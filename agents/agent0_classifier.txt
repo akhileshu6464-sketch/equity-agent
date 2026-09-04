@@ -19,7 +19,12 @@ YOUR EXACT TASKS:
 
 2. Identify Secondary / Hybrid Business Verticals (e.g., a manufacturing firm with a captive financing NBFC arm, or a consumer electricals brand entering solar EPC).
 
-3. Output the exact routing profile JSON:
+3. Handle Conglomerates & Multi-Engine Giants:
+   For diversified conglomerates (like RELIANCE, L&T, TATA MOTORS):
+   - Base the primary sector on the segment contributing >40% of revenue or operating profit (e.g., Oil, Gas, Energy & Utilities for Reliance, or assign it to Conglomerate with primary O2C / Telecom / Retail).
+   - NEVER classify an oil refining or telecom giant as Healthcare/Pharma due to small subsidiary holdings.
+
+4. Output the exact routing profile JSON:
 {
   "ticker": "...",
   "primary_sector": "...",
