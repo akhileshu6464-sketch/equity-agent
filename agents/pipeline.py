@@ -35,6 +35,48 @@ class EquityAgentPipeline:
         self.agent5 = Agent5IndustryKPI()
         self.agent6 = Agent6Synthesizer()
 
+    def _sanitize_financials(self, company_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Ensures all balance sheet, income, and cash flow fields are wrapped in defensive defaults."""
+        if not company_data:
+            return {}
+
+        history = company_data.get("history_years", [])
+        sanitized_history = []
+        for year_dict in history:
+            try:
+                clean_year = {
+                    "year": str(year_dict.get("year", "")),
+                    "date": str(year_dict.get("date", "")),
+                    "revenue": float(year_dict.get("revenue") or 0.0),
+                    "net_income": float(year_dict.get("net_income") or 0.0),
+                    "ebit": float(year_dict.get("ebit") or 0.0),
+                    "ebitda": float(year_dict.get("ebitda") or 0.0),
+                    "interest_expense": float(year_dict.get("interest_expense") or 0.0),
+                    "operating_cash_flow": float(year_dict.get("operating_cash_flow") or 0.0),
+                    "capital_expenditure": float(year_dict.get("capital_expenditure") or 0.0),
+                    "free_cash_flow": float(year_dict.get("free_cash_flow") or 0.0),
+                    "dividends_paid": float(year_dict.get("dividends_paid") or 0.0),
+                    "receivables": float(year_dict.get("receivables") or 0.0),
+                    "inventory": float(year_dict.get("inventory") or 0.0),
+                    "payables": float(year_dict.get("payables") or 0.0),
+                    "total_debt": float(year_dict.get("total_debt") or 0.0),
+                    "cash_and_equivalents": float(year_dict.get("cash_and_equivalents") or 0.0),
+                    "goodwill": float(year_dict.get("goodwill") or 0.0),
+                    "total_assets": float(year_dict.get("total_assets") or 0.0),
+                    "stockholders_equity": float(year_dict.get("stockholders_equity") or 0.0)
+                }
+            except Exception as e:
+                logger.warning(f"Error sanitizing year financial record: {e}")
+                clean_year = year_dict
+            sanitized_history.append(clean_year)
+
+        company_data["history_years"] = sanitized_history
+        company_data["current_price"] = float(company_data.get("current_price") or 0.0)
+        company_data["market_cap_cr"] = float(company_data.get("market_cap_cr") or 0.0)
+        company_data["latest_net_debt"] = float(company_data.get("latest_net_debt") or 0.0)
+        company_data["latest_fcf"] = float(company_data.get("latest_fcf") or 0.0)
+        return company_data
+
     def run_pipeline(
         self,
         ticker: str,
@@ -52,12 +94,22 @@ class EquityAgentPipeline:
         normalized_ticker = self.financial_service.normalize_ticker(ticker)
         logger.info(f"Starting 7-Agent Pipeline for {normalized_ticker}...")
 
-        # 1. Fetch official statement data
-        company_data = self.financial_service.get_company_data(normalized_ticker, force_refresh=force_refresh)
+        # 1. Fetch official statement data defensively
+        try:
+            company_data = self.financial_service.get_company_data(normalized_ticker, force_refresh=force_refresh)
+        except Exception as e:
+            logger.error(f"Failed to fetch financial data for {normalized_ticker}: {e}")
+            raise
+
+        company_data = self._sanitize_financials(company_data)
 
         # 2. Scrape/Search web and concall news intelligence
         company_name = company_data.get("short_name", normalized_ticker)
-        search_intel = self.web_scraper_service.search_news_and_concalls(company_name, normalized_ticker)
+        try:
+            search_intel = self.web_scraper_service.search_news_and_concalls(company_name, normalized_ticker)
+        except Exception as e:
+            logger.warning(f"Web scraper encountered an issue: {e}")
+            search_intel = []
 
         # Context shared across agents
         context: Dict[str, Any] = {
@@ -72,8 +124,22 @@ class EquityAgentPipeline:
 
         # 3. Agent 0: Classifier (agent0_classifier.txt)
         audit0 = self.agent0.analyze(company_data, context)
-        context["taxonomy"] = audit0.get("primary_sector")
-        context["routing_profile"] = audit0.get("routing_profile")
+        primary_sector = audit0.get("primary_sector", "")
+        context["taxonomy"] = primary_sector
+        context["routing_profile"] = audit0.get("routing_profile", {})
+
+        # Defensive Banking/NBFC (BFSI) check: skip CCC and OCF/PAT
+        is_banking = (
+            "banking" in primary_sector.lower()
+            or "nbfc" in primary_sector.lower()
+            or "financial" in primary_sector.lower()
+            or "bfsi" in primary_sector.lower()
+        )
+        context["is_banking"] = is_banking
+        context["skip_ccc"] = is_banking
+        context["skip_ocf_pat"] = is_banking
+        if is_banking:
+            logger.info(f"{normalized_ticker} classified as Banking/NBFC (BFSI). Skipping Cash Conversion Cycle and OCF/PAT calculations.")
 
         # 4. Agent 1: Qualitative & Moat Auditor (agent1_qualitative.txt)
         audit1 = self.agent1.analyze(company_data, context)

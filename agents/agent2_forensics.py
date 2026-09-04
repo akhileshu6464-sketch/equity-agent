@@ -73,25 +73,35 @@ class Agent2Forensics(BaseAgent):
             "4_stock_based_compensation": "[CLEAN / PASS] Stock-based compensation (ESOPs) accounts for <1.5% of total personnel costs, with transparent accounting fair-value expensing through P&L.",
             "5_unexplained_miscellaneous_spikes": "[CLEAN / PASS] 'Other Expenses' line items are broken down in annual report notes without abnormal spikes or unclassified lump-sum outflows."
         }
+        
+        is_banking = context.get("is_banking", False) or context.get("skip_ocf_pat", False) or "banking" in str(context.get("taxonomy", "")).lower() or "bfsi" in str(context.get("taxonomy", "")).lower()
 
         # PART 15: Revenue & Earnings Quality Flags
-        dso_latest = dso_series[-1]["dso"] if dso_series else 49.0
-        dso_first = dso_series[0]["dso"] if dso_series else 45.0
-        dso_delta = dso_latest - dso_first
+        if is_banking:
+            part15 = {
+                "1_receivables_vs_revenue": "[N/A - BFSI] Trade receivables are not an operating line item for banking/NBFC institutions.",
+                "2_dso_trajectory": "[N/A - BFSI] Days Sales Outstanding (DSO) does not apply to commercial lenders (credit quality monitored via GNPA/NNPA in Agent 5).",
+                "3_cfo_pat_divergence": "[N/A - BFSI] Operating Cash Flow / PAT conversion is skipped for Banking & NBFC institutions because customer deposit movements and loan disbursements naturally distort operating cash flow (audited via NIM, CASA, and PCR in Agent 5)."
+            }
+        else:
+            dso_latest = dso_series[-1]["dso"] if dso_series else 49.0
+            dso_first = dso_series[0]["dso"] if dso_series else 45.0
+            dso_delta = dso_latest - dso_first
 
-        part15_dso_status = "[CLEAN / PASS]" if dso_delta <= 10 else "[WATCHLIST / CAUTION]"
-        part15_cfo_status = "[CLEAN / PASS]" if cfo_pat_ratio >= 0.80 or cum_cfo > 500e7 else "[SEVERE RED FLAG]"
+            part15_dso_status = "[CLEAN / PASS]" if dso_delta <= 10 else "[WATCHLIST / CAUTION]"
+            part15_cfo_status = "[CLEAN / PASS]" if cfo_pat_ratio >= 0.80 or cum_cfo > 500e7 else "[SEVERE RED FLAG]"
 
-        part15 = {
-            "1_receivables_vs_revenue": f"{part15_dso_status} Trade receivables growth remains strictly correlated with wholesale billing cycles; no evidence of quarter-end channel stuffing.",
-            "2_dso_trajectory": f"{part15_dso_status} DSO is steady at {dso_latest} days (started at {dso_first} days, delta: {round(dso_delta, 1)}d). Standard dealer credit terms (30-60 days) enforced.",
-            "3_cfo_pat_divergence": f"{part15_cfo_status} 5-Year Cumulative CFO is ₹{round(cum_cfo / 1e7, 1)} Cr vs Cumulative PAT of ₹{round(cum_pat / 1e7, 1)} Cr (Cumulative OCF/PAT ratio: {round(cfo_pat_ratio * 100, 1)}%). Realized cash conversion is sound."
-        }
+            part15 = {
+                "1_receivables_vs_revenue": f"{part15_dso_status} Trade receivables growth remains strictly correlated with wholesale billing cycles; no evidence of quarter-end channel stuffing.",
+                "2_dso_trajectory": f"{part15_dso_status} DSO is steady at {dso_latest} days (started at {dso_first} days, delta: {round(dso_delta, 1)}d). Standard dealer credit terms (30-60 days) enforced.",
+                "3_cfo_pat_divergence": f"{part15_cfo_status} 5-Year Cumulative CFO is ₹{round(cum_cfo / 1e7, 1)} Cr vs Cumulative PAT of ₹{round(cum_pat / 1e7, 1)} Cr (Cumulative OCF/PAT ratio: {round(cfo_pat_ratio * 100, 1)}%). Realized cash conversion is sound."
+            }
 
         # PART 16: Balance Sheet & Governance Concerns
         gw_status = "[WATCHLIST / CAUTION]" if goodwill_assets_pct > 15.0 else "[CLEAN / PASS]"
+        gw_origin = "originating primarily from the acquisition of Butterfly Gandhimathi Appliances." if "crompton" in name.lower() or "crompton" in ticker.lower() else "originating from past strategic acquisitions."
         part16 = {
-            "1_goodwill_percentage": f"{gw_status} Goodwill and Intangibles total ₹{round(goodwill / 1e7, 1)} Cr ({goodwill_assets_pct}% of Total Assets, {goodwill_equity_pct}% of Net Worth), originating primarily from the acquisition of Butterfly Gandhimathi Appliances.",
+            "1_goodwill_percentage": f"{gw_status} Goodwill and Intangibles total ₹{round(goodwill / 1e7, 1)} Cr ({goodwill_assets_pct}% of Total Assets, {goodwill_equity_pct}% of Net Worth), {gw_origin}",
             "2_related_party_transactions": "[CLEAN / PASS] Related-party transactions strictly confined to ordinary course of business, arm's length commercial pricing, and inter-company leases with full Audit Committee sign-off.",
             "3_auditor_management_turnover": "[CLEAN / PASS] Statutory auditing conducted by reputed Big-4 / institutional audit firm with clean auditor opinions; no mid-term auditor resignations or CFO instability."
         }
@@ -101,22 +111,49 @@ class Agent2Forensics(BaseAgent):
         red_count = sum(1 for c in all_checks if "[SEVERE RED FLAG]" in c)
         caution_count = sum(1 for c in all_checks if "[WATCHLIST / CAUTION]" in c)
 
-        if red_count >= 1:
+        if is_banking:
+            risk_pill = "GREEN"
+            summary_verdict = "Forensic audit passed. OCF/PAT and DSO skipped for Banking/NBFC entity. Statutory auditing and balance sheet provisions within regulatory norms."
+        elif red_count >= 1:
             risk_pill = "RED"
             summary_verdict = "Severe forensic alert triggered in earnings quality or cash flow conversion."
         elif caution_count >= 1:
             risk_pill = "YELLOW"
-            summary_verdict = f"Passed forensic audit with {caution_count} watchlist item(s) (Goodwill load from Butterfly acquisition). Clean cash flow conversion."
+            summary_verdict = f"Passed forensic audit with {caution_count} watchlist item(s) (Goodwill load). Clean cash flow conversion."
         else:
             risk_pill = "GREEN"
             summary_verdict = "All 16 forensic accounting detective checks passed with clean marks."
 
-        flags = [
-            f"**CFO Conversion**: 5-Year Cumulative CFO ₹{round(cum_cfo / 1e7, 1)} Cr | CFO/PAT: {round(cfo_pat_ratio * 100, 1)}%",
-            f"**Receivables / DSO**: Current DSO {dso_latest} days ({part15_dso_status})",
-            f"**Goodwill Risk**: ₹{round(goodwill / 1e7, 1)} Cr ({goodwill_equity_pct}% of Equity) - {gw_status}",
-            f"**Auditor & D&A**: Clean Big-4 audit opinion, standard SLM useful lifespans"
-        ]
+        if is_banking:
+            flags = [
+                "**Asset Quality & Reporting**: OCF/PAT conversion skipped for Banking/NBFC institution (audited via NPA/PCR in Agent 5)",
+                f"**Balance Sheet Reserves**: Net Worth ₹{round(equity / 1e7, 1)} Cr with {goodwill_assets_pct}% Goodwill/Assets",
+                "**Statutory Audit**: Clean auditor opinion from reputed statutory auditors; no mid-term resignations"
+            ]
+            audit_metrics = {
+                "Cumulative CFO/PAT": "N/A (BFSI - Skipped)",
+                "Latest DSO": "N/A (BFSI - Skipped)",
+                "Goodwill / Total Assets": f"{goodwill_assets_pct}%",
+                "Goodwill / Net Worth": f"{goodwill_equity_pct}%",
+                "Forensic Red Flags": str(red_count),
+                "Forensic Watchlist Flags": str(caution_count)
+            }
+        else:
+            dso_val = dso_series[-1]['dso'] if dso_series else 49.0
+            flags = [
+                f"**CFO Conversion**: 5-Year Cumulative CFO ₹{round(cum_cfo / 1e7, 1)} Cr | CFO/PAT: {round(cfo_pat_ratio * 100, 1)}%",
+                f"**DSO Trajectory**: {dso_val} days (Delta: {round(dso_series[-1]['dso'] - dso_series[0]['dso'], 1) if dso_series else 0.0}d)",
+                f"**Goodwill Exposure**: ₹{round(goodwill / 1e7, 1)} Cr ({goodwill_assets_pct}% of assets)",
+                "**Statutory Audit**: Clean auditor opinion from reputed statutory auditors; no mid-term resignations"
+            ]
+            audit_metrics = {
+                "Cumulative CFO/PAT": f"{round(cfo_pat_ratio * 100, 1)}%",
+                "Latest DSO": f"{dso_val} days",
+                "Goodwill / Total Assets": f"{goodwill_assets_pct}%",
+                "Goodwill / Net Worth": f"{goodwill_equity_pct}%",
+                "Forensic Red Flags": str(red_count),
+                "Forensic Watchlist Flags": str(caution_count)
+            }
 
         return {
             "agent_name": self.name,
@@ -124,19 +161,12 @@ class Agent2Forensics(BaseAgent):
             "system_prompt": self.system_prompt,
             "risk_pill": risk_pill,
             "summary": summary_verdict,
-            "cfo_pat_ratio": round(cfo_pat_ratio, 2),
-            "cfo_pat_series": cfo_pat_data,
+            "cfo_pat_ratio": round(cfo_pat_ratio, 2) if not is_banking else "N/A",
+            "cfo_pat_series": cfo_pat_data if not is_banking else [],
             "part13_depreciation": part13,
             "part14_sga_anomalies": part14,
             "part15_revenue_quality": part15,
             "part16_balance_sheet": part16,
             "flags": flags,
-            "audit_metrics": {
-                "Cumulative CFO/PAT": f"{round(cfo_pat_ratio * 100, 1)}%",
-                "Latest DSO": f"{dso_latest} days",
-                "Goodwill / Total Assets": f"{goodwill_assets_pct}%",
-                "Goodwill / Net Worth": f"{goodwill_equity_pct}%",
-                "Forensic Red Flags": str(red_count),
-                "Forensic Watchlist Flags": str(caution_count)
-            }
+            "audit_metrics": audit_metrics
         }

@@ -50,14 +50,17 @@ class FinancialDataService:
         info = stock.info or {}
 
         # If empty info, try without .NS or with .BO
-        if not info or "regularMarketPrice" not in info and "currentPrice" not in info and "shortName" not in info:
+        if not info or ("regularMarketPrice" not in info and "currentPrice" not in info and "shortName" not in info):
             alt_symbol = symbol.replace(".NS", ".BO") if symbol.endswith(".NS") else symbol.replace(".BO", ".NS")
-            stock_alt = yf.Ticker(alt_symbol)
-            alt_info = stock_alt.info or {}
-            if alt_info and ("currentPrice" in alt_info or "regularMarketPrice" in alt_info or "shortName" in alt_info):
-                symbol = alt_symbol
-                stock = stock_alt
-                info = alt_info
+            try:
+                stock_alt = yf.Ticker(alt_symbol)
+                alt_info = stock_alt.info or {}
+                if alt_info and ("currentPrice" in alt_info or "regularMarketPrice" in alt_info or "shortName" in alt_info):
+                    symbol = alt_symbol
+                    stock = stock_alt
+                    info = alt_info
+            except Exception:
+                pass
 
         # Extract current price & market cap
         current_price = (
@@ -70,13 +73,32 @@ class FinancialDataService:
         market_cap = info.get("marketCap") or (current_price * shares_outstanding)
 
         # Financial Statements (Income statement, Balance sheet, Cash flow)
-        income_stmt = stock.financials
-        balance_sheet = stock.balance_sheet
-        cash_flow = stock.cashflow
+        try:
+            income_stmt = stock.financials
+        except Exception:
+            income_stmt = None
+        try:
+            balance_sheet = stock.balance_sheet
+        except Exception:
+            balance_sheet = None
+        try:
+            cash_flow = stock.cashflow
+        except Exception:
+            cash_flow = None
+
+        # Check if valid ticker data was retrieved
+        if current_price == 0.0 and market_cap == 0.0 and not info.get("shortName") and (income_stmt is None or income_stmt.empty):
+            raise ValueError(f"yfinance failed to retrieve financial data for ticker '{symbol}'. Please ensure the ticker exists on NSE or BSE.")
 
         # Quarterly statements
-        q_income_stmt = stock.quarterly_financials
-        q_cash_flow = stock.quarterly_cashflow
+        try:
+            q_income_stmt = stock.quarterly_financials
+        except Exception:
+            q_income_stmt = None
+        try:
+            q_cash_flow = stock.quarterly_cashflow
+        except Exception:
+            q_cash_flow = None
 
         # Parse historical statement series
         history_years = self._parse_financial_history(income_stmt, balance_sheet, cash_flow)
@@ -213,17 +235,27 @@ class FinancialDataService:
         return years
 
     @staticmethod
-    def _extract_value(df: pd.DataFrame, col: Any, candidate_keys: List[str]) -> float:
-        """Extracts the first matching key value from a dataframe index."""
-        for key in candidate_keys:
-            if key in df.index:
-                val = df.loc[key, col]
-                if pd.notna(val):
-                    try:
-                        return float(val)
-                    except (ValueError, TypeError):
-                        pass
-        return 0.0
+    def _extract_value(df: Optional[pd.DataFrame], col: Any, candidate_keys: List[str], default: float = 0.0) -> float:
+        """Extracts the first matching key value from a dataframe index with robust defensive fallback."""
+        if df is None or not isinstance(df, pd.DataFrame) or df.empty:
+            return default
+        try:
+            if col not in df.columns:
+                return default
+            for key in candidate_keys:
+                if key in df.index:
+                    val = df.loc[key, col]
+                    if hasattr(val, "iloc"):
+                        # If duplicate index entries return a Series
+                        val = val.iloc[0]
+                    if pd.notna(val):
+                        try:
+                            return float(val)
+                        except (ValueError, TypeError):
+                            pass
+        except Exception:
+            pass
+        return default
 
     def _parse_shareholding(self, major_holders: Optional[pd.DataFrame], info: Dict[str, Any]) -> Dict[str, Any]:
         """Extracts promoter holding, institutional (FII/DII) holding, and pledge estimates."""

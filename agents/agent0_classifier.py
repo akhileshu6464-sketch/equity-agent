@@ -87,27 +87,46 @@ class Agent0Classifier(BaseAgent):
     def _classify_primary_sector(self, ticker: str, name: str, sector: str, industry: str, summary: str) -> str:
         s = f"{ticker} {name} {sector} {industry} {summary}".lower()
 
-        # Check banking / NBFC / BFSI
-        if "bank" in s or "nbfc" in s or "lending" in s or "housing finance" in s or "insurance" in s or "asset management" in s or "amc" in s or "financial" in sector.lower():
+        # Check sector_yf directly if high confidence
+        sec_lower = sector.lower()
+        ind_lower = industry.lower()
+
+        if "financial" in sec_lower or "bank" in ind_lower or "nbfc" in ind_lower or "insurance" in ind_lower:
             return "Banking, NBFCs & Financial Services (BFSI)"
+
+        if "energy" in sec_lower or "oil" in ind_lower or "gas" in ind_lower or "petroleum" in ind_lower or "refining" in ind_lower or "utilities" in sec_lower:
+            return "Oil, Gas, Energy & Utilities"
+
+        if "technology" in sec_lower or "software" in ind_lower or "it services" in ind_lower:
+            return "Technology & SaaS / IT Services"
+
+        if "healthcare" in sec_lower or "pharma" in ind_lower or "biotechnology" in ind_lower:
+            return "Healthcare, Pharma & CDMO"
+
+        if "basic materials" in sec_lower:
+            if "steel" in ind_lower or "metal" in ind_lower or "mining" in ind_lower or "aluminum" in ind_lower:
+                return "Mining & Metals"
+            return "Chemicals & Specialty Materials"
+
+        if "real estate" in sec_lower or "reit" in ind_lower:
+            return "Real Estate & REITs"
+
+        if "telecommunication" in sec_lower or "media" in ind_lower:
+            return "Telecommunications & Media"
 
         # Check Consumer Durables & FMCG (Crompton, Havells, Voltas, Whirlpool, Dabur, HUL, etc.)
         if ("crompton" in s or "fan" in s or "lighting" in s or "appliance" in s or "durables" in s or "fmcg" in s 
-            or "consumer cyclical" in sector.lower() or "consumer defensive" in sector.lower() or "household" in s
-            or "furnishings" in industry.lower() or "consumer goods" in s):
+            or "consumer cyclical" in sec_lower or "consumer defensive" in sec_lower or "household" in s
+            or "furnishings" in ind_lower or "consumer goods" in s):
             return "Consumer Durables & FMCG"
 
-        # Check Technology & SaaS / IT Services
-        if "software" in s or "information technology" in s or "it services" in s or "saas" in s or "tcs" in s or "infosys" in s or "wipro" in s or "tech mahindra" in s:
-            return "Technology & SaaS / IT Services"
+        # Check Oil, Gas, Energy & Utilities
+        if "oil" in s or "gas" in s or "refin" in s or "petrochem" in s or "power" in s or "renewable" in s:
+            return "Oil, Gas, Energy & Utilities"
 
         # Check Healthcare, Pharma & CDMO
-        if "pharma" in s or "healthcare" in s or "hospital" in s or "drug" in s or "cdmo" in s or "api" in s:
+        if "pharma" in s or "healthcare" in s or "hospital" in s or "biotech" in s:
             return "Healthcare, Pharma & CDMO"
-
-        # Check Oil, Gas, Energy & Utilities
-        if "oil" in s or "gas" in s or "refin" in s or "power" in s or "utilities" in s or "renewable" in s or "solar" in s:
-            return "Oil, Gas, Energy & Utilities"
 
         # Check Mining & Metals
         if "mining" in s or "metal" in s or "steel" in s or "aluminum" in s or "iron ore" in s or "coal" in s:
@@ -120,14 +139,6 @@ class Agent0Classifier(BaseAgent):
         # Check Infrastructure, EPC & Logistics
         if "infrastructure" in s or "epc" in s or "logistics" in s or "port" in s or "shipping" in s or "road" in s:
             return "Infrastructure, EPC & Logistics"
-
-        # Check Real Estate & REITs
-        if "real estate" in s or "reit" in s or "property" in s or "developer" in s or "residential" in s:
-            return "Real Estate & REITs"
-
-        # Check Telecommunications & Media
-        if "telecom" in s or "media" in s or "broadcasting" in s or "wireless" in s:
-            return "Telecommunications & Media"
 
         # Check Retail, E-Commerce & QSR
         if "retail" in s or "e-commerce" in s or "qsr" in s or "restaurant" in s or "supermarket" in s:

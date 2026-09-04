@@ -156,38 +156,60 @@ def main():
         st.title("Indian Equity Institutional Research Platform")
         st.caption("Deep forensic accounting, governance & RPT audits, industry KPIs, and reverse DCF.")
 
-    # Search Bar
-    ticker_input = st.text_input("Enter NSE/BSE Stock Ticker:", value="CROMPTON.NS")
+    # Session state for ticker selection
+    if "selected_ticker" not in st.session_state:
+        st.session_state["selected_ticker"] = "CROMPTON.NS"
 
-    # Quick Ticker Buttons
+    # Quick Ticker Buttons passing valid tickers (.NS)
     quick_cols = st.columns(6)
     quick_tickers = ["CROMPTON.NS", "RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "TATAMOTORS.NS", "INFY.NS"]
     for i, t in enumerate(quick_tickers):
-        if quick_cols[i].button(t.replace(".NS", ""), use_container_width=True):
-            ticker_input = t
+        label = t.replace(".NS", "")
+        if quick_cols[i].button(label, key=f"quick_btn_{t}", use_container_width=True):
+            st.session_state["selected_ticker"] = t
 
-    if not ticker_input:
-        st.info("Please enter an Indian stock ticker above to start the multi-agent audit.")
+    # Search Bar
+    user_input = st.text_input(
+        "Enter NSE/BSE Stock Ticker (e.g., RELIANCE, TCS, HDFCBANK, CROMPTON):",
+        value=st.session_state.get("selected_ticker", "CROMPTON.NS")
+    )
+
+    if not user_input or not user_input.strip():
+        st.info("ℹ️ Please enter an Indian stock ticker above to start the multi-agent audit.")
         return
+
+    # 1. Automatic Suffix Appender: Ensure ticker ends with .NS or .BO
+    ticker = user_input.strip().upper()
+    if not (ticker.endswith(".NS") or ticker.endswith(".BO")):
+        ticker += ".NS"
+    st.session_state["selected_ticker"] = ticker
 
     # Run Pipeline
     pipeline = get_pipeline()
     
-    with st.spinner(f"Running Unabridged 7-Agent Institutional Pipeline for {ticker_input}..."):
+    with st.spinner(f"Running Unabridged 7-Agent Institutional Pipeline for {ticker}..."):
         try:
             dossier = pipeline.run_pipeline(
-                ticker=ticker_input,
+                ticker=ticker,
                 wacc=wacc_input,
                 terminal_growth=terminal_g_input,
                 base_growth=base_g_input
             )
         except Exception as e:
-            st.error(f"Error executing agent pipeline for '{ticker_input}': {str(e)}")
-            st.info("Tip: Ensure the symbol is valid on NSE or BSE (e.g., CROMPTON.NS, RELIANCE.NS, TCS.NS).")
+            err_msg = str(e)
+            if any(k in err_msg.lower() for k in ["rate limit", "429", "resourceexhausted", "quota"]):
+                st.error("🚨 **Gemini API Rate Limit Reached**: The free-tier AI request quota has been temporarily exhausted. Please wait 30–60 seconds before re-trying.")
+                st.info("💡 **Tip**: Running consecutive deep analyses on high-cap companies can trigger temporary API rate limiting. Pausing briefly will reset the quota window.")
+            elif any(k in err_msg.lower() for k in ["failed to retrieve", "not found", "404", "delisted", "quote not found"]):
+                st.error(f"❌ **Stock Ticker Not Found**: yfinance failed to retrieve financial statement data for **'{ticker}'**.")
+                st.info(f"💡 **Tip**: Please verify that the symbol is an active stock listed on the National Stock Exchange of India (NSE) or Bombay Stock Exchange (BSE). Examples: `RELIANCE.NS`, `TCS.NS`, `HDFCBANK.NS`, `INFY.NS`, `CROMPTON.NS`.")
+            else:
+                st.error(f"⚠️ **Analysis Execution Error**: An unexpected error occurred while auditing '{ticker}': {err_msg}")
+                st.info("💡 **Tip**: Please verify your network connection, try an alternate ticker, or refresh the page.")
             return
 
-    symbol = dossier.get("symbol")
-    company_name = dossier.get("company_name")
+    symbol = dossier.get("symbol", ticker)
+    company_name = dossier.get("company_name", ticker)
     cmp = dossier.get("current_price", 0.0)
     mcap_cr = dossier.get("market_cap_cr", 0.0)
     pe = dossier.get("trailing_pe", 0.0)
@@ -198,13 +220,13 @@ def main():
     rating_color = dossier.get("rating_color", "#1565C0")
     pills = dossier.get("risk_pills", {})
 
-    a0 = dossier["agent_0"]
-    a1 = dossier["agent_1"]
-    a2 = dossier["agent_2"]
-    a3 = dossier["agent_3"]
-    a4 = dossier["agent_4"]
-    a5 = dossier["agent_5"]
-    a6 = dossier["agent_6"]
+    a0 = dossier.get("agent_0", {})
+    a1 = dossier.get("agent_1", {})
+    a2 = dossier.get("agent_2", {})
+    a3 = dossier.get("agent_3", {})
+    a4 = dossier.get("agent_4", {})
+    a5 = dossier.get("agent_5", {})
+    a6 = dossier.get("agent_6", {})
 
     # Top Hero Section
     st.markdown("---")

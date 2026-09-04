@@ -23,13 +23,21 @@ from agents.pipeline import EquityAgentPipeline
 
 
 def main():
-    ticker = sys.argv[1] if len(sys.argv) > 1 else "CROMPTON.NS"
+    raw_ticker = sys.argv[1] if len(sys.argv) > 1 else "CROMPTON.NS"
+    ticker = raw_ticker.strip().upper()
+    if not (ticker.endswith(".NS") or ticker.endswith(".BO")):
+        ticker += ".NS"
+
     print("=" * 80)
     print(f"🚀 RUNNING 7-AGENT INSTITUTIONAL EQUITY AUDIT ON: {ticker}")
     print("=" * 80)
 
     pipeline = EquityAgentPipeline()
-    dossier = pipeline.run_pipeline(ticker)
+    try:
+        dossier = pipeline.run_pipeline(ticker)
+    except Exception as e:
+        print(f"\n❌ Error executing agent pipeline for '{ticker}': {e}")
+        sys.exit(1)
 
     print(f"\n📊 Company: {dossier.get('company_name')} ({dossier.get('symbol')})")
     print(f"💰 Current Market Price (CMP): ₹{dossier.get('current_price')} | Market Cap: ₹{dossier.get('market_cap_cr')} Cr")
@@ -43,7 +51,7 @@ def main():
         print(f"  {emoji} {domain.upper()}: {pill}")
 
     # Agent 0
-    a0 = dossier["agent_0"]
+    a0 = dossier.get("agent_0", {})
     print("\n" + "-" * 80)
     print(f"🏷️  [AGENT 0: CLASSIFIER]")
     print(f"  • Primary Sector (1 of 12): {a0.get('primary_sector')}")
@@ -51,7 +59,7 @@ def main():
     print(f"  • Revenue Engine: {a0.get('revenue_engine_summary')}")
 
     # Agent 1
-    a1 = dossier["agent_1"]
+    a1 = dossier.get("agent_1", {})
     print("\n" + "-" * 80)
     print(f"🛡️  [AGENT 1: QUALITATIVE & MOAT AUDITOR] (Moat: {a1.get('moat_rating')}, Score: {a1.get('checklist_score')}/100)")
     print(f"  • Core Product/Service: {a1.get('part1_business_model', {}).get('1_core_product_service')}")
@@ -62,7 +70,7 @@ def main():
     print(f"  • Single Biggest Failure Point: {a1.get('part7_qualitative_risks', {}).get('4_single_biggest_failure_point')}")
 
     # Agent 2
-    a2 = dossier["agent_2"]
+    a2 = dossier.get("agent_2", {})
     print("\n" + "-" * 80)
     print(f"🔍 [AGENT 2: FORENSIC DETECTIVE] (Risk Pill: {a2.get('risk_pill')})")
     print(f"  • 5-Year Cumulative CFO/PAT: {a2.get('part15_revenue_quality', {}).get('3_cfo_pat_divergence')}")
@@ -72,7 +80,7 @@ def main():
     print(f"  • Goodwill Exposure: {a2.get('part16_balance_sheet', {}).get('1_goodwill_percentage')}")
 
     # Agent 3
-    a3 = dossier["agent_3"]
+    a3 = dossier.get("agent_3", {})
     print("\n" + "-" * 80)
     print(f"⚖️  [AGENT 3: SOLVENCY & CAPITAL ALLOCATION] (Risk Pill: {a3.get('risk_pill')})")
     print(f"  • Net Debt & Leverage: {a3.get('part10_solvency', {}).get('2_debt_to_equity')}")
@@ -81,7 +89,7 @@ def main():
     print(f"  • FCF Dividend Coverage: {a3.get('part12_capital_allocation', {}).get('4_dividend_fcf_sustainability')}")
 
     # Agent 4
-    a4 = dossier["agent_4"]
+    a4 = dossier.get("agent_4", {})
     print("\n" + "-" * 80)
     print(f"🏛️  [AGENT 4: GOVERNANCE & MASTER RPT AUDITOR] (Risk Pill: {a4.get('risk_pill')})")
     print(f"  • Promoter Pledge: {a4.get('section1_promoter_integrity', {}).get('2_promoter_pledge_percentage')}")
@@ -91,17 +99,17 @@ def main():
     print(f"  • Master RPT Capital Siphoning: {a4.get('section4_master_rpt', {}).get('capital_siphoning', {}).get('unsecured_loans_to_insiders')}")
 
     # Agent 5
-    a5 = dossier["agent_5"]
+    a5 = dossier.get("agent_5", {})
     print("\n" + "-" * 80)
     print(f"📈 [AGENT 5: INDUSTRY KPI SPECIALIST] (Activated: {a5.get('activated_checklist_section')})")
     for k, v in a5.get("kpi_results", {}).items():
         print(f"  • {k}: {v}")
 
     # Agent 6
-    a6 = dossier["agent_6"]
+    a6 = dossier.get("agent_6", {})
     print("\n" + "-" * 80)
     print(f"🎯 [AGENT 6: CIO & VALUATION SPECIALIST] (Verdict: {a6.get('institutional_rating')})")
-    print(f"  • Management Walk-the-Talk: {a6.get('section1_management_walk_the_talk', {}).get('1_historical_delivery_1', {}).get('verdict')} on BLDC Fan Transition")
+    print(f"  • Management Walk-the-Talk: {a6.get('section1_management_walk_the_talk', {}).get('1_historical_delivery_1', {}).get('verdict')} on Historical Targets")
     print("  • Asset & Yield Valuation Floors:")
     for k, v in a6.get("section2_asset_yield_valuation", {}).items():
         print(f"      - {k}: {v}")
