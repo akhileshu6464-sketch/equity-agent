@@ -105,6 +105,14 @@ st.markdown("""
         font-size: 14px;
         color: #E0E0E0;
     }
+    .report-card {
+        background-color: #131720;
+        border: 1px solid #2A303C;
+        border-radius: 8px;
+        padding: 24px;
+        margin: 20px 0px 30px 0px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -190,13 +198,21 @@ def main():
     rating_color = dossier.get("rating_color", "#1565C0")
     pills = dossier.get("risk_pills", {})
 
+    a0 = dossier["agent_0"]
+    a1 = dossier["agent_1"]
+    a2 = dossier["agent_2"]
+    a3 = dossier["agent_3"]
+    a4 = dossier["agent_4"]
+    a5 = dossier["agent_5"]
+    a6 = dossier["agent_6"]
+
     # Top Hero Section
     st.markdown("---")
     hero_c1, hero_c2 = st.columns([3, 1])
 
     with hero_c1:
         st.markdown(f'<div class="company-title">{company_name} ({symbol})</div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="company-subtitle">{dossier.get("sector")} • {dossier.get("industry")} • {dossier["agent_0"].get("primary_sector")}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="company-subtitle">{dossier.get("sector")} • {dossier.get("industry")} • {a0.get("primary_sector")}</div>', unsafe_allow_html=True)
 
     with hero_c2:
         st.markdown(f'<div class="rating-badge" style="background-color: {rating_color}; color: white;">{rating}</div>', unsafe_allow_html=True)
@@ -215,12 +231,135 @@ def main():
         render_risk_pill(domain, status) for domain, status in pills.items()
     ]) + '</div>', unsafe_allow_html=True)
 
-    # Accordion Tabs for All 7 Agent Audits
-    st.subheader("🔬 Unabridged Multi-Agent Audit Dossier")
+    # =========================================================================
+    # INSTITUTIONAL RESEARCH REPORT (Full Markdown Dossier on Main Page)
+    # =========================================================================
+    history_years = dossier.get("company_data", {}).get("history_years", [])
+    total_cfo_cr = round(sum(h.get("operating_cash_flow", 0.0) for h in history_years) / 1e7, 1)
+
+    full_report_md = f"""# 📑 Institutional Equity Research Dossier: {company_name} ({symbol})
+
+**Ticker**: `{symbol}` | **Current Market Price (CMP)**: ₹{cmp:,.2f} | **Market Cap**: ₹{mcap_cr:,.1f} Cr | **52-Week Range**: ₹{low_52:,.0f} - ₹{high_52:,.0f}  
+**Institutional Rating**: **{rating}** | **Sector**: {dossier.get('sector')} | **Primary Sector (1 of 12)**: **{a0.get('primary_sector')}**
+
+---
+
+### 🚦 Executive Risk Pill Dashboard
+| Audit Domain | Risk Status | Institutional Evaluation |
+| :--- | :---: | :--- |
+| **Moat & Business Model** | `{pills.get('Moat & Business')}` | **{a1.get('moat_rating')}** (Checklist Score: {a1.get('checklist_score')}/100) — {a1.get('part2_competitive_moat', {}).get('2_moat_source')} |
+| **Forensic Detective** | `{pills.get('Forensics')}` | 5-Year Cumulative CFO/PAT Conversion: **{a2.get('audit_metrics', {}).get('Cumulative CFO/PAT')}** (Cumulative CFO: ₹{total_cfo_cr} Cr) |
+| **Solvency & Capital** | `{pills.get('Solvency')}` | Net Debt: **{a3.get('audit_metrics', {}).get('Net Debt')}** (Net Debt/Equity: {a3.get('audit_metrics', {}).get('Net Debt / Equity')}), CCC: **{a3.get('audit_metrics', {}).get('Cash Conversion Cycle')}** |
+| **Governance & Master RPT** | `{pills.get('Governance')}` | Promoter Pledge: **{a4.get('audit_metrics', {}).get('Promoter Pledge')}**, Institutional Ownership: **{a4.get('audit_metrics', {}).get('Institutional Holding')}** |
+| **Industry Operational KPIs** | `{pills.get('Industry KPIs')}` | Activated Section: **{a5.get('activated_checklist_section')}** |
+| **Valuation & Reverse DCF** | `{pills.get('Valuation')}` | Implied 10Y FCF CAGR: **{dossier.get('implied_growth_pct')}%** (Base Case Fair Value: **{a6.get('audit_metrics', {}).get('Base Fair Value')}**) |
+
+---
+
+### 🏷️ Agent 0: Industry Taxonomy & Routing Profile
+- **Primary Sector (Assigned 1 of 12)**: {a0.get('primary_sector')}
+- **Sub-Vertical**: {a0.get('sub_vertical')}
+- **Revenue Engine (>60% Profit Generator)**: {a0.get('revenue_engine_summary')}
+- **Secondary / Hybrid Business Verticals**: {', '.join(a0.get('hybrid_verticals', [])) if a0.get('hybrid_verticals') else 'None'}
+
+---
+
+### 🛡️ Agent 1: Qualitative & Economic Moat Analysis
+- **Core Product / Service**: {a1.get('part1_business_model', {}).get('1_core_product_service')}
+- **Revenue Mechanics**: {a1.get('part1_business_model', {}).get('2_revenue_model')}
+- **Customer Concentration & Switching Costs**: {a1.get('part1_business_model', {}).get('3_customer_concentration')} | {a1.get('part1_business_model', {}).get('4_switching_costs')}
+- **Sales Engine**: {a1.get('part1_business_model', {}).get('5_sales_process')}
+- **Economic Moat Source & Trajectory**: {a1.get('part2_competitive_moat', {}).get('2_moat_source')} ({a1.get('part2_competitive_moat', {}).get('3_moat_trajectory')})
+- **Barriers to Entry**: {a1.get('part2_competitive_moat', {}).get('1_barriers_to_entry')}
+- **Pricing Power & Pass-Through**: {a1.get('part2_competitive_moat', {}).get('5_pricing_power')}
+- **Industry Structural Growth & TAM**: {a1.get('part3_industry_growth', {}).get('1_structural_growth')} — {a1.get('part3_industry_growth', {}).get('2_tam_and_headroom')}
+- **Cyclicality & Recession Resilience**: {a1.get('part3_industry_growth', {}).get('3_cyclicality_recession')}
+- **Scalability & Operating Leverage**: {a1.get('part5_operations_scalability', {}).get('1_operating_leverage')}
+- **Supply Chain Risks & Capital Intensity**: {a1.get('part5_operations_scalability', {}).get('2_supply_chain_risks')} | {a1.get('part5_operations_scalability', {}).get('3_capital_intensity')}
+- **Ground-Level Scuttlebutt**: {a1.get('part6_scuttlebutt', {}).get('1_customer_sentiment')} | Workplace Culture: {a1.get('part6_scuttlebutt', {}).get('2_employee_culture')}
+- **Single Biggest Operational Failure Point**: {a1.get('part7_qualitative_risks', {}).get('4_single_biggest_failure_point')}
+
+---
+
+### 🔍 Agent 2: Forensic Accounting Detective
+- **5-Year Cumulative CFO vs PAT Conversion**: {a2.get('part15_revenue_quality', {}).get('3_cfo_pat_divergence')}
+- **Receivables & DSO Trajectory**: {a2.get('part15_revenue_quality', {}).get('2_dso_trajectory')} (Channel Stuffing Check: {a2.get('part15_revenue_quality', {}).get('1_receivables_vs_revenue')})
+- **Depreciation & Asset Useful Lifespans**: {a2.get('part13_depreciation', {}).get('1_useful_lifespan_extension')} | Method: {a2.get('part13_depreciation', {}).get('2_depreciation_method_change')}
+- **CapEx vs D&A Relationship**: {a2.get('part13_depreciation', {}).get('3_capex_vs_da_relationship')}
+- **SG&A Growth vs Top-Line Revenue**: {a2.get('part14_sga_anomalies', {}).get('1_sga_growth_vs_revenue')}
+- **Stock-Based Compensation & Overhead**: {a2.get('part14_sga_anomalies', {}).get('4_stock_based_compensation')} | Miscellany: {a2.get('part14_sga_anomalies', {}).get('5_unexplained_miscellaneous_spikes')}
+- **Goodwill & Intangible Assets Load**: {a2.get('part16_balance_sheet', {}).get('1_goodwill_percentage')}
+- **Auditor Independence & Pedigree**: {a2.get('part16_balance_sheet', {}).get('3_auditor_management_turnover')}
+
+---
+
+### ⚖️ Agent 3: Balance Sheet, Solvency & Capital Health
+- **Balance Sheet Leverage**: Total Debt: ₹{a3.get('audit_metrics', {}).get('Total Debt')}, Net Debt: ₹{a3.get('audit_metrics', {}).get('Net Debt')} (Net Debt/Equity: {a3.get('audit_metrics', {}).get('Net Debt / Equity')}, Total Debt/Equity: {a3.get('audit_metrics', {}).get('Total Debt / Equity')})
+- **Liquid Cash Buffer**: ₹{a3.get('audit_metrics', {}).get('Cash & Equivalents')} in cash and short-term equivalents
+- **Debt Service Headroom**: Normalized Interest Coverage: **{a3.get('audit_metrics', {}).get('Normalized Interest Coverage')}**
+- **Working Capital Cycle (Cash Conversion Cycle)**: **{a3.get('audit_metrics', {}).get('Cash Conversion Cycle')}** ({a3.get('part11_working_capital', {}).get('1_cash_conversion_cycle')})
+- **Return on Invested Capital (ROIC)**: **{a3.get('part9_cash_flow_roic', {}).get('5_roic_vs_wacc')}**
+- **Free Cash Flow & Margin**: FCF Margin: {a3.get('audit_metrics', {}).get('FCF Margin')} ({a3.get('part9_cash_flow_roic', {}).get('2_fcf_trajectory')})
+- **FCF Dividend Sustainability**: **{a3.get('part12_capital_allocation', {}).get('4_dividend_fcf_sustainability')}** (Coverage: {a3.get('audit_metrics', {}).get('FCF Dividend Coverage')})
+
+---
+
+### 🏛️ Agent 4: Corporate Governance & Master RPT Audit
+- **Promoter Alignment & Encumbrance**: {a4.get('section1_promoter_integrity', {}).get('2_promoter_pledge_percentage')}
+- **Executive Remuneration vs PAT**: {a4.get('section2_executive_remuneration', {}).get('1_ceo_remuneration_vs_pat')} (CEO-to-Median-Employee Ratio: {a4.get('audit_metrics', {}).get('CEO / Median Pay')})
+- **Incentive Hurdle Alignment**: {a4.get('section2_executive_remuneration', {}).get('3_incentive_hurdle_alignment')}
+- **Politically Exposed Persons (PEP) & Rent-Seeking**: {a4.get('section3_pep_rent_seeking', {}).get('1_pep_presence')} | Dependency: {a4.get('section3_pep_rent_seeking', {}).get('2_government_concession_dependency')}
+- **Master RPT Pricing & Arm's Length Validation**: {a4.get('section4_master_rpt', {}).get('pricing_validation', {}).get('pricing_arms_length')}
+- **Capital Siphoning & Corporate Guarantees**: {a4.get('section4_master_rpt', {}).get('capital_siphoning', {}).get('unsecured_loans_to_insiders')} | Guarantees: {a4.get('section4_master_rpt', {}).get('capital_siphoning', {}).get('corporate_guarantees')}
+- **RPT Revenue & Disclosure Governance**: RPT % of Revenue: {a4.get('audit_metrics', {}).get('RPT % of Revenue')} | Audit Committee Sign-Off: {a4.get('section4_master_rpt', {}).get('governance_disclosures', {}).get('audit_committee_preapproval')}
+
+---
+
+### 📈 Agent 5: Industry Operational KPIs ({a5.get('activated_checklist_section')})
+"""
+    for k, v in a5.get("kpi_results", {}).items():
+        full_report_md += f"- **{k}**: {v}\n"
+
+    full_report_md += f"""
+---
+
+### 🎯 Agent 6: CIO Valuation, Asset Floors & Reverse DCF
+- **Management Walk-the-Talk Audit**:
+  - Target 1 (BLDC Energy Efficiency): {a6.get('section1_management_walk_the_talk', {}).get('1_historical_delivery_1', {}).get('verdict')}
+  - Target 2 (Butterfly Synergy): {a6.get('section1_management_walk_the_talk', {}).get('1_historical_delivery_2', {}).get('verdict')}
+  - Target 3 (CFO Conversion): {a6.get('section1_management_walk_the_talk', {}).get('1_historical_delivery_3', {}).get('verdict')}
+- **Independent Asset & Yield Valuation Floors (Non-DCF / Non-Relative)**:
+  - **Tangible Book Value (TBV)**: {a6.get('section2_asset_yield_valuation', {}).get('1_tangible_book_value_per_share')}
+  - **Graham Net-Net (NCAV)**: {a6.get('section2_asset_yield_valuation', {}).get('2_graham_net_net_ncav')}
+  - **Stressed Liquidation Value**: {a6.get('section2_asset_yield_valuation', {}).get('3_liquidation_value_stressed')}
+  - **Owner Earnings Yield**: {a6.get('section2_asset_yield_valuation', {}).get('4_owner_earnings_yield')}
+  - **Earnings Power Value (EPV, 0% Growth)**: {a6.get('section2_asset_yield_valuation', {}).get('5_earnings_power_value_epv')}
+  - **Dividend Yield & Organic Coverage**: {a6.get('section2_asset_yield_valuation', {}).get('6_dividend_yield_and_fcf_payout')}
+- **Reverse DCF Hurdle Test (WACC 11.5%, Terminal Growth 5.5%)**:
+  - Implied 10-Year FCF CAGR: **{dossier.get('implied_growth_pct')}%** ({a6.get('section3_reverse_dcf', {}).get('2_reality_check_vs_guidance')})
+- **3-Scenario Valuation Matrix**:
+  - **Bear Case**: Target {a6.get('section4_scenario_matrix', {}).get('bear_case', {}).get('fair_target_price')} ({a6.get('section4_scenario_matrix', {}).get('bear_case', {}).get('expected_return')}) | Growth: {a6.get('section4_scenario_matrix', {}).get('bear_case', {}).get('growth_assumed')}
+  - **Base Case**: Target {a6.get('section4_scenario_matrix', {}).get('base_case', {}).get('fair_target_price')} ({a6.get('section4_scenario_matrix', {}).get('base_case', {}).get('expected_return')}) | Growth: {a6.get('section4_scenario_matrix', {}).get('base_case', {}).get('growth_assumed')}
+  - **Bull Case**: Target {a6.get('section4_scenario_matrix', {}).get('bull_case', {}).get('fair_target_price')} ({a6.get('section4_scenario_matrix', {}).get('bull_case', {}).get('expected_return')}) | Growth: {a6.get('section4_scenario_matrix', {}).get('bull_case', {}).get('growth_assumed')}
+- **Thesis Invalidation Triggers**:
+"""
+    for trig in a6.get("invalidation_triggers", []):
+        full_report_md += f"  - {trig}\n"
+
+    full_report_md += f"""
+---
+### 🏛️ Final Institutional Verdict: **{rating}**
+"""
+
+    st.markdown('<div class="report-card">', unsafe_allow_html=True)
+    st.markdown(full_report_md, unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # Accordion Tabs for All 7 Agent Audits (Expanded by default)
+    st.subheader("🔬 Deep-Dive Multi-Agent Audit Accordions (Expanded by Default)")
 
     # Agent 0: Classifier
-    with st.expander("🏷️ Agent 0: Industry Taxonomy & Routing Profile", expanded=False):
-        a0 = dossier["agent_0"]
+    with st.expander("🏷️ Agent 0: Industry Taxonomy & Routing Profile", expanded=True):
         st.caption("System Prompt dynamically loaded from: `agent0_classifier.txt`")
         
         c0_1, c0_2 = st.columns(2)
@@ -236,7 +375,6 @@ def main():
 
     # Agent 1: Qualitative & Moat Auditor
     with st.expander("🛡️ Agent 1: Qualitative & Economic Moat Auditor", expanded=True):
-        a1 = dossier["agent_1"]
         st.caption("System Prompt dynamically loaded from: `agent1_qualitative.txt`")
         st.markdown(f"**Moat Classification**: `{a1.get('moat_rating')}` (Checklist Score: **{a1.get('checklist_score')}/100**)")
 
@@ -270,7 +408,6 @@ def main():
 
     # Agent 2: Forensic Detective
     with st.expander("🔍 Agent 2: Forensic Accounting Detective", expanded=True):
-        a2 = dossier["agent_2"]
         st.caption("System Prompt dynamically loaded from: `agent2_forensics.txt`")
         st.markdown(f"**Forensic Status**: {render_risk_pill('Forensics', a2.get('risk_pill'))}", unsafe_allow_html=True)
         st.markdown(f"**Detective Summary**: {a2.get('summary')}")
@@ -310,8 +447,7 @@ def main():
                 st.markdown(f'<div class="q-box"><div class="q-title">{k.replace("_", " ").upper()}</div><div class="q-ans">{v}</div></div>', unsafe_allow_html=True)
 
     # Agent 3: Solvency & Capital Allocation
-    with st.expander("⚖️ Agent 3: Balance Sheet, Solvency & Capital Allocation Analyst", expanded=False):
-        a3 = dossier["agent_3"]
+    with st.expander("⚖️ Agent 3: Balance Sheet, Solvency & Capital Allocation Analyst", expanded=True):
         st.caption("System Prompt dynamically loaded from: `agent3_solvency.txt`")
         st.markdown(f"**Solvency Status**: {render_risk_pill('Solvency', a3.get('risk_pill'))}", unsafe_allow_html=True)
         st.markdown(f"**Assessment**: {a3.get('summary')}")
@@ -339,8 +475,7 @@ def main():
                 st.markdown(f'<div class="q-box"><div class="q-title">{k.replace("_", " ").upper()}</div><div class="q-ans">{v}</div></div>', unsafe_allow_html=True)
 
     # Agent 4: Governance & Master RPT
-    with st.expander("🏛️ Agent 4: Governance, RPT & Executive Remuneration Auditor", expanded=False):
-        a4 = dossier["agent_4"]
+    with st.expander("🏛️ Agent 4: Governance, RPT & Executive Remuneration Auditor", expanded=True):
         st.caption("System Prompt dynamically loaded from: `agent4_governance_rpt.txt`")
         st.markdown(f"**Governance Status**: {render_risk_pill('Governance', a4.get('risk_pill'))}", unsafe_allow_html=True)
         st.markdown(f"**Audit Findings**: {a4.get('summary')}")
@@ -369,8 +504,7 @@ def main():
                     st.markdown(f'<div class="q-box"><div class="q-title">{sub_k.replace("_", " ").upper()}</div><div class="q-ans">{sub_v}</div></div>', unsafe_allow_html=True)
 
     # Agent 5: Industry KPI Specialist
-    with st.expander("📈 Agent 5: Industry KPI Specialist", expanded=False):
-        a5 = dossier["agent_5"]
+    with st.expander("📈 Agent 5: Industry KPI Specialist", expanded=True):
         st.caption("System Prompt dynamically loaded from: `agent5_industry_kpi.txt`")
         st.markdown(f"**Activated Sector Checklist**: `{a5.get('activated_checklist_section')}`")
         st.markdown(f"**Summary**: {a5.get('summary')}")
@@ -382,7 +516,6 @@ def main():
 
     # Agent 6: CIO & Valuation Specialist
     with st.expander("🎯 Agent 6: Chief Investment Officer & Valuation Specialist", expanded=True):
-        a6 = dossier["agent_6"]
         st.caption("System Prompt dynamically loaded from: `agent6_valuation_cio.txt`")
         st.markdown(f"**CIO Final Rating Badge**: `{a6.get('institutional_rating')}`")
         st.markdown(f"**CIO Synthesis**: {a6.get('summary')}")
@@ -443,30 +576,39 @@ def main():
             for trig in a6.get("invalidation_triggers", []):
                 st.markdown(f'<div class="bullet-card">❌ {trig}</div>', unsafe_allow_html=True)
 
-    # Download Report Button
+    # Download Dossier Buttons (Markdown and JSON)
     st.markdown("---")
-    export_json = json.dumps({
-        "symbol": symbol,
-        "company_name": company_name,
-        "current_price": cmp,
-        "market_cap_cr": mcap_cr,
-        "institutional_rating": rating,
-        "agent_0_classifier": a0.get("routing_profile"),
-        "agent_1_qualitative": a1.get("summary"),
-        "agent_2_forensics": a2.get("summary"),
-        "agent_3_solvency": a3.get("summary"),
-        "agent_4_governance": a4.get("summary"),
-        "agent_5_industry_kpi": a5.get("summary"),
-        "agent_6_valuation_cio": a6.get("summary")
-    }, indent=2)
-
-    st.download_button(
-        label="📥 Download Complete Institutional Dossier (JSON)",
-        data=export_json,
-        file_name=f"{symbol}_institutional_dossier.json",
-        mime="application/json",
-        use_container_width=True
-    )
+    d_col1, d_col2 = st.columns(2)
+    with d_col1:
+        st.download_button(
+            label="📥 Download Full Research Report (.md)",
+            data=full_report_md,
+            file_name=f"{symbol}_institutional_dossier.md",
+            mime="text/markdown",
+            use_container_width=True
+        )
+    with d_col2:
+        export_json = json.dumps({
+            "symbol": symbol,
+            "company_name": company_name,
+            "current_price": cmp,
+            "market_cap_cr": mcap_cr,
+            "institutional_rating": rating,
+            "agent_0_classifier": a0.get("routing_profile"),
+            "agent_1_qualitative": a1.get("summary"),
+            "agent_2_forensics": a2.get("summary"),
+            "agent_3_solvency": a3.get("summary"),
+            "agent_4_governance": a4.get("summary"),
+            "agent_5_industry_kpi": a5.get("summary"),
+            "agent_6_valuation_cio": a6.get("summary")
+        }, indent=2)
+        st.download_button(
+            label="📥 Download Structured Dossier (.json)",
+            data=export_json,
+            file_name=f"{symbol}_institutional_dossier.json",
+            mime="application/json",
+            use_container_width=True
+        )
 
 
 if __name__ == "__main__":
