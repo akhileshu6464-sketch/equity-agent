@@ -426,16 +426,40 @@ def main():
     with st.expander("🏷️ Agent 0: Industry Taxonomy & Routing Profile", expanded=True):
         st.caption("System Prompt dynamically loaded from: `agent0_classifier.txt`")
         
-        c0_1, c0_2 = st.columns(2)
-        c0_1.metric("Primary Sector (1 of 12)", a0.get("primary_sector"))
-        c0_2.metric("Sub-Vertical", a0.get("sub_vertical")[:45] + "...")
+        col_left, col_right = st.columns(2)
+        
+        with col_left:
+            st.markdown(
+                f'<div class="q-box">'
+                f'<div class="q-title">PRIMARY SECTOR (ASSIGNED 1 OF 12)</div>'
+                f'<div class="q-ans"><strong>{a0.get("primary_sector", "N/A")}</strong></div>'
+                f'</div>',
+                unsafe_allow_html=True
+            )
+            st.markdown(
+                f'<div class="q-box">'
+                f'<div class="q-title">SUB-VERTICAL</div>'
+                f'<div class="q-ans">{a0.get("sub_vertical", "N/A")}</div>'
+                f'</div>',
+                unsafe_allow_html=True
+            )
+            
+        with col_right:
+            st.markdown(
+                f'<div class="q-box">'
+                f'<div class="q-title">REVENUE ENGINE SUMMARY (&gt;60% OPERATING PROFIT DRIVER)</div>'
+                f'<div class="q-ans" style="line-height: 1.6;">{a0.get("revenue_engine_summary", "N/A")}</div>'
+                f'</div>',
+                unsafe_allow_html=True
+            )
 
-        st.markdown("##### 📄 Exact Routing Profile JSON:")
-        st.json(a0.get("routing_profile", {}))
-
-        st.markdown("**Hybrid / Secondary Business Verticals:**")
-        for hv in a0.get("hybrid_verticals", []):
-            st.markdown(f"- {hv}")
+        st.markdown("##### 🌿 Hybrid / Secondary Business Verticals")
+        hybrids = a0.get("hybrid_verticals", [])
+        if hybrids:
+            for hv in hybrids:
+                st.markdown(f"- {hv}")
+        else:
+            st.markdown("- *No secondary or hybrid business verticals identified.*")
 
     # Agent 1: Qualitative & Moat Auditor
     with st.expander("🛡️ Agent 1: Qualitative & Economic Moat Auditor", expanded=True):
