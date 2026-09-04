@@ -9,8 +9,41 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 from typing import Dict, Any
+from fpdf import FPDF
 
 from agents.pipeline import EquityAgentPipeline
+
+
+class PDFReport(FPDF):
+    def header(self):
+        self.set_font('Helvetica', 'B', 14)
+        self.cell(0, 10, f'{self.ticker} - Institutional Equity Audit', border=False, align='C')
+        self.ln(12)
+
+    def footer(self):
+        self.set_y(-15)
+        self.set_font('Helvetica', 'I', 8)
+        self.cell(0, 10, f'Page {self.page_no()}', border=False, align='C')
+
+
+def generate_pdf(report_text: str, ticker: str) -> bytes:
+    pdf = PDFReport()
+    pdf.ticker = ticker
+    pdf.add_page()
+    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.set_font("Helvetica", size=10)
+    
+    # Sanitize text to latin-1 to avoid fpdf encoding crashes
+    clean_text = report_text.replace('₹', 'Rs. ').encode('latin-1', 'replace').decode('latin-1')
+    
+    for line in clean_text.split('\n'):
+        if not line.strip():
+            pdf.ln(3)
+        else:
+            pdf.set_x(pdf.l_margin)
+            pdf.multi_cell(0, 5, line)
+    
+    return bytes(pdf.output())
 
 # Page configuration
 st.set_page_config(
@@ -347,9 +380,9 @@ def main():
 
 ### 🎯 Agent 6: CIO Valuation, Asset Floors & Reverse DCF
 - **Management Walk-the-Talk Audit**:
-  - Target 1 (BLDC Energy Efficiency): {a6.get('section1_management_walk_the_talk', {}).get('1_historical_delivery_1', {}).get('verdict')}
-  - Target 2 (Butterfly Synergy): {a6.get('section1_management_walk_the_talk', {}).get('1_historical_delivery_2', {}).get('verdict')}
-  - Target 3 (CFO Conversion): {a6.get('section1_management_walk_the_talk', {}).get('1_historical_delivery_3', {}).get('verdict')}
+  - Target 1: {a6.get('section1_management_walk_the_talk', {}).get('1_historical_delivery_1', {}).get('target', 'Core Operational Target')} -> **{a6.get('section1_management_walk_the_talk', {}).get('1_historical_delivery_1', {}).get('verdict')}**
+  - Target 2: {a6.get('section1_management_walk_the_talk', {}).get('1_historical_delivery_2', {}).get('target', 'Capital Allocation Target')} -> **{a6.get('section1_management_walk_the_talk', {}).get('1_historical_delivery_2', {}).get('verdict')}**
+  - Target 3: {a6.get('section1_management_walk_the_talk', {}).get('1_historical_delivery_3', {}).get('target', 'Operating Cash Flow Conversion')} -> **{a6.get('section1_management_walk_the_talk', {}).get('1_historical_delivery_3', {}).get('verdict')}**
 - **Independent Asset & Yield Valuation Floors (Non-DCF / Non-Relative)**:
   - **Tangible Book Value (TBV)**: {a6.get('section2_asset_yield_valuation', {}).get('1_tangible_book_value_per_share')}
   - **Graham Net-Net (NCAV)**: {a6.get('section2_asset_yield_valuation', {}).get('2_graham_net_net_ncav')}
@@ -376,6 +409,15 @@ def main():
     st.markdown('<div class="report-card">', unsafe_allow_html=True)
     st.markdown(full_report_md, unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
+
+    # Direct PDF Download Button
+    pdf_data = generate_pdf(full_report_md, ticker)
+    st.download_button(
+        label="📄 Download Full Institutional PDF Dossier",
+        data=pdf_data,
+        file_name=f"{ticker}_Institutional_Audit.pdf",
+        mime="application/pdf"
+    )
 
     # Accordion Tabs for All 7 Agent Audits (Expanded by default)
     st.subheader("🔬 Deep-Dive Multi-Agent Audit Accordions (Expanded by Default)")

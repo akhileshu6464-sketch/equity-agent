@@ -183,27 +183,7 @@ class WebScraperService:
                 if len(cleaned) > 25 and cleaned not in macro_points:
                     macro_points.append(cleaned[:180])
 
-        # Domain fallback knowledge for Crompton Greaves Consumer Electricals if search was thin
-        if "crompton" in company_name.lower():
-            if not guidance_points:
-                guidance_points = [
-                    "Management guided for double-digit revenue CAGR driven by premium fans (BLDC transition) and appliances scaling.",
-                    "EBITDA margin recovery expected towards 11.5% - 12.5% as Butterfly integration synergies realize and operating leverage kicks in.",
-                    "Strengthening go-to-market in rural distribution channels and direct-to-retail reach across tier-2/3 towns."
-                ]
-            if not capex_points:
-                capex_points = [
-                    "Annual maintenance and expansion capex pegged at ₹120 - ₹180 Cr, focused on R&D for energy-efficient BLDC motors and in-house electronics.",
-                    "Supply chain automation and integration of Butterfly Gandhimathi manufacturing infrastructure in Southern India."
-                ]
-            if not macro_points:
-                macro_points = [
-                    "Copper, aluminum, and polypropylene raw material price volatility key determinant of quarterly gross margins.",
-                    "BEE energy efficiency star-rating migration boosting premium BLDC fan replacement cycle.",
-                    "Summer seasonality and real estate housing completion trends directly driving electrical consumer durables demand."
-                ]
-
-        # Generic baseline if still empty
+        # Generic baseline if search was thin or empty
         if not guidance_points:
             guidance_points = [
                 f"Management targeting mid-to-high teen volume growth across core operational segments.",

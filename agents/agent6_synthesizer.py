@@ -47,6 +47,8 @@ class Agent6Synthesizer(BaseAgent):
         ebit = latest.get("ebit", 0.0)
         rev = latest.get("revenue", 0.0)
         pat = latest.get("net_income", 0.0)
+        cum_cfo = sum(h.get("operating_cash_flow", 0.0) for h in history)
+        cum_pat = sum(h.get("net_income", 0.0) for h in history)
         total_liabilities = total_debt + (total_assets - equity - total_debt)
         current_assets = rec + inv + cash_eq + (total_assets * 0.15)
         pp_e = total_assets * 0.25
@@ -62,27 +64,7 @@ class Agent6Synthesizer(BaseAgent):
         bull_growth = context.get("bull_growth", 0.16)
 
         # SECTION 1: Management "Walk-The-Talk" Audit
-        is_crompton = "crompton" in name.lower() or "crompton" in ticker.lower()
-        if is_crompton:
-            sec1 = {
-                "1_historical_delivery_1": {
-                    "target": "BLDC Fan Transition & Premiumization: Target 30%+ share of portfolio in BLDC energy-efficient fans post-BEE mandate.",
-                    "actual": "Delivered successfully: Gained market leadership in 5-star BLDC fans with 'SilentPro' franchise.",
-                    "verdict": "[WALKED THE TALK]"
-                },
-                "1_historical_delivery_2": {
-                    "target": "Butterfly Gandhimathi Synergy Realization: Achieve ₹1,200 Cr revenue and double-digit EBITDA margin via pan-India distribution expansion.",
-                    "actual": "Partially Delivered: Channel distribution expanded into North/West, but southern market demand softness led to moderate margin lag.",
-                    "verdict": "[COMPROMISED]"
-                },
-                "1_historical_delivery_3": {
-                    "target": "Operating Cash Flow Conversion: Maintain >85% CFO/PAT cash generation without structural debt accumulation.",
-                    "actual": "Delivered in full: 5-year cumulative CFO exceeds ₹3,500 Cr, self-funding capex and keeping net debt near zero.",
-                    "verdict": "[WALKED THE TALK]"
-                },
-                "2_forward_guidance_realism": "Management guidance targeting 12%-14% consolidated revenue CAGR with EBITDA margins recovering to 11.5%-12.5% is realistic and achievable, supported by operating leverage, steady housing completions, and commodity cost stabilization."
-            }
-        elif is_banking:
+        if is_banking:
             sec1 = {
                 "1_historical_delivery_1": {
                     "target": "Credit Advances Growth: Outpace scheduled commercial banking industry growth (12-14% YoY) with disciplined risk selection.",
@@ -102,11 +84,41 @@ class Agent6Synthesizer(BaseAgent):
                 "2_forward_guidance_realism": "Management guidance targeting steady credit growth and sustainable RoE of 15%-18% is realistic and backed by proven execution track record."
             }
         else:
+            web_intel = context.get("web_intel", {})
+            g_pts = web_intel.get("guidance_points", [])
+            c_pts = web_intel.get("capex_points", [])
+            
+            target_1_title = f"Top-Line & Operational Growth ({g_pts[0][:60]}...)" if g_pts else f"Core Revenue Expansion across {company_data.get('industry', 'operating segments')}"
+            actual_1_desc = "Delivered: Maintained stable market execution and sales momentum in line with stated operational milestones."
+            
+            target_2_title = f"Strategic Capex & Capacity Allocation ({c_pts[0][:60]}...)" if c_pts else "Disciplined Capital Expenditure & Capacity Expansion"
+            actual_2_desc = "Delivered: Executed capital expenditure programs within budget parameters and internal cash generation."
+            
+            cfo_pat_ratio = (cum_cfo / cum_pat) if cum_pat > 0 else 0.0
+            if cum_cfo > 0:
+                cfo_conversion_msg = f"Delivered: 5-year cumulative CFO of ₹{round(cum_cfo / 1e7, 1)} Cr vs PAT of ₹{round(cum_pat / 1e7, 1)} Cr (conversion ratio: {round(cfo_pat_ratio * 100, 1)}%), self-funding operational requirements."
+                cfo_verdict = "[WALKED THE TALK]" if cfo_pat_ratio >= 0.70 else "[COMPROMISED]"
+            else:
+                cfo_conversion_msg = "Cash flow conversion remains monitorable across upcoming reporting cycles."
+                cfo_verdict = "[COMPROMISED]"
+                
             sec1 = {
-                "1_historical_delivery_1": {"target": "Revenue Growth Target", "actual": "In line with domestic industry trajectory", "verdict": "[WALKED THE TALK]"},
-                "1_historical_delivery_2": {"target": "Operating Margin Expansion", "actual": "Stable margins maintained despite input cost spikes", "verdict": "[WALKED THE TALK]"},
-                "1_historical_delivery_3": {"target": "Capacity Commissioning", "actual": "Commissioned on schedule within capex budgets", "verdict": "[WALKED THE TALK]"},
-                "2_forward_guidance_realism": "Management 3-year outlook achievable subject to macro industry tailwinds."
+                "1_historical_delivery_1": {
+                    "target": target_1_title,
+                    "actual": actual_1_desc,
+                    "verdict": "[WALKED THE TALK]"
+                },
+                "1_historical_delivery_2": {
+                    "target": target_2_title,
+                    "actual": actual_2_desc,
+                    "verdict": "[WALKED THE TALK]"
+                },
+                "1_historical_delivery_3": {
+                    "target": "Operating Cash Flow Conversion: Maintain strong structural conversion of operating profit into cash flow.",
+                    "actual": cfo_conversion_msg,
+                    "verdict": cfo_verdict
+                },
+                "2_forward_guidance_realism": f"Management outlook for {name} targeting operational scale and steady margin realization is achievable, backed by market positioning, capacity utilization, and sector demand."
             }
 
         # SECTION 2: Asset & Yield Valuation Floors (Non-DCF / Non-Relative)
@@ -200,18 +212,26 @@ class Agent6Synthesizer(BaseAgent):
         }
 
         # SECTION 4: Scenario Valuation Matrix & Final Rating Badge
-        if is_crompton:
-            bear_thesis = "Subdued housing cycle, input commodity inflation, delayed Butterfly synergies"
-            base_thesis = "Stable execution, BLDC fan market share gains, normal summer seasonality"
-            bull_thesis = "Accelerated rural electrification, full kitchen appliances turnaround, double-digit margin expansion"
-        elif is_banking:
+        if is_banking:
             bear_thesis = "Asset quality slippage (Gross NPA >3.0%), credit cost spike, deposit margin compression"
             base_thesis = "Prudent credit growth (12-14%), stable NIM spreads (3.6-4.0%), benign credit costs"
             bull_thesis = "High market share gains across retail/SME advances, digital cost-to-income efficiency, RoE >18%"
+        elif any(s in primary_sector.lower() for s in ["oil", "gas", "energy", "petro"]):
+            bear_thesis = "Refining margin compression, global crude volatility, subdued petrochemical spreads"
+            base_thesis = "Steady refining throughput, resilient consumer retail and telecom EBITDA, disciplined debt servicing"
+            bull_thesis = "Sharp GRM expansion, high-margin consumer subscriber ARPU inflection, accelerated new energy monetization"
+        elif any(s in primary_sector.lower() for s in ["consumer", "fmcg"]):
+            bear_thesis = "Subdued consumption cycle, commodity raw material inflation, delayed pricing pass-through"
+            base_thesis = "Steady volume growth, premiumization, distribution channel expansion across tier-2/3 towns"
+            bull_thesis = "Accelerated consumption revival, market share gains from unorganized segment, operating margin expansion"
+        elif any(s in primary_sector.lower() for s in ["technology", "it services", "saas"]):
+            bear_thesis = "Slowdown in enterprise tech spending, client discretionary cuts, project billing delays"
+            base_thesis = "Steady constant-currency revenue growth, resilient large deal pipeline, stable operating margins"
+            bull_thesis = "Acceleration in GenAI and digital transformation programs, margin expansion via employee pyramid utilization"
         else:
-            bear_thesis = "Macro slowdown, input cost inflation, margin contraction"
-            base_thesis = "Steady volume growth, operating leverage, stable market share"
-            bull_thesis = "Market share expansion, operating margin turnaround, multi-year capacity utilization"
+            bear_thesis = f"Macro slowdown, input cost inflation, margin contraction across {company_data.get('industry', 'core sector')}"
+            base_thesis = f"Steady volume growth, operating leverage, stable market share in {company_data.get('industry', 'core markets')}"
+            bull_thesis = f"Market share expansion, operating margin turnaround, multi-year capacity utilization across {company_data.get('industry', 'primary verticals')}"
 
         scenario_matrix = {
             "bear_case": {
@@ -253,13 +273,7 @@ class Agent6Synthesizer(BaseAgent):
             risk_pill = "GREEN"
 
         # Invalidation Triggers
-        if is_crompton:
-            invalidation_triggers = [
-                "1. Cumulative CFO / PAT conversion ratio drops below 0.70x over two consecutive fiscal quarters.",
-                "2. Failure of Butterfly Gandhimathi business to deliver >8% operating EBITDA margin within 18 months.",
-                "3. Core ceiling fan market share drops by >250 bps in primary distribution channels."
-            ]
-        elif is_banking:
+        if is_banking:
             invalidation_triggers = [
                 "1. Gross NPA ratio rises above 3.0% or Net NPA crosses 1.0% indicating deterioration in loan asset quality.",
                 "2. Net Interest Margin (NIM) compresses below 3.0% due to rising deposit cost of funds.",
@@ -268,8 +282,8 @@ class Agent6Synthesizer(BaseAgent):
         else:
             invalidation_triggers = [
                 "1. Operating EBITDA margin contracts by >250 bps across two consecutive fiscal quarters.",
-                "2. Working capital days stretch by >25% or structural cash conversion drops below 0.70x.",
-                "3. Core product line revenue growth falls materially below broader industry sector benchmarks."
+                "2. Structural cash conversion deteriorates with Cumulative CFO / PAT falling below 0.70x.",
+                f"3. Core segment revenue growth or market share falls materially (>200 bps) below primary {company_data.get('industry', 'industry')} benchmarks."
             ]
 
         flags = [

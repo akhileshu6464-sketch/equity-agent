@@ -228,7 +228,7 @@ class Agent0Classifier(BaseAgent):
         if "crompton" in s:
             sub_vertical = "Electric Consumer Durables (Fans, Pumps, Lighting & Small Domestic Appliances)"
             hybrids = [
-                "Kitchen Appliances & Cookware (via Butterfly Gandhimathi integration)",
+                "Kitchen Appliances & Cookware",
                 "Solar Water Pumps & Agricultural Solar EPC",
                 "Smart Home Connected Lighting / IoT Lighting Solutions"
             ]
@@ -262,7 +262,7 @@ class Agent0Classifier(BaseAgent):
                     "Digital Services (Jio telecom & broadband), and organized Retail, with the O2C energy engine generating foundational operating cash flows.")
         if "crompton" in s or t.startswith("CROMPTON"):
             return ("Crompton Greaves Consumer Electricals generates over 65% of its revenues and operating profit from Electric Consumer Durables "
-                    "(residential ceiling/BLDC fans, residential water pumps, and domestic appliances), with the remainder driven by LED lighting and Butterfly kitchenware.")
+                    "(fans, pumps, and domestic appliances), with the remainder driven by lighting and kitchenware.")
         if "larsen" in s or "l&t" in s or t.startswith("LT."):
             return ("Larsen & Toubro operates primarily in Heavy Engineering, Infrastructure, and Defense EPC, "
                     "executing complex multi-billion dollar turnkey capital projects across India and international markets.")

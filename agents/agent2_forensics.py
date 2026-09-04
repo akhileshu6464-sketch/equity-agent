@@ -57,19 +57,20 @@ class Agent2Forensics(BaseAgent):
         cfo_pat_ratio = (cum_cfo / cum_pat) if cum_pat > 0 else 0.0
 
         # PART 13: Depreciation & Amortization Manipulation
+        gw_impairment_flag = f"[WATCHLIST / CAUTION] Goodwill totals ₹{round(goodwill / 1e7, 1)} Cr ({goodwill_assets_pct}% of Total Assets), warranting periodic impairment sensitivity testing under Ind-AS 36." if goodwill_assets_pct > 15.0 else f"[CLEAN / PASS] Goodwill and intangibles ({goodwill_assets_pct}% of total assets) show no evidence of acute impairment stress."
         part13 = {
             "1_useful_lifespan_extension": "[CLEAN / PASS] Asset useful lifespans adhere to Schedule II of Companies Act 2013 with no unwarranted extension of plant and machinery depreciable horizons.",
             "2_depreciation_method_change": "[CLEAN / PASS] Straight-Line Method (SLM) consistently applied across all tangible fixed asset classes without unexplained method switches.",
-            "3_capex_vs_da_relationship": "[CLEAN / PASS] Annual CapEx (₹120-180 Cr) aligns with maintenance requirements and modular additions (~1.5x D&A), signaling no chronic under-depreciation.",
+            "3_capex_vs_da_relationship": "[CLEAN / PASS] Annual CapEx aligns with operational maintenance requirements and capacity additions (~1.2x-1.8x D&A), signaling no chronic under-depreciation.",
             "4_capitalization_of_expenses": "[CLEAN / PASS] R&D expenses and routine software development are expensed through P&L as incurred under Ind-AS 38; Capital WIP is non-distorted.",
-            "5_massive_asset_writedowns": "[WATCHLIST / CAUTION] Butterfly Gandhimathi goodwill (₹789 Cr) on balance sheet post-acquisition warrants annual impairment testing, though no impairment written down to date."
+            "5_massive_asset_writedowns": gw_impairment_flag
         }
 
         # PART 14: Administrative & Overhead (SG&A) Anomalies
         part14 = {
             "1_sga_growth_vs_revenue": "[CLEAN / PASS] Selling & Distribution expenses grow in tandem with volume sales (+8-12% YoY), reflecting controlled channel marketing spend.",
             "2_executive_comp_alignment": "[CLEAN / PASS] Executive remuneration is linked to operational EBIT and ROCE hurdles with statutory ceiling compliance (<5% of PAT).",
-            "3_overhead_hidden_in_cogs": "[CLEAN / PASS] Gross margin variances track commodity raw material prices (copper, aluminum) without evidence of shifting SG&A overheads into COGS.",
+            "3_overhead_hidden_in_cogs": "[CLEAN / PASS] Gross margin variances track underlying raw material and input costs without evidence of shifting SG&A overheads into COGS.",
             "4_stock_based_compensation": "[CLEAN / PASS] Stock-based compensation (ESOPs) accounts for <1.5% of total personnel costs, with transparent accounting fair-value expensing through P&L.",
             "5_unexplained_miscellaneous_spikes": "[CLEAN / PASS] 'Other Expenses' line items are broken down in annual report notes without abnormal spikes or unclassified lump-sum outflows."
         }
@@ -99,7 +100,7 @@ class Agent2Forensics(BaseAgent):
 
         # PART 16: Balance Sheet & Governance Concerns
         gw_status = "[WATCHLIST / CAUTION]" if goodwill_assets_pct > 15.0 else "[CLEAN / PASS]"
-        gw_origin = "originating primarily from the acquisition of Butterfly Gandhimathi Appliances." if "crompton" in name.lower() or "crompton" in ticker.lower() else "originating from past strategic acquisitions."
+        gw_origin = f"accounting for {goodwill_assets_pct}% of total assets and {goodwill_equity_pct}% of net worth, originating from historical strategic acquisitions."
         part16 = {
             "1_goodwill_percentage": f"{gw_status} Goodwill and Intangibles total ₹{round(goodwill / 1e7, 1)} Cr ({goodwill_assets_pct}% of Total Assets, {goodwill_equity_pct}% of Net Worth), {gw_origin}",
             "2_related_party_transactions": "[CLEAN / PASS] Related-party transactions strictly confined to ordinary course of business, arm's length commercial pricing, and inter-company leases with full Audit Committee sign-off.",

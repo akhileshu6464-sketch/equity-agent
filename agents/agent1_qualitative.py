@@ -26,105 +26,60 @@ class Agent1Qualitative(BaseAgent):
         industry = company_data.get("industry", "")
         web_intel = context.get("web_intel", {})
 
-        is_crompton = "crompton" in name.lower() or "crompton" in ticker.lower()
+        # Clean product / business description from yfinance summary
+        business_desc = summary[:280].strip() if summary else f"Core operations in {industry} ({sector})."
+        if not business_desc.endswith('.'):
+            business_desc += "..."
 
         # PART 1: Business Model & Revenue Mechanics
-        if is_crompton:
-            part1 = {
-                "1_core_product_service": "Electric Consumer Durables: Fans (BLDC and premium decorative ceiling fans), Residential Water Pumps, and LED Lighting contribute ~80% of revenue and operating profit, complemented by Butterfly kitchen appliances.",
-                "2_revenue_model": "Transactional model driven by seasonal consumer purchases and housing completion cycles, supported by a recurring replacement cycle (fans/appliances replaced every 5-7 years).",
-                "3_customer_concentration": "Widely diversified retail consumer base across India; channel sales distributed via >150,000 retail touchpoints and regional distributors. No single dealer or customer accounts for >3% of total revenue.",
-                "4_switching_costs": "Low to Moderate at consumer retail level (consumers can pick alternative brands at retail). Moderate at electrician/plumber contractor level due to entrenched installer loyalty, warranty support, and service network reach.",
-                "5_sales_process": "Omnichannel distribution reliant on strong dealer-distributor networks, electrician engagement loyalty programs ('Crompton Josh'), and brand advertising (ATL/BTL campaigns)."
-            }
-        else:
-            part1 = {
-                "1_core_product_service": f"Primary offerings in {industry} within {sector}.",
-                "2_revenue_model": "Primarily transactional enterprise and consumer sales contracts with periodic renewals.",
-                "3_customer_concentration": "Diversified customer base across target demographic with low individual counterparty concentration risk.",
-                "4_switching_costs": "Moderate switching costs based on brand equity, product integration, and distribution channel relationships.",
-                "5_sales_process": "Multi-tier distributor-led sales supported by national marketing and trade channel incentives."
-            }
+        part1 = {
+            "1_core_product_service": f"{industry} / {sector}: {business_desc}",
+            "2_revenue_model": f"Commercial and consumer operating model serving domestic and international demand across {industry}.",
+            "3_customer_concentration": "Diversified customer base across target demographics with well-distributed counterparty risk across operating divisions.",
+            "4_switching_costs": "Moderate to High switching costs driven by brand recall, product standards adherence, and entrenched vendor/client relationships.",
+            "5_sales_process": "Multi-tier commercial distribution network complemented by direct enterprise and institutional touchpoints."
+        }
 
         # PART 2: Competitive Advantage (Economic Moat)
-        if is_crompton:
-            part2 = {
-                "1_barriers_to_entry": "Entrenched brand equity built over 80+ years, extensive pan-India distribution reach (Tier 1 to Tier 4 towns), in-house R&D for BLDC energy efficiency, and pan-India after-sales service infrastructure.",
-                "2_moat_source": "Brand Equity (high consumer brand recall in Fans & Pumps) and Cost Advantage (manufacturing scale, local sourcing, and deep supply chain bargaining power).",
-                "3_moat_trajectory": "Stable to Widening: Strengthening premium BLDC market share, expanding Butterfly distribution footprint in North/West India, and transitioning from unorganized to organized sector under BEE star-rating regulations.",
-                "4_tollbooth_position": "No absolute tollbooth, but holds an oligopolistic top-2 market share position in Indian consumer fans alongside Havells.",
-                "5_pricing_power": "Moderate Pricing Power: Able to pass on raw material inflation (copper, aluminum) to consumers with a 30-60 day lag via periodic price hikes without losing market share."
-            }
-        else:
-            part2 = {
-                "1_barriers_to_entry": "Distribution reach, scale manufacturing, established client relationships, and regulatory approvals.",
-                "2_moat_source": "Brand Equity, operational scale, and customer relationships.",
-                "3_moat_trajectory": "Stable: Competing against established incumbents with moderate market share gains in core niches.",
-                "4_tollbooth_position": "Competitive market with alternative substitute choices.",
-                "5_pricing_power": "Moderate: Price adjustments require industry-wide cost inflation triggers."
-            }
+        part2 = {
+            "1_barriers_to_entry": f"High barriers to entry anchored by capital investment scale, proprietary process knowledge, nationwide distribution, and regulatory approvals in {industry}.",
+            "2_moat_source": "Brand Equity, operational scale advantages, and extensive distribution/servicing infrastructure.",
+            "3_moat_trajectory": "Stable to Widening: Defending core market share against domestic peers while capitalizing on organized sector formalization.",
+            "4_tollbooth_position": "Strong competitive standing within primary market segments with high recurring demand.",
+            "5_pricing_power": "Moderate to High: Capable of passing through input cost inflation over 30-90 day operating cycles."
+        }
 
         # PART 3: Industry & Growth Potential
-        if is_crompton:
-            part3 = {
-                "1_structural_growth": "Long-term structural growth driven by Indian urbanization, nuclearization of households, housing electrification, premiumization (BLDC energy-efficient fans), and rural electrification.",
-                "2_tam_and_headroom": "Total Addressable Market in Indian FMEG/Consumer Electricals exceeds ₹85,000 Cr ($10B+). Substantial headroom to expand in small domestic appliances, built-in kitchen appliances, and solar pumps.",
-                "3_cyclicality_recession": "Moderately cyclical: Correlated with residential real estate completions and peak summer temperatures (for fans/coolers), but cushioned by recurring replacement and renovation demand.",
-                "4_primary_competitors": "Havells India, Orient Electric, Bajaj Electricals, Polycab, Voltas, and Atomberg. Industry has consolidated significantly post-GST and BEE regulatory mandates into top 5 organized players."
-            }
-        else:
-            part3 = {
-                "1_structural_growth": "Secular demand expansion aligned with Indian economic GDP growth.",
-                "2_tam_and_headroom": "Expanding TAM with headroom in tier-2/3 cities and export opportunities.",
-                "3_cyclicality_recession": "Moderate cyclicality tied to overall capital formation and consumer sentiment.",
-                "4_primary_competitors": "Top 4-5 organized competitors in an increasingly consolidated landscape."
-            }
+        part3 = {
+            "1_structural_growth": f"Secular multi-year expansion driven by Indian economic growth, infrastructure formalization, and demographic consumption tailwinds in {sector}.",
+            "2_tam_and_headroom": f"Substantial total addressable market headroom across urban, rural, and export corridors in {industry}.",
+            "3_cyclicality_recession": "Moderately cyclical: Influenced by broader macroeconomic capital expenditure and consumption cycles, balanced by recurring aftermarket and maintenance needs.",
+            "4_primary_competitors": f"Operates alongside leading domestic and multinational corporations in {industry} in an increasingly consolidating landscape."
+        }
 
         # PART 5: Operations & Scalability
-        if is_crompton:
-            part5 = {
-                "1_operating_leverage": "Positive Operating Leverage: Manufacturing plants operate with modular expansion capacity; SG&A and distribution costs scale sub-linearly relative to incremental sales volume.",
-                "2_supply_chain_risks": "Low-to-moderate single-source risk: Major raw materials (copper, aluminum, plastics, silicon steel) procured from diversified domestic and international vendors. Component assembly diversified across multiple plants (Baddi, Bethora, Kundaim).",
-                "3_capital_intensity": "Asset-Light to Moderate Capital Intensity: Annual maintenance capex is ~1.5%-2.5% of revenue, utilizing outsourcing for low-margin assembly while retaining core motor/electronics manufacturing in-house."
-            }
-        else:
-            part5 = {
-                "1_operating_leverage": "Moderate operational leverage achievable as volume reaches plant design thresholds.",
-                "2_supply_chain_risks": "Diversified supplier base with standard industry component availability.",
-                "3_capital_intensity": "Moderate capital intensity with disciplined working capital requirements."
-            }
+        part5 = {
+            "1_operating_leverage": "Positive operating leverage: High fixed asset utilization allows incremental revenue to flow through to operating margins at attractive conversion rates.",
+            "2_supply_chain_risks": "Diversified supplier base across domestic and global channels with strategic inventory management to mitigate raw material supply disruptions.",
+            "3_capital_intensity": "Disciplined capital intensity with annual capex funded predominantly through internal cash generation."
+        }
 
         # PART 6: Ground-Level Feedback ("Scuttlebutt")
-        if is_crompton:
-            part6 = {
-                "1_customer_sentiment": "Strong consumer brand equity for durability and motor reliability ('Crompton reliability'). Customer feedback on BLDC SilentPro fans and water pumps remains highly positive on Amazon/Flipkart (>4.2/5 average rating).",
-                "2_employee_culture": "AmbitionBox rating ~4.0/5. Reviews reflect professional corporate governance, stable management pedigree, and merit-based organizational structure with low attrition in core engineering teams.",
-                "3_competitor_stance": "Competitors respect Crompton's deep distribution reach and aggressive pricing in entry-to-mid premium fans; newer D2C competitors (e.g. Atomberg) actively compete on smart IoT features."
-            }
-        else:
-            part6 = {
-                "1_customer_sentiment": "Stable market reputation for quality and prompt post-sales support.",
-                "2_employee_culture": "Positive workforce satisfaction with standard corporate benchmarks.",
-                "3_competitor_stance": "Viewed as a steady, rational competitor with disciplined promotional spending."
-            }
+        part6 = {
+            "1_customer_sentiment": f"Established market goodwill and reputable brand perception for product reliability and after-sales support in {industry}.",
+            "2_employee_culture": "Professional managerial hierarchy with institutional talent retention and structured leadership succession planning.",
+            "3_competitor_stance": "Viewed as a disciplined, formidable market incumbent with deep channel relationships."
+        }
 
         # PART 7: Qualitative Risks & Vulnerabilities
-        if is_crompton:
-            part7 = {
-                "1_disruptive_technologies": "Rapid consumer shift towards smart IoT-enabled voice-controlled appliances and ultra-efficient BLDC motors where agility against tech-first startups is required.",
-                "2_regulatory_exposure": "High regulatory compliance exposure to Bureau of Energy Efficiency (BEE) star-rating transitions and BIS quality control standards (requiring redesign and inventory management).",
-                "3_input_cost_lag": "Exposure to sharp spikes in copper, aluminum, and crude-linked polypropylene; typical price pass-through lag is 45-60 days.",
-                "4_single_biggest_failure_point": "Execution failure in integrating Butterfly Gandhimathi appliances or losing the #1/#2 market share leadership in Fans during energy rating shifts."
-            }
-        else:
-            part7 = {
-                "1_disruptive_technologies": "Technology transitions towards automated and energy-efficient product lines.",
-                "2_regulatory_exposure": "Standard statutory, environmental, and product quality regulatory compliance.",
-                "3_input_cost_lag": "Raw material commodity inflation requires 30-90 day pass-through adjustment windows.",
-                "4_single_biggest_failure_point": "Severe demand contraction in core end-markets or major quality recall event."
-            }
+        part7 = {
+            "1_disruptive_technologies": f"Technological modernization, digital supply chain adoption, and transition to energy-efficient and automated processes in {industry}.",
+            "2_regulatory_exposure": "Statutory compliance with Indian regulatory bodies, environmental mandates, and quality certifications.",
+            "3_input_cost_lag": "Commodity input price fluctuations managed via forward contracting and periodic price revisions.",
+            "4_single_biggest_failure_point": f"Significant loss of market share to aggressive competitors or prolonged operational demand slowdown in {industry}."
+        }
 
-        checklist_score = 82 if is_crompton else 75
+        checklist_score = 78
         risk_pill = "GREEN" if checklist_score >= 75 else "YELLOW"
 
         flags = [
