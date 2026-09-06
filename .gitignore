@@ -39,3 +39,7 @@ ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
 .DS_Store
+
+# Local Scratch & Artifacts
+scratch/
+*.pdf

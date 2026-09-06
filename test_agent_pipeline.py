@@ -22,7 +22,11 @@ if sys.platform == "win32":
 # Ensure root directory is in sys.path
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
+import io
+import pypdf
+
 from agents.pipeline import EquityAgentPipeline
+from pdf_generator import build_institutional_pdf
 
 
 def test_pipeline(ticker: str = "CROMPTON.NS"):
@@ -188,6 +192,49 @@ def test_pipeline(ticker: str = "CROMPTON.NS"):
     print("  • Invalidation Triggers:")
     for trig in a6.get("invalidation_triggers", []):
         print(f"      - {trig}")
+    # =========================================================================
+    # VERIFY 20+ PAGE INSTITUTIONAL REPORTLAB PDF BUILDER
+    # =========================================================================
+    print("\n" + "=" * 80)
+    print("📄 [STAGE 3: VERIFY 20+ PAGE INSTITUTIONAL REPORTLAB PDF BUILDER]")
+    print("=" * 80)
+    meta = dossier.get("financial_payload", {}).get("company_meta", {})
+    metrics = {
+        "cmp": meta.get("current_price"),
+        "mcap": meta.get("market_cap_cr"),
+        "sector": meta.get("sector"),
+        "range": f"{meta.get('fifty_two_week_low', 0):,.1f} - {meta.get('fifty_two_week_high', 0):,.1f}",
+        "stat4_tag": "P/E Ratio",
+        "stat4_num": f"{meta.get('trailing_pe', 0.0):.1f}x",
+        "stat5_tag": "EV/EBITDA",
+        "stat5_num": f"{meta.get('ev_to_ebitda', 0.0):.1f}x",
+        "verdict": dossier.get("institutional_rating", "[HOLD / FAIR VALUE]"),
+        "implied_cagr": dossier.get("implied_growth_pct", "10.5%"),
+        "primary_valuation": dossier.get("primary_valuation", "Reverse DCF")
+    }
+
+    pdf_bytes = build_institutional_pdf(
+        ticker=ticker,
+        company_name=meta.get("short_name", ticker),
+        metrics=metrics,
+        dossier_dict=dossier
+    )
+
+    reader = pypdf.PdfReader(io.BytesIO(pdf_bytes))
+    num_pages = len(reader.pages)
+    print(f"  • Compiled ReportLab PDF Document: {len(pdf_bytes):,} bytes")
+    print(f"  • Total Dossier Page Count: {num_pages} pages")
+
+    # Save to scratch for artifact inspection
+    scratch_dir = os.path.join(os.path.dirname(__file__), "scratch")
+    os.makedirs(scratch_dir, exist_ok=True)
+    out_pdf_path = os.path.join(scratch_dir, f"{ticker.replace('.', '_')}_Institutional_Dossier.pdf")
+    with open(out_pdf_path, "wb") as f:
+        f.write(pdf_bytes)
+    print(f"  • Saved Institutional PDF Dossier to: {out_pdf_path}")
+
+    assert num_pages >= 20, f"Generated PDF has {num_pages} pages, which is less than the required 20+ pages!"
+    print(f"✅ INSTITUTIONAL REPORTLAB PDF VERIFIED: {num_pages} pages generated (>= 20 pages requirement satisfied)!")
 
     print("\n" + "=" * 80)
     print(f"✅ TWO-STAGE INSTITUTIONAL ENGINE EXECUTED SUCCESSFULLY FOR {ticker}!")

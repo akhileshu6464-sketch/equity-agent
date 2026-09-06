@@ -140,150 +140,7 @@ def clean_markdown_for_pdf(text):
     return '\n'.join(cleaned_lines)
 
 
-def build_presentation_pdf(ticker, company_name, metrics, dossier_dict):
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(
-        buffer,
-        pagesize=A4,
-        leftMargin=15 * mm,
-        rightMargin=15 * mm,
-        topMargin=20 * mm,
-        bottomMargin=20 * mm
-    )
-
-    styles = getSampleStyleSheet()
-    
-    # Custom Palette Typography
-    navy_dark = colors.HexColor("#0F172A")
-    navy_blue = colors.HexColor("#1E3A8A")
-    border_gray = colors.HexColor("#E2E8F0")
-    light_bg = colors.HexColor("#F8FAFC")
-    
-    title_style = ParagraphStyle(
-        'DocTitle',
-        parent=styles['Normal'],
-        fontName='Helvetica-Bold',
-        fontSize=18,
-        leading=22,
-        textColor=navy_dark,
-        spaceAfter=6
-    )
-    
-    subtitle_style = ParagraphStyle(
-        'SubTitle',
-        parent=styles['Normal'],
-        fontName='Helvetica',
-        fontSize=10,
-        leading=13,
-        textColor=colors.HexColor("#475569"),
-        spaceAfter=12
-    )
-
-    section_heading = ParagraphStyle(
-        'SecHeading',
-        parent=styles['Normal'],
-        fontName='Helvetica-Bold',
-        fontSize=12,
-        leading=16,
-        textColor=navy_blue,
-        spaceBefore=10,
-        spaceAfter=6,
-        keepWithNext=True
-    )
-
-    body_style = ParagraphStyle(
-        'BodyDark',
-        parent=styles['Normal'],
-        fontName='Helvetica',
-        fontSize=9,
-        leading=13,
-        textColor=colors.HexColor("#1E293B")
-    )
-
-    story = []
-
-    # 1. Executive Title Block
-    primary_val_title = metrics.get('primary_valuation', 'Reverse DCF')
-    story.append(Paragraph(f"<b>{company_name}</b> ({ticker})", title_style))
-    story.append(Paragraph(f"Institutional Equity Research Dossier | Sector: {metrics.get('sector', 'N/A')} | Primary Valuation: <b>{primary_val_title}</b> ({metrics.get('implied_cagr', 'N/A')})", subtitle_style))
-
-    # 2. Key Metrics Card Table
-    kpi_data = [
-        [
-            Paragraph(f"<b>Current Price:</b> Rs. {metrics.get('cmp', 'N/A')}", body_style),
-            Paragraph(f"<b>Market Cap:</b> Rs. {metrics.get('mcap', 'N/A')} Cr", body_style),
-            Paragraph(f"<b>{metrics.get('stat4_tag', 'P/E Ratio')}:</b> {metrics.get('stat4_num', 'N/A')}", body_style)
-        ],
-        [
-            Paragraph(f"<b>52W Range:</b> Rs. {metrics.get('range', 'N/A')}", body_style),
-            Paragraph(f"<b>{metrics.get('stat5_tag', 'EV/EBITDA')}:</b> {metrics.get('stat5_num', 'N/A')}", body_style),
-            Paragraph(f"<b>Final Verdict:</b> <b>{metrics.get('verdict', 'HOLD')}</b>", body_style)
-        ]
-    ]
-    kpi_table = Table(kpi_data, colWidths=[60 * mm, 60 * mm, 60 * mm])
-    kpi_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, -1), light_bg),
-        ('BOX', (0, 0), (-1, -1), 1, border_gray),
-        ('INNERGRID', (0, 0), (-1, -1), 0.5, border_gray),
-        ('TOPPADDING', (0, 0), (-1, -1), 6),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-        ('LEFTPADDING', (0, 0), (-1, -1), 8),
-    ]))
-    story.append(kpi_table)
-    story.append(Spacer(1, 10))
-
-    # 3. Risk Pill Status Bar Table
-    story.append(Paragraph("Executive Risk Pill Dashboard", section_heading))
-    risk_headers = ["Moat & Business", "Forensic Accounting", "Solvency & Capital", "Governance & RPT", "Industry Operational KPIs", "Valuation Floor"]
-    pills = dossier_dict.get('risk_pills', {})
-    risk_values = [
-        Paragraph(f"<b>{pills.get('moat', 'GREEN')}</b>", body_style),
-        Paragraph(f"<b>{pills.get('forensics', 'GREEN')}</b>", body_style),
-        Paragraph(f"<b>{pills.get('solvency', 'GREEN')}</b>", body_style),
-        Paragraph(f"<b>{pills.get('governance', 'GREEN')}</b>", body_style),
-        Paragraph(f"<b>{pills.get('industry', 'GREEN')}</b>", body_style),
-        Paragraph(f"<b>{pills.get('valuation', 'GREEN')}</b>", body_style)
-    ]
-    risk_table = Table([risk_headers, risk_values], colWidths=[30 * mm] * 6)
-    risk_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), navy_blue),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 7),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('BOX', (0, 0), (-1, -1), 0.5, border_gray),
-        ('TOPPADDING', (0, 0), (-1, -1), 4),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-    ]))
-    story.append(risk_table)
-    story.append(Spacer(1, 12))
-
-    # 4. Agent Sections formatted as clean tables and paragraphs
-    agent_names = [
-        ("Industry Taxonomy & Routing Profile", dossier_dict.get('agent0')),
-        ("Qualitative & Economic Moat Analysis", dossier_dict.get('agent1')),
-        ("Forensic Accounting Audit", dossier_dict.get('agent2')),
-        ("Balance Sheet, Solvency & Capital Allocation", dossier_dict.get('agent3')),
-        ("Corporate Governance & Related Party Transactions", dossier_dict.get('agent4')),
-        ("Industry Operational KPIs & Benchmarks", dossier_dict.get('agent5')),
-        ("Valuation Architecture, Asset Floors & Reverse DCF", dossier_dict.get('agent6')),
-    ]
-
-    for title, content in agent_names:
-        if not content:
-            continue
-        story.append(Paragraph(title, section_heading))
-        clean_content = clean_markdown_for_pdf(content)
-        for line in clean_content.split('\n'):
-            line = line.strip()
-            if line:
-                story.append(Paragraph(line, body_style))
-                story.append(Spacer(1, 2))
-        story.append(Spacer(1, 8))
-
-    doc.build(story, canvasmaker=NumberedCanvas)
-    buffer.seek(0)
-    return buffer.getvalue()
+from pdf_generator import build_institutional_pdf, build_presentation_pdf
 
 
 # Page configuration
@@ -917,11 +774,11 @@ def main():
         }
 
         # Generate presentation-grade institutional PDF
-        pdf_bytes = build_presentation_pdf(
+        pdf_bytes = build_institutional_pdf(
             ticker=ticker,
             company_name=company_name,
             metrics=pdf_metrics,
-            dossier_dict=pdf_dossier_dict
+            dossier_dict={**dossier, **pdf_dossier_dict}
         )
 
         clean_comp_name = re.sub(r'[\\/*?:"<>|]', '', company_name).strip() if company_name else ticker

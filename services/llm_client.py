@@ -83,11 +83,14 @@ PRE-CALCULATED FINANCIAL PAYLOAD (STAGE 1 PURE-PYTHON MATH):
 UNABRIDGED SECTOR ARCHETYPE CHECKLIST & RULES:
 {archetype_checklist}
 
-CRITICAL RULES:
-1. Strictly obey all banned metrics for this archetype ({financial_payload.get('sector_profile', {}).get('banned_metrics', [])}). NEVER cite banned metrics.
-2. If BFSI (Bank/NBFC), strictly NEVER mention 'inventory', 'raw material', 'factory', or 'machinery'.
-3. Use the exact pre-calculated figures from the financial payload. Do not invent contradictory numbers.
-4. Output MUST be valid JSON conforming exactly to the expected dossier schema with all 7 agent structures (agent_0, agent_1, agent_2, agent_3, agent_4, agent_5, agent_6), risk_pills, and institutional_rating.
+CRITICAL INSTITUTIONAL DEPTH RULES:
+1. DO NOT provide one-line summaries. Write deep, multi-paragraph analytical commentary for each agent section.
+2. For every metric evaluated, explain: (a) Historical 3-to-5-year trajectory, (b) Structural driver behind the trend, (c) Comparison to industry peers, and (d) Implication for future shareholder returns.
+3. Include full markdown data tables for historical trends across Forensics, Solvency, Industry KPIs, and Valuation Scenarios.
+4. Strictly obey all banned metrics for this archetype ({financial_payload.get('sector_profile', {}).get('banned_metrics', [])}). NEVER cite banned metrics.
+5. If BFSI (Bank/NBFC), strictly NEVER mention 'inventory', 'raw material', 'factory', or 'machinery'.
+6. Use the exact pre-calculated figures from the financial payload. Do not invent contradictory numbers.
+7. Output MUST be valid JSON conforming exactly to the expected dossier schema with all 7 agent structures (agent_0, agent_1, agent_2, agent_3, agent_4, agent_5, agent_6), risk_pills, and institutional_rating.
 """
 
         body = {
@@ -99,7 +102,8 @@ CRITICAL RULES:
             ],
             "generationConfig": {
                 "responseMimeType": "application/json",
-                "temperature": 0.2
+                "temperature": 0.2,
+                "maxOutputTokens": 8192
             }
         }
 

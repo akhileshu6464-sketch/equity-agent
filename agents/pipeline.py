@@ -357,6 +357,11 @@ PRIMARY SECTOR: {sector_prof.get('display_name')} ({sector_prof.get('sector_key'
 REQUIRED OPERATIONAL KPIS: {', '.join(sector_prof.get('required_kpis', []))}
 PRIMARY VALUATION MODEL: {sector_prof.get('primary_valuation')}
 BANNED METRICS: {', '.join(sector_prof.get('banned_metrics', []))}
+
+INSTITUTIONAL REPORTING STANDARDS:
+- DO NOT provide one-line summaries. Write deep, multi-paragraph analytical commentary for every agent.
+- For every metric evaluated, explain: (a) Historical 3-to-5-year trajectory, (b) Structural driver behind the trend, (c) Comparison to industry peers, and (d) Implication for future shareholder returns.
+- Include full markdown data tables for historical trends.
 """
         unified_dossier = self.llm_client.generate_institutional_audit(
             financial_payload=financial_payload,
