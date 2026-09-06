@@ -259,13 +259,13 @@ def build_presentation_pdf(ticker, company_name, metrics, dossier_dict):
 
     # 4. Agent Sections formatted as clean tables and paragraphs
     agent_names = [
-        ("Agent 0: Industry Taxonomy & Routing Profile", dossier_dict.get('agent0')),
-        ("Agent 1: Qualitative & Economic Moat Analysis", dossier_dict.get('agent1')),
-        ("Agent 2: Forensic Accounting Detective", dossier_dict.get('agent2')),
-        ("Agent 3: Balance Sheet, Solvency & Capital Health", dossier_dict.get('agent3')),
-        ("Agent 4: Corporate Governance & Master RPT Audit", dossier_dict.get('agent4')),
-        ("Agent 5: Industry Operational KPIs", dossier_dict.get('agent5')),
-        ("Agent 6: CIO Valuation, Asset Floors & Reverse DCF", dossier_dict.get('agent6')),
+        ("Industry Taxonomy & Routing Profile", dossier_dict.get('agent0')),
+        ("Qualitative & Economic Moat Analysis", dossier_dict.get('agent1')),
+        ("Forensic Accounting Audit", dossier_dict.get('agent2')),
+        ("Balance Sheet, Solvency & Capital Allocation", dossier_dict.get('agent3')),
+        ("Corporate Governance & Related Party Transactions", dossier_dict.get('agent4')),
+        ("Industry Operational KPIs & Benchmarks", dossier_dict.get('agent5')),
+        ("Valuation Architecture, Asset Floors & Reverse DCF", dossier_dict.get('agent6')),
     ]
 
     for title, content in agent_names:
