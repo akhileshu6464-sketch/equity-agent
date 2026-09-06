@@ -1,6 +1,7 @@
 """
 Full-Stack Institutional Equity Research Dashboard (NSE/BSE)
 Multi-Agent Analysis Platform (Agents 0 through 6)
+3D Glassmorphic UI with 2-State Flow (Minimal Search Landing -> Full Dossier Display)
 """
 
 import json
@@ -284,6 +285,7 @@ def build_presentation_pdf(ticker, company_name, metrics, dossier_dict):
     buffer.seek(0)
     return buffer.getvalue()
 
+
 # Page configuration
 st.set_page_config(
     page_title="BharatAlpha | 7-Agent Institutional Equity Analyst",
@@ -292,100 +294,248 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom Institutional CSS
+# 3D Glassmorphism & Ambient 3D Floating Orbs Styles
 st.markdown("""
 <style>
-    .main {
-        background-color: #0E1117;
-    }
-    .company-title {
-        font-size: 26px;
-        font-weight: 700;
-        color: #F0F2F6;
-        margin-bottom: 4px;
-    }
-    .company-subtitle {
-        font-size: 14px;
-        color: #9AA0A6;
-        margin-bottom: 16px;
-    }
-    .pill-container {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        margin: 14px 0px 22px 0px;
-    }
-    .risk-pill {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        padding: 7px 16px;
-        border-radius: 20px;
-        font-size: 12px;
-        font-weight: 600;
-        letter-spacing: 0.3px;
-        text-transform: uppercase;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.15);
-    }
-    .pill-green {
-        background-color: rgba(46, 125, 50, 0.2);
-        color: #81C784;
-        border: 1px solid #2E7D32;
-    }
-    .pill-yellow {
-        background-color: rgba(245, 127, 23, 0.2);
-        color: #FFD54F;
-        border: 1px solid #F57F17;
-    }
-    .pill-red {
-        background-color: rgba(198, 40, 40, 0.2);
-        color: #E57373;
-        border: 1px solid #C62828;
-    }
-    .rating-badge {
-        display: inline-block;
-        padding: 10px 20px;
-        border-radius: 8px;
-        font-size: 16px;
-        font-weight: 700;
-        text-align: center;
-        margin-top: 8px;
-        letter-spacing: 0.5px;
-    }
-    .bullet-card {
-        background-color: #1A1D24;
-        border-left: 3px solid #3F51B5;
-        padding: 10px 14px;
-        margin-bottom: 8px;
-        border-radius: 0px 6px 6px 0px;
-        font-size: 14px;
-    }
-    .q-box {
-        background-color: #161920;
-        border: 1px solid #282C37;
-        border-radius: 6px;
-        padding: 12px 16px;
-        margin-bottom: 10px;
-    }
-    .q-title {
-        font-size: 13px;
-        font-weight: 700;
-        color: #64B5F6;
-        margin-bottom: 4px;
-    }
-    .q-ans {
-        font-size: 14px;
-        color: #E0E0E0;
-    }
-    .report-card {
-        background-color: #131720;
-        border: 1px solid #2A303C;
-        border-radius: 8px;
-        padding: 24px;
-        margin: 20px 0px 30px 0px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.25);
-    }
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap');
+
+/* Base Dark Canvas */
+.stApp {
+    background-color: #0d0e15;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    color: #f1f5f9;
+    overflow-x: hidden;
+}
+
+/* Background Ambient 3D Floating Orbs */
+.stApp::before {
+    content: '';
+    position: fixed;
+    top: 5%;
+    left: 8%;
+    width: 380px;
+    height: 380px;
+    background: radial-gradient(circle, #ec4899 0%, #be185d 60%, transparent 75%);
+    filter: blur(75px);
+    opacity: 0.45;
+    z-index: 0;
+    pointer-events: none;
+    border-radius: 50%;
+}
+
+.stApp::after {
+    content: '';
+    position: fixed;
+    bottom: 8%;
+    right: 10%;
+    width: 440px;
+    height: 440px;
+    background: radial-gradient(circle, #f59e0b 0%, #d97706 60%, transparent 75%);
+    filter: blur(85px);
+    opacity: 0.4;
+    z-index: 0;
+    pointer-events: none;
+    border-radius: 50%;
+}
+
+/* Secondary Purple Orb */
+.orb-purple {
+    position: fixed;
+    top: 55%;
+    left: 20%;
+    width: 420px;
+    height: 420px;
+    background: radial-gradient(circle, #8b5cf6 0%, #6d28d9 60%, transparent 75%);
+    filter: blur(90px);
+    opacity: 0.35;
+    z-index: 0;
+    pointer-events: none;
+    border-radius: 50%;
+}
+
+/* Frosted Glass Card Container */
+.glass-panel {
+    background: rgba(255, 255, 255, 0.04);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 24px;
+    padding: 32px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.15);
+    margin-bottom: 24px;
+    position: relative;
+    z-index: 1;
+}
+
+/* Glass Stat Tile */
+.glass-stat {
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    padding: 16px 20px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+.stat-tag {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #94a3b8;
+}
+.stat-num {
+    font-size: 1.35rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    color: #ffffff;
+    margin-top: 4px;
+}
+
+/* Glass Risk Pills */
+.pill-badge {
+    display: inline-block;
+    padding: 6px 14px;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+.pill-green {
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+    border: 1px solid rgba(52, 211, 153, 0.35);
+}
+.pill-yellow {
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(251, 191, 36, 0.35);
+}
+.pill-red {
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+    border: 1px solid rgba(248, 113, 113, 0.35);
+}
+
+/* Tab Navigation */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 10px;
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 8px;
+    border-radius: 16px;
+}
+.stTabs [data-baseweb="tab"] {
+    height: 42px;
+    border-radius: 10px;
+    color: #94a3b8;
+    font-weight: 600;
+    font-size: 0.85rem;
+    padding: 0 18px;
+}
+.stTabs [aria-selected="true"] {
+    background: rgba(255, 255, 255, 0.12) !important;
+    color: #ffffff !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+}
+
+/* Minimal Input Styling */
+.stTextInput > div > div > input {
+    background: rgba(255, 255, 255, 0.06) !important;
+    border: 1px solid rgba(255, 255, 255, 0.18) !important;
+    color: #ffffff !important;
+    border-radius: 14px !important;
+    padding: 14px 18px !important;
+    font-size: 1.05rem !important;
+}
+
+/* Glass Buttons */
+.stButton > button {
+    background: rgba(255, 255, 255, 0.06) !important;
+    color: #ffffff !important;
+    border: 1px solid rgba(255, 255, 255, 0.16) !important;
+    border-radius: 14px !important;
+    backdrop-filter: blur(12px) !important;
+    font-weight: 600 !important;
+    font-size: 0.92rem !important;
+    padding: 10px 20px !important;
+    transition: all 0.2s ease !important;
+}
+.stButton > button:hover {
+    background: rgba(255, 255, 255, 0.14) !important;
+    border-color: rgba(255, 255, 255, 0.35) !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4) !important;
+}
+
+/* Question & Content Cards */
+.q-box {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    padding: 14px 18px;
+    margin-bottom: 12px;
+    backdrop-filter: blur(12px);
+}
+.q-title {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #818cf8;
+    margin-bottom: 5px;
+}
+.q-ans {
+    font-size: 0.92rem;
+    color: #e2e8f0;
+    line-height: 1.55;
+}
+
+/* Bullet Cards */
+.bullet-card {
+    background: rgba(255, 255, 255, 0.03);
+    border-left: 3px solid #6366f1;
+    border-radius: 0 12px 12px 0;
+    padding: 12px 16px;
+    margin-bottom: 10px;
+    font-size: 0.92rem;
+    color: #f1f5f9;
+    backdrop-filter: blur(8px);
+}
+
+/* Glass Expanders */
+[data-testid="stExpander"] {
+    background: rgba(255, 255, 255, 0.02) !important;
+    backdrop-filter: blur(16px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 18px !important;
+    margin-bottom: 18px !important;
+}
+
+/* Streamlit Header / Clean Overrides */
+header[data-testid="stHeader"] {
+    background: transparent !important;
+}
+[data-testid="stSidebar"] {
+    background-color: rgba(13, 14, 21, 0.92) !important;
+    backdrop-filter: blur(20px) !important;
+    border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+[data-testid="stMetricValue"] {
+    font-family: 'JetBrains Mono', monospace !important;
+    color: #ffffff !important;
+}
+[data-testid="stMetricLabel"] {
+    color: #94a3b8 !important;
+    font-weight: 600 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.05em !important;
+    font-size: 0.75rem !important;
+}
 </style>
+<div class="orb-purple"></div>
 """, unsafe_allow_html=True)
 
 
@@ -397,7 +547,99 @@ def get_pipeline():
 def render_risk_pill(domain: str, status: str) -> str:
     color_class = "pill-green" if status == "GREEN" else ("pill-yellow" if status == "YELLOW" else "pill-red")
     icon = "●"
-    return f'<div class="risk-pill {color_class}"><span>{icon}</span> {domain}: {status}</div>'
+    return f'<span class="pill-badge {color_class}"><span>{icon}</span> {domain}: {status}</span>'
+
+
+def render_glass_stat(tag: str, num: str) -> str:
+    return f"""
+    <div class="glass-stat">
+        <div class="stat-tag">{tag}</div>
+        <div class="stat-num">{num}</div>
+    </div>
+    """
+
+
+def render_search_landing(quick_tickers):
+    """Renders State 1: Minimal Search Landing Page."""
+    st.markdown("""
+    <div class="glass-panel" style="text-align: center; max-width: 880px; margin: 45px auto 25px auto; padding: 50px 36px;">
+        <div style="display: inline-flex; align-items: center; gap: 8px; padding: 6px 18px; border-radius: 9999px; background: rgba(99, 102, 241, 0.15); border: 1px solid rgba(129, 140, 248, 0.35); font-size: 0.78rem; font-weight: 700; color: #a5b4fc; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 24px;">
+            <span>🏛️</span> Institutional Multi-Agent Intelligence
+        </div>
+        <h1 style="font-size: 3rem; font-weight: 800; color: #ffffff; letter-spacing: -0.03em; margin: 0 0 14px 0; line-height: 1.15;">
+            BharatAlpha Research
+        </h1>
+        <p style="font-size: 1.08rem; color: #94a3b8; max-width: 650px; margin: 0 auto 12px auto; line-height: 1.65;">
+            Autonomous 7-Agent Institutional Equity Pipeline for Indian Equities (NSE/BSE). Deep forensic accounting, corporate governance & master RPT audits, industry operating KPIs, and reverse DCF hurdle testing.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Search Bar Container
+    search_col1, search_col2, search_col3 = st.columns([1, 4, 1])
+    with search_col2:
+        user_typed = st.text_input(
+            "Enter Stock Ticker",
+            placeholder="Enter NSE/BSE Stock Ticker (e.g. RELIANCE, TCS, HDFCBANK, CROMPTON, ASHOKA)...",
+            label_visibility="collapsed",
+            key="landing_ticker_search"
+        )
+        
+        btn_col1, btn_col2, btn_col3 = st.columns([1, 2, 1])
+        with btn_col2:
+            launch_clicked = st.button("🚀 Launch Institutional Audit", key="landing_btn_launch", use_container_width=True)
+
+        if launch_clicked or (user_typed and user_typed.strip()):
+            raw = user_typed.strip().upper() if user_typed else ""
+            if raw:
+                if not (raw.endswith(".NS") or raw.endswith(".BO")):
+                    raw += ".NS"
+                st.session_state["active_ticker"] = raw
+                st.rerun()
+
+        st.markdown("<div style='text-align: center; margin-top: 24px; margin-bottom: 12px; font-size: 0.75rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em;'>Quick Select Benchmark Equities</div>", unsafe_allow_html=True)
+        
+        q_cols = st.columns(len(quick_tickers))
+        for i, t in enumerate(quick_tickers):
+            label = t.replace(".NS", "")
+            if q_cols[i].button(label, key=f"quick_landing_{t}", use_container_width=True):
+                st.session_state["active_ticker"] = t
+                st.rerun()
+
+    # 7-Agent Architecture Showcase
+    st.markdown("<div style='margin-top: 45px;'></div>", unsafe_allow_html=True)
+    f_c1, f_c2, f_c3 = st.columns(3)
+    with f_c1:
+        st.markdown("""
+        <div class="glass-panel" style="padding: 24px; height: 100%;">
+            <div style="font-size: 1.5rem; margin-bottom: 10px;">🏷️ 🛡️</div>
+            <div style="font-size: 1rem; font-weight: 700; color: #ffffff; margin-bottom: 8px;">Taxonomy & Qualitative Moat</div>
+            <div style="font-size: 0.88rem; color: #94a3b8; line-height: 1.55;">
+                <strong>Agent 0 & 1</strong>: Strict 1-of-12 sector archetype classification, revenue engine deconstruction (&gt;60% operating profit), pricing power, barriers to entry, and scuttlebutt intelligence.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    with f_c2:
+        st.markdown("""
+        <div class="glass-panel" style="padding: 24px; height: 100%;">
+            <div style="font-size: 1.5rem; margin-bottom: 10px;">🔍 ⚖️</div>
+            <div style="font-size: 1.5rem; display: none;"></div>
+            <div style="font-size: 1rem; font-weight: 700; color: #ffffff; margin-bottom: 8px;">Forensic Detective & Solvency</div>
+            <div style="font-size: 0.88rem; color: #94a3b8; line-height: 1.55;">
+                <strong>Agent 2 & 3</strong>: 5-Year cumulative CFO vs PAT conversion trajectory, D&A lifespan extension, DSO channel stuffing, balance sheet leverage, liquid cash buffers, and ROIC vs WACC spreads.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    with f_c3:
+        st.markdown("""
+        <div class="glass-panel" style="padding: 24px; height: 100%;">
+            <div style="font-size: 1.5rem; margin-bottom: 10px;">🏛️ 📈 🎯</div>
+            <div style="font-size: 1rem; font-weight: 700; color: #ffffff; margin-bottom: 8px;">Governance, KPIs & Reverse DCF</div>
+            <div style="font-size: 0.88rem; color: #94a3b8; line-height: 1.55;">
+                <strong>Agent 4, 5 & 6</strong>: Promoter pledge encumbrance, Master RPT pricing audit, activated operational KPIs, independent asset yield floors, 3-scenario matrix, and reverse DCF hurdle testing.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
 
 def main():
@@ -422,63 +664,69 @@ def main():
     - 🎯 **Agent 6**: CIO Valuation & Reverse DCF (`agent6_valuation_cio.txt`)
     """)
 
-    # Main Header & Search
-    col_s1, col_s2 = st.columns([3, 1])
-    with col_s1:
-        st.title("Indian Equity Institutional Research Platform")
-        st.caption("Deep forensic accounting, governance & RPT audits, industry KPIs, and reverse DCF.")
-
-    # Session state for ticker selection
-    if "selected_ticker" not in st.session_state:
-        st.session_state["selected_ticker"] = "CROMPTON.NS"
-
-    # Quick Ticker Buttons passing valid tickers (.NS)
-    quick_cols = st.columns(6)
     quick_tickers = ["CROMPTON.NS", "RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "TATAMOTORS.NS", "INFY.NS"]
-    for i, t in enumerate(quick_tickers):
-        label = t.replace(".NS", "")
-        if quick_cols[i].button(label, key=f"quick_btn_{t}", use_container_width=True):
-            st.session_state["selected_ticker"] = t
 
-    # Search Bar
-    user_input = st.text_input(
-        "Enter NSE/BSE Stock Ticker (e.g., RELIANCE, TCS, HDFCBANK, CROMPTON):",
-        value=st.session_state.get("selected_ticker", "CROMPTON.NS")
-    )
+    # 2-State Flow Controller
+    if "active_ticker" not in st.session_state:
+        st.session_state["active_ticker"] = None
 
-    if not user_input or not user_input.strip():
-        st.info("ℹ️ Please enter an Indian stock ticker above to start the multi-agent audit.")
+    # State 1: Minimal Search Landing
+    if not st.session_state.get("active_ticker"):
+        render_search_landing(quick_tickers)
         return
 
-    # 1. Automatic Suffix Appender: Ensure ticker ends with .NS or .BO
-    ticker = user_input.strip().upper()
-    if not (ticker.endswith(".NS") or ticker.endswith(".BO")):
-        ticker += ".NS"
-    st.session_state["selected_ticker"] = ticker
+    # State 2: Full Dossier Display
+    ticker = st.session_state["active_ticker"]
 
-    # Run Pipeline
+    # Navigation & Quick Switcher Bar
+    col_nav_back, col_nav_space, col_nav_switch = st.columns([1.8, 3.2, 2.0])
+    with col_nav_back:
+        if st.button("← New Stock Search", key="btn_nav_back", use_container_width=True):
+            st.session_state["active_ticker"] = None
+            st.rerun()
+    with col_nav_switch:
+        switch_val = st.text_input("Switch Ticker", placeholder="Switch ticker (e.g. TCS, ASHOKA)...", label_visibility="collapsed", key="dossier_switch_input")
+        if switch_val and switch_val.strip():
+            st_raw = switch_val.strip().upper()
+            if not (st_raw.endswith(".NS") or st_raw.endswith(".BO")):
+                st_raw += ".NS"
+            st.session_state["active_ticker"] = st_raw
+            st.rerun()
+
+    # Pipeline Execution with Session State Caching
     pipeline = get_pipeline()
-    
-    with st.spinner(f"Running Unabridged 7-Agent Institutional Pipeline for {ticker}..."):
-        try:
-            dossier = pipeline.run_pipeline(
-                ticker=ticker,
-                wacc=wacc_input,
-                terminal_growth=terminal_g_input,
-                base_growth=base_g_input
-            )
-        except Exception as e:
-            err_msg = str(e)
-            if any(k in err_msg.lower() for k in ["rate limit", "429", "resourceexhausted", "quota"]):
-                st.error("🚨 **Gemini API Rate Limit Reached**: The free-tier AI request quota has been temporarily exhausted. Please wait 30–60 seconds before re-trying.")
-                st.info("💡 **Tip**: Running consecutive deep analyses on high-cap companies can trigger temporary API rate limiting. Pausing briefly will reset the quota window.")
-            elif any(k in err_msg.lower() for k in ["failed to retrieve", "not found", "404", "delisted", "quote not found"]):
-                st.error(f"❌ **Stock Ticker Not Found**: yfinance failed to retrieve financial statement data for **'{ticker}'**.")
-                st.info(f"💡 **Tip**: Please verify that the symbol is an active stock listed on the National Stock Exchange of India (NSE) or Bombay Stock Exchange (BSE). Examples: `RELIANCE.NS`, `TCS.NS`, `HDFCBANK.NS`, `INFY.NS`, `CROMPTON.NS`.")
-            else:
-                st.error(f"⚠️ **Analysis Execution Error**: An unexpected error occurred while auditing '{ticker}': {err_msg}")
-                st.info("💡 **Tip**: Please verify your network connection, try an alternate ticker, or refresh the page.")
-            return
+    cache_key = f"{ticker}_{wacc_input}_{terminal_g_input}_{base_g_input}"
+    if "dossier_cache" not in st.session_state:
+        st.session_state["dossier_cache"] = {}
+
+    if cache_key in st.session_state["dossier_cache"]:
+        dossier = st.session_state["dossier_cache"][cache_key]
+    else:
+        with st.spinner(f"Running Unabridged 7-Agent Institutional Pipeline for {ticker}..."):
+            try:
+                dossier = pipeline.run_pipeline(
+                    ticker=ticker,
+                    wacc=wacc_input,
+                    terminal_growth=terminal_g_input,
+                    base_growth=base_g_input
+                )
+                st.session_state["dossier_cache"][cache_key] = dossier
+            except Exception as e:
+                err_msg = str(e)
+                if any(k in err_msg.lower() for k in ["rate limit", "429", "resourceexhausted", "quota"]):
+                    st.error("🚨 **Gemini API Rate Limit Reached**: The free-tier AI request quota has been temporarily exhausted. Please wait 30–60 seconds before re-trying.")
+                    st.info("💡 **Tip**: Running consecutive deep analyses on high-cap companies can trigger temporary API rate limiting. Pausing briefly will reset the quota window.")
+                elif any(k in err_msg.lower() for k in ["failed to retrieve", "not found", "404", "delisted", "quote not found"]):
+                    st.error(f"❌ **Stock Ticker Not Found**: yfinance failed to retrieve financial statement data for **'{ticker}'**.")
+                    st.info(f"💡 **Tip**: Please verify that the symbol is an active stock listed on the National Stock Exchange of India (NSE) or Bombay Stock Exchange (BSE). Examples: `RELIANCE.NS`, `TCS.NS`, `HDFCBANK.NS`, `INFY.NS`, `CROMPTON.NS`.")
+                else:
+                    st.error(f"⚠️ **Analysis Execution Error**: An unexpected error occurred while auditing '{ticker}': {err_msg}")
+                    st.info("💡 **Tip**: Please verify your network connection, try an alternate ticker, or refresh the page.")
+                
+                if st.button("← Return to Search Landing", key="err_btn_return"):
+                    st.session_state["active_ticker"] = None
+                    st.rerun()
+                return
 
     symbol = dossier.get("symbol", ticker)
     company_name = dossier.get("company_name", ticker)
@@ -500,30 +748,49 @@ def main():
     a5 = dossier.get("agent_5", {})
     a6 = dossier.get("agent_6", {})
 
-    # Top Hero Section
-    st.markdown("---")
-    hero_c1, hero_c2 = st.columns([3, 1])
+    # Top Company Hero Glass Panel
+    st.markdown(f"""
+    <div class="glass-panel" style="margin-top: 10px; margin-bottom: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+            <div>
+                <div style="font-size: 2.2rem; font-weight: 800; color: #ffffff; letter-spacing: -0.02em;">
+                    {company_name} <span style="color: #94a3b8; font-size: 1.4rem; font-weight: 600;">({symbol})</span>
+                </div>
+                <div style="font-size: 0.95rem; color: #94a3b8; margin-top: 6px;">
+                    {dossier.get("sector")} &bull; {dossier.get("industry")} &bull; Primary Sector (1 of 12): <strong style="color: #cbd5e1;">{a0.get("primary_sector")}</strong>
+                </div>
+            </div>
+            <div>
+                <div style="background-color: {rating_color}; color: #ffffff; padding: 10px 22px; border-radius: 12px; font-size: 1.05rem; font-weight: 800; letter-spacing: 0.04em; box-shadow: 0 4px 16px rgba(0,0,0,0.3);">
+                    {rating}
+                </div>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-    with hero_c1:
-        st.markdown(f'<div class="company-title">{company_name} ({symbol})</div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="company-subtitle">{dossier.get("sector")} • {dossier.get("industry")} • {a0.get("primary_sector")}</div>', unsafe_allow_html=True)
-
-    with hero_c2:
-        st.markdown(f'<div class="rating-badge" style="background-color: {rating_color}; color: white;">{rating}</div>', unsafe_allow_html=True)
-
-    # Key Metrics Bar
+    # 6 Glass Stat Tiles
     m_col1, m_col2, m_col3, m_col4, m_col5, m_col6 = st.columns(6)
-    m_col1.metric("CMP", f"₹{cmp:,.2f}")
-    m_col2.metric("Market Cap", f"₹{mcap_cr:,.1f} Cr")
-    m_col3.metric("52W Range", f"₹{low_52:,.0f} - {high_52:,.0f}")
-    m_col4.metric("Trailing P/E", f"{pe:,.1f}x" if pe > 0 else "N/A")
-    m_col5.metric("EV / EBITDA", f"{ev_ebitda:,.1f}x" if ev_ebitda > 0 else "N/A")
-    m_col6.metric("Implied 10Y FCF CAGR", f"{dossier.get('implied_growth_pct')}%")
+    with m_col1:
+        st.markdown(render_glass_stat("CMP", f"₹{cmp:,.2f}"), unsafe_allow_html=True)
+    with m_col2:
+        st.markdown(render_glass_stat("Market Cap", f"₹{mcap_cr:,.1f} Cr"), unsafe_allow_html=True)
+    with m_col3:
+        st.markdown(render_glass_stat("52W Range", f"₹{low_52:,.0f} - {high_52:,.0f}"), unsafe_allow_html=True)
+    with m_col4:
+        st.markdown(render_glass_stat("Trailing P/E", f"{pe:,.1f}x" if pe > 0 else "N/A"), unsafe_allow_html=True)
+    with m_col5:
+        st.markdown(render_glass_stat("EV / EBITDA", f"{ev_ebitda:,.1f}x" if ev_ebitda > 0 else "N/A"), unsafe_allow_html=True)
+    with m_col6:
+        st.markdown(render_glass_stat("Implied 10Y CAGR", f"{dossier.get('implied_growth_pct')}%"), unsafe_allow_html=True)
 
-    # Colored Risk Pills Horizontal Ribbon
-    st.markdown('<div class="pill-container">' + "".join([
-        render_risk_pill(domain, status) for domain, status in pills.items()
-    ]) + '</div>', unsafe_allow_html=True)
+    # Glass Risk Pills Horizontal Ribbon
+    st.markdown(
+        '<div style="display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 24px 0;">' +
+        "".join([render_risk_pill(domain, status) for domain, status in pills.items()]) +
+        '</div>',
+        unsafe_allow_html=True
+    )
 
     # =========================================================================
     # INSTITUTIONAL RESEARCH REPORT (Full Markdown Dossier on Main Page)
@@ -645,7 +912,7 @@ def main():
 ### 🏛️ Final Institutional Verdict: **{rating}**
 """
 
-    st.markdown('<div class="report-card">', unsafe_allow_html=True)
+    st.markdown('<div class="glass-panel" style="padding: 28px;">', unsafe_allow_html=True)
     st.markdown(full_report_md, unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -769,7 +1036,8 @@ def main():
     )
 
     # Accordion Tabs for All 7 Agent Audits (Expanded by default)
-    st.subheader("🔬 Deep-Dive Multi-Agent Audit Accordions (Expanded by Default)")
+    st.markdown("<div style='margin-top: 30px;'></div>", unsafe_allow_html=True)
+    st.subheader("🔬 Deep-Dive Multi-Agent Audit Dossiers")
 
     # Agent 0: Classifier
     with st.expander("🏷️ Agent 0: Industry Taxonomy & Routing Profile", expanded=True):
@@ -860,11 +1128,12 @@ def main():
             st.markdown("##### 📊 5-Year Cash Flow Divergence (CFO vs Net Profit)")
             df_cfo = pd.DataFrame(cfo_pat_data)
             fig_cfo = go.Figure()
-            fig_cfo.add_trace(go.Bar(x=df_cfo["year"], y=df_cfo["pat_cr"], name="PAT (Net Profit ₹ Cr)", marker_color="#42A5F5"))
-            fig_cfo.add_trace(go.Bar(x=df_cfo["year"], y=df_cfo["cfo_cr"], name="CFO (Operating Cash Flow ₹ Cr)", marker_color="#66BB6A"))
+            fig_cfo.add_trace(go.Bar(x=df_cfo["year"], y=df_cfo["pat_cr"], name="PAT (Net Profit ₹ Cr)", marker_color="#38bdf8"))
+            fig_cfo.add_trace(go.Bar(x=df_cfo["year"], y=df_cfo["cfo_cr"], name="CFO (Operating Cash Flow ₹ Cr)", marker_color="#34d399"))
             fig_cfo.update_layout(
                 barmode="group", height=300, margin=dict(l=20, r=20, t=30, b=20),
                 paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="#94a3b8"),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
             )
             st.plotly_chart(fig_cfo, use_container_width=True)
@@ -1012,8 +1281,6 @@ def main():
             st.markdown("##### 🚨 Thesis Invalidation Triggers")
             for trig in a6.get("invalidation_triggers", []):
                 st.markdown(f'<div class="bullet-card">❌ {trig}</div>', unsafe_allow_html=True)
-
-
 
 
 if __name__ == "__main__":
