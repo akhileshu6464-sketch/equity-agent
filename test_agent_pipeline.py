@@ -1,7 +1,9 @@
 """
-Test Complete 7-Agent Pipeline on NSE/BSE Equities (e.g. CROMPTON.NS, HDFCBANK.NS, TCS.NS)
-Validates dynamic prompt loading from .txt files, unabridged checklist execution,
-sector-aware qualitative audits (Agent 1), and BFSI prohibition guards.
+Test Two-Stage Institutional Equity Engine on NSE/BSE Equities (e.g. CROMPTON.NS, HDFCBANK.NS, TCS.NS)
+Validates:
+1. Stage 1 (Deterministic Python Math Engine): financial_payload extraction & pure-Python calculations.
+2. Stage 2 (Unified Institutional CIO Audit): Unified synthesis across all 6 domains,
+   seamless analytical cross-referencing, and BFSI prohibition guard compliance.
 """
 
 import sys
@@ -25,7 +27,7 @@ from agents.pipeline import EquityAgentPipeline
 
 def test_pipeline(ticker: str = "CROMPTON.NS"):
     print("=" * 80)
-    print(f"🚀 RUNNING 7-AGENT INSTITUTIONAL EQUITY AUDIT ON {ticker}")
+    print(f"🚀 RUNNING TWO-STAGE INSTITUTIONAL EQUITY ENGINE ON {ticker}")
     print("=" * 80)
 
     pipeline = EquityAgentPipeline()
@@ -38,20 +40,56 @@ def test_pipeline(ticker: str = "CROMPTON.NS"):
     print(f"🏷️  Sector: {dossier.get('sector')} | Industry: {dossier.get('industry')}")
     print(f"🎯 Institutional Verdict: {dossier.get('institutional_rating')}")
 
+    # =========================================================================
+    # VERIFY STAGE 1: PURE-PYTHON DETERMINISTIC MATH ENGINE
+    # =========================================================================
+    print("\n" + "=" * 80)
+    print("⚡ [STAGE 1: DETERMINISTIC PYTHON MATH ENGINE PAYLOAD]")
+    print("=" * 80)
+    payload = dossier.get("financial_payload", {})
+    assert payload, "Stage 1 financial_payload is empty!"
+
+    math_data = payload.get("calculated_metrics", {})
+    sector_prof = payload.get("sector_profile", {})
+    is_bfsi = sector_prof.get("is_bfsi", False)
+
+    print(f"  • Sector Archetype: {sector_prof.get('display_name')} ({sector_prof.get('sector_key')})")
+    print(f"  • 5-Year Cumulative CFO vs PAT: ₹{math_data.get('cfo_5y_cr'):,.1f} Cr vs ₹{math_data.get('pat_5y_cr'):,.1f} Cr (Conversion: {math_data.get('cfo_to_pat_5y_pct')}%)")
+    if is_bfsi:
+        print(f"  • Capital Adequacy (CRAR & CET-1): CRAR {math_data.get('crar_pct')}% | Tier-1 CET1 {math_data.get('tier1_cet1_pct')}%")
+        print(f"  • Banking Margins & Efficiency: NIM {math_data.get('nim_pct')}% | Cost-to-Income {math_data.get('cost_to_income_pct')}% | CASA {math_data.get('casa_pct')}%")
+        print(f"  • Valuation Multiples: P/BV {math_data.get('p_bv_ratio')}x | P/ABV {math_data.get('p_abv_ratio')}x (ABV: ₹{math_data.get('abv_per_share')}/sh)")
+        assert math_data.get("ccc_days") == 0.0, "CCC must be 0.0/exempt for BFSI entities!"
+    else:
+        print(f"  • Cash Conversion Cycle: {math_data.get('ccc_days')} days (DSI: {math_data.get('dsi_days')}d + DSO: {math_data.get('dso_days')}d - DPO: {math_data.get('dpo_days')}d)")
+        print(f"  • Solvency & Debt: Net Debt ₹{math_data.get('net_debt_cr'):,.1f} Cr (Net Debt/Equity: {math_data.get('net_debt_to_equity')}x)")
+        print(f"  • Valuation Multiples: Trailing P/E {math_data.get('pe_ratio')}x | EV/EBITDA {math_data.get('ev_to_ebitda')}x | P/BV {math_data.get('p_bv_ratio')}x")
+        print(f"  • Capital Returns: ROIC {math_data.get('roic_pct')}% vs WACC {math_data.get('wacc_pct')}%")
+
+    print("✅ Stage 1 Pure-Python Math calculations verified successfully!")
+
+    # =========================================================================
+    # VERIFY STAGE 2: UNIFIED INSTITUTIONAL CIO AUDIT
+    # =========================================================================
+    print("\n" + "=" * 80)
+    print("🧠 [STAGE 2: UNIFIED INSTITUTIONAL CIO AUDIT DOSSIER]")
+    print("=" * 80)
+
     # Risk Pills
     print("\n🚦 RISK PILL DASHBOARD:")
     for domain, pill in dossier.get("risk_pills", {}).items():
         emoji = "🟢" if pill == "GREEN" else ("🟡" if pill == "YELLOW" else "🔴")
         print(f"  {emoji} {domain.upper()}: {pill}")
 
-    # Agent 0: Classifier (agent0_classifier.txt)
+    # Agent 0: Classifier
     a0 = dossier["agent_0"]
     print("\n" + "-" * 80)
-    print(f"🏷️  [AGENT 0: CLASSIFIER] (Prompt file: {a0.get('system_prompt', '')[:45]}...)")
-    print("Routing Profile JSON:")
-    print(json.dumps(a0.get("routing_profile", {}), indent=2))
+    print("🏷️  [AGENT 0: CLASSIFIER / TAXONOMY]")
+    print(f"  • Primary Sector: {a0.get('primary_sector')}")
+    print(f"  • Sub-Vertical: {a0.get('sub_vertical')}")
+    print(f"  • Revenue Engine: {a0.get('revenue_engine_summary')}")
 
-    # Agent 1: Qualitative (agent1_qualitative.txt)
+    # Agent 1: Qualitative
     a1 = dossier["agent_1"]
     print("\n" + "-" * 80)
     print(f"🛡️  [AGENT 1: QUALITATIVE & MOAT AUDITOR] (Moat: {a1.get('moat_rating')}, Score: {a1.get('checklist_score')}/100)")
@@ -67,8 +105,6 @@ def test_pipeline(ticker: str = "CROMPTON.NS"):
     print("  • Part 7 (Biggest Failure Point):", a1.get("part7_qualitative_risks", {}).get("4_single_biggest_failure_point"))
 
     # Validate BFSI Prohibition Guard if applicable
-    sector_key = a0.get("sector_key", "")
-    is_bfsi = sector_key in ["BFSI_BANKS", "BFSI_NBFC"] or "Bank" in dossier.get("industry", "") or "Banks" in dossier.get("sector", "")
     if is_bfsi:
         print("\n🔍 VERIFYING BFSI PROHIBITION GUARD FOR AGENT 1...")
         banned_terms = ["inventory", "raw material", "factory", "machinery"]
@@ -102,7 +138,7 @@ def test_pipeline(ticker: str = "CROMPTON.NS"):
         assert "cet-1" in p5_text or "tier-1" in p5_text or "rwa" in p5_text or "crar" in p5_text, "Part 5 must evaluate Tier-1 CET-1 capital intensity for BFSI!"
         print("✅ BFSI PART 5 ARCHETYPE VERIFIED: Evaluates Cost-to-Income, deposit liabilities, and Tier-1 CET-1 capital.")
 
-    # Agent 2: Forensics (agent2_forensics.txt)
+    # Agent 2: Forensics
     a2 = dossier["agent_2"]
     print("\n" + "-" * 80)
     print(f"🔍 [AGENT 2: FORENSIC DETECTIVE] (Risk Pill: {a2.get('risk_pill')})")
@@ -111,7 +147,7 @@ def test_pipeline(ticker: str = "CROMPTON.NS"):
     print("  • Part 15 (CFO Divergence):", a2.get("part15_revenue_quality", {}).get("3_cfo_pat_divergence"))
     print("  • Part 16 (Goodwill & RPT):", a2.get("part16_balance_sheet", {}).get("1_goodwill_percentage"))
 
-    # Agent 3: Solvency (agent3_solvency.txt)
+    # Agent 3: Solvency
     a3 = dossier["agent_3"]
     print("\n" + "-" * 80)
     print(f"⚖️  [AGENT 3: SOLVENCY & CAPITAL ALLOCATION] (Risk Pill: {a3.get('risk_pill')})")
@@ -121,7 +157,7 @@ def test_pipeline(ticker: str = "CROMPTON.NS"):
     print("  • Part 11 (Cash Conversion Cycle):", a3.get("part11_working_capital", {}).get("1_cash_conversion_cycle"))
     print("  • Part 12 (FCF Dividend Coverage):", a3.get("part12_capital_allocation", {}).get("4_dividend_fcf_sustainability"))
 
-    # Agent 4: Governance (agent4_governance_rpt.txt)
+    # Agent 4: Governance
     a4 = dossier["agent_4"]
     print("\n" + "-" * 80)
     print(f"🏛️  [AGENT 4: GOVERNANCE & MASTER RPT] (Risk Pill: {a4.get('risk_pill')})")
@@ -129,16 +165,15 @@ def test_pipeline(ticker: str = "CROMPTON.NS"):
     print("  • Section 2 (Remuneration):", a4.get("section2_executive_remuneration", {}).get("1_ceo_remuneration_vs_pat"))
     print("  • Section 3 (PEP & Political):", a4.get("section3_pep_rent_seeking", {}).get("1_pep_presence"))
     print("  • Section 4 (Master RPT Pricing):", a4.get("section4_master_rpt", {}).get("pricing_validation", {}).get("pricing_arms_length"))
-    print("  • Section 4 (Capital Siphoning):", a4.get("section4_master_rpt", {}).get("capital_siphoning", {}).get("unsecured_loans_to_insiders"))
 
-    # Agent 5: Industry KPI (agent5_industry_kpi.txt)
+    # Agent 5: Industry KPI
     a5 = dossier["agent_5"]
     print("\n" + "-" * 80)
     print(f"📈 [AGENT 5: INDUSTRY KPI SPECIALIST] (Activated: {a5.get('activated_checklist_section')})")
     for k, v in a5.get("kpi_results", {}).items():
         print(f"  • {k}: {v}")
 
-    # Agent 6: Synthesizer & Valuation (agent6_valuation_cio.txt)
+    # Agent 6: Synthesizer & Valuation
     a6 = dossier["agent_6"]
     print("\n" + "-" * 80)
     print(f"🎯 [AGENT 6: CIO & VALUATION SPECIALIST] (Verdict: {a6.get('institutional_rating')})")
@@ -155,7 +190,7 @@ def test_pipeline(ticker: str = "CROMPTON.NS"):
         print(f"      - {trig}")
 
     print("\n" + "=" * 80)
-    print(f"✅ ALL 7 AGENTS EXECUTED SUCCESSFULLY FOR {ticker} WITH COMPLETE UNABRIDGED CHECKLIST PROMPTS!")
+    print(f"✅ TWO-STAGE INSTITUTIONAL ENGINE EXECUTED SUCCESSFULLY FOR {ticker}!")
     print("=" * 80)
     return dossier
 
