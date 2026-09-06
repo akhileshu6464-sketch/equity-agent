@@ -57,20 +57,86 @@ class NumberedCanvas(canvas.Canvas):
 
 
 def clean_markdown_for_pdf(text):
-    """Strip raw markdown formatting artifacts cleanly into HTML tags recognized by ReportLab."""
+    """Clean raw markdown, technical symbols, code fences, and broken unicode into clean text for ReportLab."""
     if not text:
         return ""
-    # Clean bullet points before removing non-ASCII
-    text = text.replace('•', '&bull;').replace(' - ', '&bull; ')
-    # Remove emoji and control characters that break standard PDF fonts
-    text = re.sub(r'[^\x00-\x7F]+', ' ', text)
-    # Convert bold **text** to <b>text</b>
-    text = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', text)
-    # Convert italic *text* to <i>text</i>
-    text = re.sub(r'\*(.*?)\*', r'<i>\1</i>', text)
-    # Remove markdown headers (#, ##, ###)
-    text = re.sub(r'^#+\s*', '', text)
-    return text.strip()
+    if isinstance(text, dict):
+        text = "\n".join(f"{k}: {v}" for k, v in text.items())
+    elif isinstance(text, list):
+        text = "\n".join(str(item) for item in text)
+    else:
+        text = str(text)
+
+    # 1. Normalize currency and standard symbols
+    text = text.replace('₹', 'Rs. ')
+    text = text.replace('€', 'EUR ').replace('£', 'GBP ')
+
+    # 2. Strip code fences (```json, ```, etc.) and inline backticks
+    text = re.sub(r'```[a-zA-Z]*', '', text)
+    text = text.replace('```', '')
+    text = text.replace('`', '')
+
+    # 3. Clean line by line
+    cleaned_lines = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+
+        # Skip horizontal rules (---, ***, ___)
+        if re.match(r'^[-*_]{3,}\s*$', line):
+            continue
+
+        # Strip markdown headers (##, ###, ####, etc.)
+        line = re.sub(r'^#+\s*', '', line)
+
+        # Convert markdown bullet points (- , * , + ) to standard bullet &bull;
+        line = re.sub(r'^[-*+]\s+', '&bull; ', line)
+        if line.startswith('•'):
+            line = '&bull; ' + line.lstrip('•').strip()
+
+        # Clean JSON bracket lines if any stray ones appear
+        if (line.startswith('{') and line.endswith('}')) or (line.startswith('[') and line.endswith(']')):
+            clean_json_content = re.sub(r'["{}\[\]]', '', line).strip()
+            if clean_json_content:
+                line = clean_json_content
+            else:
+                continue
+
+        # Convert bold **text** to <b>text</b>
+        line = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', line)
+        # Convert __text__ to <b>text</b>
+        line = re.sub(r'__(.*?)__', r'<b>\1</b>', line)
+
+        # Convert italic *text* or _text_ to <i>text</i>
+        line = re.sub(r'(?<!\w)\*(.*?)\*(?!\w)', r'<i>\1</i>', line)
+        line = re.sub(r'(?<!\w)_(.*?)_(?!\w)', r'<i>\1</i>', line)
+
+        # Remove any remaining stray asterisks, hashes
+        line = line.replace('**', '').replace('##', '').replace('###', '')
+
+        # Escape stray & that aren't recognized XML entities
+        line = re.sub(r'&(?!(bull|amp|lt|gt|quot|apos);)', '&amp;', line)
+
+        # Escape stray < and > not part of valid ReportLab tags
+        line = line.replace('<b>', '___B_OPEN___').replace('</b>', '___B_CLOSE___')
+        line = line.replace('<i>', '___I_OPEN___').replace('</i>', '___I_CLOSE___')
+        line = line.replace('<u>', '___U_OPEN___').replace('</u>', '___U_CLOSE___')
+        line = line.replace('<', '&lt;').replace('>', '&gt;')
+        line = line.replace('___B_OPEN___', '<b>').replace('___B_CLOSE___', '</b>')
+        line = line.replace('___I_OPEN___', '<i>').replace('___I_CLOSE___', '</i>')
+        line = line.replace('___U_OPEN___', '<u>').replace('___U_CLOSE___', '</u>')
+
+        # Remove broken/unwanted unicode symbols and emojis that break Helvetica
+        line = re.sub(r'[^\x20-\x7E&;]', ' ', line)
+
+        # Clean up multiple spaces
+        line = re.sub(r'[ \t]+', ' ', line).strip()
+
+        if line:
+            cleaned_lines.append(line)
+
+    return '\n'.join(cleaned_lines)
 
 
 def build_presentation_pdf(ticker, company_name, metrics, dossier_dict):
@@ -691,11 +757,15 @@ def main():
         dossier_dict=pdf_dossier_dict
     )
 
+    clean_comp_name = re.sub(r'[\\/*?:"<>|]', '', company_name).strip() if company_name else symbol
+    pdf_filename = f"{clean_comp_name} - Equity Research Report.pdf"
+
     st.download_button(
-        label="📄 Download Institutional Presentation PDF Dossier",
+        label="📥 Download Report PDF",
         data=pdf_data,
-        file_name=f"{symbol}_Institutional_Research_Dossier.pdf",
-        mime="application/pdf"
+        file_name=pdf_filename,
+        mime="application/pdf",
+        use_container_width=True
     )
 
     # Accordion Tabs for All 7 Agent Audits (Expanded by default)
@@ -943,39 +1013,7 @@ def main():
             for trig in a6.get("invalidation_triggers", []):
                 st.markdown(f'<div class="bullet-card">❌ {trig}</div>', unsafe_allow_html=True)
 
-    # Download Dossier Buttons (Markdown and JSON)
-    st.markdown("---")
-    d_col1, d_col2 = st.columns(2)
-    with d_col1:
-        st.download_button(
-            label="📥 Download Full Research Report (.md)",
-            data=full_report_md,
-            file_name=f"{symbol}_institutional_dossier.md",
-            mime="text/markdown",
-            use_container_width=True
-        )
-    with d_col2:
-        export_json = json.dumps({
-            "symbol": symbol,
-            "company_name": company_name,
-            "current_price": cmp,
-            "market_cap_cr": mcap_cr,
-            "institutional_rating": rating,
-            "agent_0_classifier": a0.get("routing_profile"),
-            "agent_1_qualitative": a1.get("summary"),
-            "agent_2_forensics": a2.get("summary"),
-            "agent_3_solvency": a3.get("summary"),
-            "agent_4_governance": a4.get("summary"),
-            "agent_5_industry_kpi": a5.get("summary"),
-            "agent_6_valuation_cio": a6.get("summary")
-        }, indent=2)
-        st.download_button(
-            label="📥 Download Structured Dossier (.json)",
-            data=export_json,
-            file_name=f"{symbol}_institutional_dossier.json",
-            mime="application/json",
-            use_container_width=True
-        )
+
 
 
 if __name__ == "__main__":
