@@ -23,6 +23,11 @@ class FinancialDataService:
     def __init__(self):
         self._cache: Dict[str, Dict[str, Any]] = {}
 
+    def clear_cache(self) -> None:
+        """Clears all cached financial statements and market metrics."""
+        self._cache.clear()
+        logger.info("Cleared FinancialDataService cache.")
+
     @staticmethod
     def normalize_ticker(ticker: str) -> str:
         """

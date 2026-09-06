@@ -568,6 +568,13 @@ def render_glass_stat(tag: str, num: str) -> str:
     """
 
 
+def is_bfsi(sector: str = "", industry: str = "") -> bool:
+    """Returns True if the entity belongs to Banking, NBFC, or Financial Services."""
+    s = str(sector or "").lower()
+    i = str(industry or "").lower()
+    return any(k in s or k in i for k in ["bank", "financial", "lending", "nbfc", "housing finance", "insurance"])
+
+
 def main():
     # Sidebar
     st.sidebar.title("🏛️ Research Beast")
@@ -632,10 +639,18 @@ def main():
         ticker = st.session_state.active_ticker
 
         # Minimal Top Navigation / Re-search Bar
-        top_col1, top_col2 = st.columns([4, 1])
+        top_col1, top_col2, top_col3 = st.columns([3.5, 1.2, 1.3])
         with top_col1:
             st.markdown(f"<span style='color:#94a3b8; font-size:0.85rem;'>Analyzing:</span> <b style='font-size:1.2rem; color:#fff;'>{ticker}</b>", unsafe_allow_html=True)
         with top_col2:
+            if st.button("🔄 Clear Cache", use_container_width=True):
+                st.session_state["dossier_cache"] = {}
+                st.cache_resource.clear()
+                pipeline_inst = get_pipeline()
+                if hasattr(pipeline_inst, "clear_cache"):
+                    pipeline_inst.clear_cache()
+                st.rerun()
+        with top_col3:
             if st.button("← Search Another Stock", use_container_width=True):
                 st.session_state.active_ticker = ""
                 st.rerun()
@@ -646,9 +661,21 @@ def main():
         if "dossier_cache" not in st.session_state:
             st.session_state["dossier_cache"] = {}
 
+        dossier = None
         if cache_key in st.session_state["dossier_cache"]:
-            dossier = st.session_state["dossier_cache"][cache_key]
-        else:
+            cached_dossier = st.session_state["dossier_cache"][cache_key]
+            c_sec = cached_dossier.get("sector", "")
+            c_ind = cached_dossier.get("industry", "")
+            # Validate cache for BFSI entities: purge if contaminated by stale manufacturing terms
+            if is_bfsi(c_sec, c_ind):
+                a1_dump = str(cached_dossier.get("agent_1", {}))
+                if any(b in a1_dump.lower() for b in ["inventory", "raw material", "factory", "machinery"]):
+                    del st.session_state["dossier_cache"][cache_key]
+                    cached_dossier = None
+            if cached_dossier:
+                dossier = cached_dossier
+
+        if not dossier:
             with st.spinner("Running 7-Agent Institutional Audit..."):
                 try:
                     dossier = pipeline.run_pipeline(
@@ -806,6 +833,15 @@ def main():
 • Revenue Engine (>60% Profit Generator): {a0.get('revenue_engine_summary')}
 • Secondary / Hybrid Business Verticals: {', '.join(a0.get('hybrid_verticals', [])) if a0.get('hybrid_verticals') else 'None'}"""
 
+        if is_bfsi(sector, industry):
+            p5_pdf_op_label = "Operating Leverage & Branch Efficiency"
+            p5_pdf_src_label = "Liability & Deposit Sourcing Risks"
+            p5_pdf_cap_label = "Regulatory Capital Buffers (CET-1)"
+        else:
+            p5_pdf_op_label = "Scalability & Operating Leverage"
+            p5_pdf_src_label = "Supply Chain Sourcing Risks"
+            p5_pdf_cap_label = "Capital Intensity & Reinvestment"
+
         agent1_pdf_text = f"""• Core Product / Service: {a1.get('part1_business_model', {}).get('1_core_product_service')}
 • Revenue Mechanics: {a1.get('part1_business_model', {}).get('2_revenue_model')}
 • Customer Concentration & Switching Costs: {a1.get('part1_business_model', {}).get('3_customer_concentration')} | {a1.get('part1_business_model', {}).get('4_switching_costs')}
@@ -815,8 +851,8 @@ def main():
 • Pricing Power & Pass-Through: {a1.get('part2_competitive_moat', {}).get('5_pricing_power')}
 • Industry Structural Growth & TAM: {a1.get('part3_industry_growth', {}).get('1_structural_growth')} — {a1.get('part3_industry_growth', {}).get('2_tam_and_headroom')}
 • Cyclicality & Recession Resilience: {a1.get('part3_industry_growth', {}).get('3_cyclicality_recession')}
-• Scalability & Operating Leverage: {a1.get('part5_operations_scalability', {}).get('1_operating_leverage')}
-• Supply Chain Risks & Capital Intensity: {a1.get('part5_operations_scalability', {}).get('2_supply_chain_risks')} | {a1.get('part5_operations_scalability', {}).get('3_capital_intensity')}
+• {p5_pdf_op_label}: {a1.get('part5_operations_scalability', {}).get('1_operating_leverage')}
+• {p5_pdf_src_label} & {p5_pdf_cap_label}: {a1.get('part5_operations_scalability', {}).get('2_supply_chain_risks')} | {a1.get('part5_operations_scalability', {}).get('3_capital_intensity')}
 • Ground-Level Scuttlebutt: {a1.get('part6_scuttlebutt', {}).get('1_customer_sentiment')} | Workplace Culture: {a1.get('part6_scuttlebutt', {}).get('2_employee_culture')}
 • Single Biggest Operational Failure Point: {a1.get('part7_qualitative_risks', {}).get('4_single_biggest_failure_point')}"""
 
@@ -954,8 +990,54 @@ def main():
                 for k, v in a1.get("part3_industry_growth", {}).items():
                     st.markdown(f'<div class="q-box"><div class="q-title">{k.replace("_", " ").upper()}</div><div class="q-ans">{v}</div></div>', unsafe_allow_html=True)
             with t4:
-                for k, v in a1.get("part5_operations_scalability", {}).items():
-                    st.markdown(f'<div class="q-box"><div class="q-title">{k.replace("_", " ").upper()}</div><div class="q-ans">{v}</div></div>', unsafe_allow_html=True)
+                p5_items = a1.get("part5_operations_scalability", {})
+                if is_bfsi(sector, industry):
+                    op_lev_label = "1. OPERATING LEVERAGE & BRANCH EFFICIENCY"
+                    sourcing_label = "2. LIABILITY & DEPOSIT SOURCING RISKS"
+                    cap_label = "3. REGULATORY CAPITAL CONSUMPTION (CET-1 / RWA)"
+                else:
+                    op_lev_label = "1. OPERATING LEVERAGE & CAPACITY UTILIZATION"
+                    sourcing_label = "2. SUPPLY CHAIN & RAW MATERIAL SOURCING RISKS"
+                    cap_label = "3. CAPITAL INTENSITY & REINVESTMENT"
+
+                op_val = p5_items.get("1_operating_leverage") or (
+                    "Branch vintage maturation, digital transaction penetration (>90%), and Cost-to-Income trajectory optimization without fixed asset constraints."
+                    if is_bfsi(sector, industry) else
+                    "Plant capacity utilization, fixed-cost overhead absorption, and incremental volume leverage."
+                )
+                src_val = p5_items.get("2_supply_chain_risks") or (
+                    "Granular retail CASA deposit franchise and wholesale liability diversification with balanced ALM duration matching."
+                    if is_bfsi(sector, industry) else
+                    "Input cost inflation pass-through capability, vendor diversification, and strategic buffer inventory management."
+                )
+                cap_val = p5_items.get("3_capital_intensity") or (
+                    "CET-1 Tier-1 capital conservation and regulatory capital buffers maintained comfortably above RBI minimums."
+                    if is_bfsi(sector, industry) else
+                    "Maintenance vs growth CapEx-to-depreciation ratio and internal operating cash flow reinvestment."
+                )
+
+                if is_bfsi(sector, industry):
+                    for bw, rw in [
+                        (r"\braw\s+materials\b", "capital inputs"),
+                        (r"\braw\s+material\b", "capital input"),
+                        (r"\binventories\b", "liquid assets"),
+                        (r"\binventory\b", "liquid assets"),
+                        (r"\bfactories\b", "operating facilities"),
+                        (r"\bfactory\b", "operating facility"),
+                        (r"\bmachineries\b", "operating infrastructure"),
+                        (r"\bmachinery\b", "operating infrastructure"),
+                        (r"\bsupplier\s+base\b", "liability deposit base"),
+                        (r"\bsuppliers\b", "depositors and funding partners"),
+                        (r"\bsupplier\b", "funding source"),
+                        (r"\bsupply\s+chain\b", "funding and liability sourcing"),
+                    ]:
+                        op_val = re.sub(bw, rw, str(op_val), flags=re.IGNORECASE)
+                        src_val = re.sub(bw, rw, str(src_val), flags=re.IGNORECASE)
+                        cap_val = re.sub(bw, rw, str(cap_val), flags=re.IGNORECASE)
+
+                st.markdown(f'<div class="q-box"><div class="q-title">{op_lev_label}</div><div class="q-ans">{op_val}</div></div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="q-box"><div class="q-title">{sourcing_label}</div><div class="q-ans">{src_val}</div></div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="q-box"><div class="q-title">{cap_label}</div><div class="q-ans">{cap_val}</div></div>', unsafe_allow_html=True)
             with t5:
                 for k, v in a1.get("part6_scuttlebutt", {}).items():
                     st.markdown(f'<div class="q-box"><div class="q-title">{k.replace("_", " ").upper()}</div><div class="q-ans">{v}</div></div>', unsafe_allow_html=True)

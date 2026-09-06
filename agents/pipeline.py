@@ -55,6 +55,11 @@ class EquityAgentPipeline:
         self.agent5 = Agent5IndustryKPI()
         self.agent6 = Agent6Synthesizer()
 
+    def clear_cache(self) -> None:
+        """Clears all cached financial statements and data in pipeline."""
+        if hasattr(self, "financial_service") and hasattr(self.financial_service, "clear_cache"):
+            self.financial_service.clear_cache()
+
     def _sanitize_financials(self, company_data: Dict[str, Any]) -> Dict[str, Any]:
         """Ensures all balance sheet, income, and cash flow fields are wrapped in defensive defaults."""
         if not company_data:
