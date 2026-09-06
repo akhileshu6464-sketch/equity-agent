@@ -12,7 +12,7 @@ Produces a publication-grade, 20+ page institutional research dossier with:
 import io
 import re
 import datetime
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional, Tuple, Union
 
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
@@ -43,59 +43,79 @@ class NumberedCanvas(canvas.Canvas):
         for state in self._saved_page_states:
             self.__dict__.update(state)
             self.draw_page_decorations(num_pages)
-            super().showPage()
-        super().save()
+            canvas.Canvas.showPage(self)
+        canvas.Canvas.save(self)
 
     def draw_page_decorations(self, page_count: int):
-        page_w = 595.27
-        page_h = 841.89
-        margin = 46.0
-
         self.saveState()
+        page_width, page_height = A4
 
-        # Suppress running header on Cover Page (Page 1)
+        # ---------------------------------------------------------------------
+        # RUNNING HEADER (Pages 2 to N)
+        # ---------------------------------------------------------------------
         if self._pageNumber > 1:
-            self.setFont("Helvetica-Bold", 7.5)
-            self.setFillColor(colors.HexColor("#1E3A8A"))
-            self.drawString(margin, page_h - 26, "RESEARCH BEAST")
-            self.setFont("Helvetica", 7.5)
-            self.setFillColor(colors.HexColor("#64748B"))
-            self.drawString(margin + 78, page_h - 26, "|   INSTITUTIONAL EQUITY RESEARCH DOSSIER")
-            self.drawRightString(page_w - margin, page_h - 26, "STRICTLY CONFIDENTIAL • INSTITUTIONAL USE ONLY")
-            self.setStrokeColor(colors.HexColor("#CBD5E1"))
+            self.setFont('Helvetica-Bold', 7.5)
+            self.setFillColor(colors.HexColor("#0f172a"))  # Deep navy
+            self.drawString(46, page_height - 30, "RESEARCH BEAST")
+
+            self.setFont('Helvetica', 7.5)
+            self.setFillColor(colors.HexColor("#64748b"))  # Muted slate
+            self.drawString(132, page_height - 30, "|   INSTITUTIONAL EQUITY RESEARCH DOSSIER")
+
+            self.setFont('Helvetica-Bold', 7.0)
+            self.setFillColor(colors.HexColor("#991b1b"))  # Risk red
+            self.drawRightString(page_width - 46, page_height - 30, "STRICTLY CONFIDENTIAL   INSTITUTIONAL USE ONLY")
+
+            self.setStrokeColor(colors.HexColor("#cbd5e1"))
             self.setLineWidth(0.6)
-            self.line(margin, page_h - 30, page_w - margin, page_h - 30)
+            self.line(46, page_height - 34, page_width - 46, page_height - 34)
 
-        # Running Footer on all pages
-        self.setStrokeColor(colors.HexColor("#CBD5E1"))
+        # ---------------------------------------------------------------------
+        # RUNNING FOOTER (All Pages)
+        # ---------------------------------------------------------------------
+        self.setStrokeColor(colors.HexColor("#cbd5e1"))
         self.setLineWidth(0.6)
-        self.line(margin, 34, page_w - margin, 34)
+        self.line(46, 38, page_width - 46, 38)
 
-        self.setFont("Helvetica", 7.5)
-        self.setFillColor(colors.HexColor("#64748B"))
-        self.drawString(margin, 23, "Research Beast Autonomous Intelligence • 7-Agent Institutional Audit Engine")
-        self.drawRightString(page_w - margin, 23, f"Page {self._pageNumber} of {page_count}")
+        self.setFont('Helvetica', 7.5)
+        self.setFillColor(colors.HexColor("#64748b"))
+        self.drawString(46, 26, "Research Beast Autonomous Intelligence   7-Agent Institutional Audit Engine")
+
+        page_str = f"Page {self._pageNumber} of {page_count}"
+        self.setFont('Helvetica-Bold', 8.0)
+        self.setFillColor(colors.HexColor("#0f172a"))
+        self.drawRightString(page_width - 46, 26, page_str)
 
         self.restoreState()
 
 
 class InstitutionalStyles:
-    """Manages typography, colors, and layout styles for Research Beast institutional reports."""
+    """
+    Centralized typography and color palette conforming to institutional research specifications.
+    Enforces distinct hierarchy, calibrated leading, and formal font choices.
+    """
     def __init__(self):
-        self.navy_dark = colors.HexColor("#0F172A")
-        self.navy_blue = colors.HexColor("#1E3A8A")
-        self.accent_blue = colors.HexColor("#2563EB")
-        self.slate_dark = colors.HexColor("#1E293B")
-        self.slate_gray = colors.HexColor("#475569")
-        self.border_gray = colors.HexColor("#CBD5E1")
-        self.bg_light = colors.HexColor("#F8FAFC")
-        self.bg_tint = colors.HexColor("#F1F5F9")
-        self.red_dark = colors.HexColor("#991B1B")
-        self.green_dark = colors.HexColor("#166534")
+        # Palette Definitions
+        self.navy_dark = colors.HexColor("#0f172a")       # Slate 900
+        self.navy_blue = colors.HexColor("#1e3a8a")       # Blue 900
+        self.accent_blue = colors.HexColor("#2563eb")     # Blue 600
+        self.slate_dark = colors.HexColor("#1e293b")      # Slate 800 (Body)
+        self.slate_muted = colors.HexColor("#475569")     # Slate 600
+        self.slate_gray = colors.HexColor("#475569")      # Slate 600 alias
+        self.slate_light = colors.HexColor("#94a3b8")     # Slate 400
+        self.border_gray = colors.HexColor("#cbd5e1")     # Slate 300
+        self.bg_light = colors.HexColor("#f8fafc")        # Slate 50
+        self.bg_subtle = colors.HexColor("#f1f5f9")       # Slate 100
+        self.bg_tint = colors.HexColor("#f1f5f9")         # Slate 100 alias
+        self.risk_green = colors.HexColor("#166534")      # Green 800
+        self.green_dark = colors.HexColor("#166534")      # Green 800 alias
+        self.risk_amber = colors.HexColor("#b45309")      # Amber 700
+        self.risk_red = colors.HexColor("#991b1b")        # Red 800
+        self.red_dark = colors.HexColor("#991b1b")        # Red 800 alias
 
         base_styles = getSampleStyleSheet()
 
-        # Title Page Styles
+        # Document Header Title
         self.doc_title = ParagraphStyle(
             'RB_DocTitle',
             parent=base_styles['Normal'],
@@ -103,17 +123,20 @@ class InstitutionalStyles:
             fontSize=22,
             leading=26,
             textColor=self.navy_dark,
-            spaceAfter=5
+            spaceAfter=3,
+            alignment=TA_LEFT
         )
 
+        # Document Subtitle
         self.doc_subtitle = ParagraphStyle(
-            'RB_DocSubTitle',
+            'RB_DocSubtitle',
             parent=base_styles['Normal'],
             fontName='Helvetica',
-            fontSize=10,
-            leading=14,
-            textColor=self.slate_gray,
-            spaceAfter=10
+            fontSize=9.5,
+            leading=13,
+            textColor=self.slate_muted,
+            spaceAfter=8,
+            alignment=TA_LEFT
         )
 
         # Chapter Heading H1
@@ -122,16 +145,16 @@ class InstitutionalStyles:
             parent=base_styles['Normal'],
             fontName='Helvetica-Bold',
             fontSize=14,
-            leading=18,
+            leading=17,
             textColor=self.navy_dark,
             spaceBefore=8,
-            spaceAfter=6,
+            spaceAfter=3,
             keepWithNext=True
         )
 
         # Section Heading H2
         self.section_heading = ParagraphStyle(
-            'RB_SecHeading',
+            'RB_SectionHeading',
             parent=base_styles['Normal'],
             fontName='Helvetica-Bold',
             fontSize=11,
@@ -151,20 +174,27 @@ class InstitutionalStyles:
             leading=13,
             textColor=self.slate_dark,
             spaceBefore=5,
-            spaceAfter=3,
+            spaceAfter=2,
             keepWithNext=True
         )
 
-        # Body Text (Justified, Book-Style 9.5pt / 13.5pt leading)
+        # Body Text (Justified, formal line pitch)
         self.body_text = ParagraphStyle(
             'RB_BodyText',
             parent=base_styles['Normal'],
             fontName='Helvetica',
-            fontSize=9,
-            leading=13,
+            fontSize=8.8,
+            leading=12.5,
             textColor=self.slate_dark,
             alignment=TA_JUSTIFY,
-            spaceAfter=5
+            spaceAfter=4
+        )
+
+        # Body Bold / Emphasized
+        self.body_bold = ParagraphStyle(
+            'RB_BodyBold',
+            parent=self.body_text,
+            fontName='Helvetica-Bold'
         )
 
         # Bullet List Items
@@ -186,19 +216,19 @@ class InstitutionalStyles:
             'RB_TblHeader',
             parent=base_styles['Normal'],
             fontName='Helvetica-Bold',
-            fontSize=8,
+            fontSize=7.8,
             leading=10.5,
             textColor=colors.white,
-            alignment=TA_CENTER
+            alignment=TA_LEFT
         )
 
-        # Table Cell Normal
+        # Table Cell Standard
         self.tbl_cell = ParagraphStyle(
             'RB_TblCell',
             parent=base_styles['Normal'],
             fontName='Helvetica',
-            fontSize=8,
-            leading=10.5,
+            fontSize=7.5,
+            leading=10,
             textColor=self.slate_dark,
             alignment=TA_LEFT
         )
@@ -206,35 +236,29 @@ class InstitutionalStyles:
         # Table Cell Bold
         self.tbl_cell_bold = ParagraphStyle(
             'RB_TblCellBold',
-            parent=base_styles['Normal'],
-            fontName='Helvetica-Bold',
-            fontSize=8,
-            leading=10.5,
-            textColor=self.navy_dark,
-            alignment=TA_LEFT
+            parent=self.tbl_cell,
+            fontName='Helvetica-Bold'
         )
 
         # Table Cell Center
         self.tbl_cell_center = ParagraphStyle(
             'RB_TblCellCenter',
-            parent=base_styles['Normal'],
-            fontName='Helvetica',
-            fontSize=8,
-            leading=10.5,
-            textColor=self.slate_dark,
+            parent=self.tbl_cell,
             alignment=TA_CENTER
         )
 
-        # Callout Card Text
+        # Callout Title Style
         self.callout_title = ParagraphStyle(
             'RB_CalloutTitle',
             parent=base_styles['Normal'],
             fontName='Helvetica-Bold',
-            fontSize=9,
-            leading=12,
-            textColor=colors.HexColor("#92400E")
+            fontSize=8.5,
+            leading=11,
+            textColor=self.navy_dark,
+            spaceAfter=2
         )
 
+        # Callout Body Style
         self.callout_text = ParagraphStyle(
             'RB_CalloutText',
             parent=base_styles['Normal'],
@@ -253,18 +277,48 @@ def clean_markdown_for_pdf(text: Any) -> str:
     if not isinstance(text, str):
         text = str(text)
 
-    clean = text.replace('&', '&amp;')
+    # 1. Currency glyph replacement: Indian Rupee (₹) is not in Helvetica Type 1 font
+    clean = text.replace("₹", "Rs. ").replace("\u20b9", "Rs. ")
+    clean = re.sub(r'(?:Rs\.\s*)+', 'Rs. ', clean)
+
+    # 2. Normalize smart quotes and dashes
+    clean = clean.replace("–", "-").replace("—", "-").replace("’", "'").replace("‘", "'").replace('”', '"').replace('“', '"')
+
+    # 3. Strip raw HTML entities like &bull; or <br/> if present in raw string
+    clean = re.sub(r'&bull;?', '', clean)
+    clean = re.sub(r'<br\s*/?>', ' ', clean)
+
+    # 4. Protect existing safe tags: <b>, </b>, <i>, </i>, <u>, </u>
+    clean = re.sub(r'<\s*b\s*>', '@@BOPEN@@', clean, flags=re.IGNORECASE)
+    clean = re.sub(r'<\s*/\s*b\s*>', '@@BCLOSE@@', clean, flags=re.IGNORECASE)
+    clean = re.sub(r'<\s*i\s*>', '@@IOPEN@@', clean, flags=re.IGNORECASE)
+    clean = re.sub(r'<\s*/\s*i\s*>', '@@ICLOSE@@', clean, flags=re.IGNORECASE)
+    clean = re.sub(r'<\s*u\s*>', '@@UOPEN@@', clean, flags=re.IGNORECASE)
+    clean = re.sub(r'<\s*/\s*u\s*>', '@@UCLOSE@@', clean, flags=re.IGNORECASE)
+
+    # 5. XML escape unescaped special characters
+    clean = clean.replace('&', '&amp;')
+    clean = clean.replace('&amp;amp;', '&amp;').replace('&amp;lt;', '&lt;').replace('&amp;gt;', '&gt;')
     clean = clean.replace('<', '&lt;').replace('>', '&gt;')
-    clean = re.sub(r'\*\*(.*?)\*\*', r'<b></b>', clean)
-    clean = re.sub(r'__(.*?)__', r'<b></b>', clean)
-    clean = re.sub(r'(?<!\*)\*(?!\*)(.*?)(?<!\*)\*(?!\*)', r'<i></i>', clean)
-    clean = re.sub(r'(?<!_)_(?!_)(.*?)(?<!_)_(?!_)', r'<i></i>', clean)
-    clean = re.sub(r'`(.*?)`', r'<font face="Courier"></font>', clean)
+
+    # 6. Convert markdown formatting to ReportLab XML
+    clean = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', clean)
+    clean = re.sub(r'__(.*?)__', r'<b>\1</b>', clean)
+    clean = re.sub(r'(?<!\*)\*(?!\*)(.*?)(?<!\*)\*(?!\*)', r'<i>\1</i>', clean)
+    clean = re.sub(r'(?<!_)_(?!_)(.*?)(?<!_)_(?!_)', r'<i>\1</i>', clean)
+    clean = re.sub(r'`(.*?)`', r'<font face="Courier">\1</font>', clean)
+
+    # 7. Restore protected tags
+    clean = clean.replace('@@BOPEN@@', '<b>').replace('@@BCLOSE@@', '</b>')
+    clean = clean.replace('@@IOPEN@@', '<i>').replace('@@ICLOSE@@', '</i>')
+    clean = clean.replace('@@UOPEN@@', '<u>').replace('@@UCLOSE@@', '</u>')
+
+    clean = re.sub(r'(?:Rs\.\s*)+', 'Rs. ', clean)
     return clean.strip()
 
 
 def make_callout_box(
-    content: str,
+    content: Union[str, List[Any]],
     title: str = "AUDIT OBSERVATION & SENSITIVITY TRIGGER",
     tone: str = "warning",
     printable_width: float = 503.27,
@@ -278,6 +332,10 @@ def make_callout_box(
         bg_col = colors.HexColor("#FEF2F2")
         border_col = colors.HexColor("#EF4444")
         title_col = colors.HexColor("#991B1B")
+    elif tone == "amber":
+        bg_col = colors.HexColor("#fff7ed")
+        border_col = colors.HexColor("#f97316")
+        title_col = colors.HexColor("#c2410c")
     elif tone == "success":
         bg_col = colors.HexColor("#F0FDF4")
         border_col = colors.HexColor("#22C55E")
@@ -297,21 +355,30 @@ def make_callout_box(
         textColor=title_col
     )
 
-    clean_body = clean_markdown_for_pdf(content)
-    elems = [
-        Paragraph(f"<b>{title}</b>", box_title_style),
-        Spacer(1, 2),
-        Paragraph(clean_body, st.callout_text)
-    ]
+    if isinstance(content, list):
+        elems = [
+            Paragraph(f"<b>{title}</b>", box_title_style),
+            Spacer(1, 4),
+        ] + content
+    else:
+        clean_body = clean_markdown_for_pdf(content)
+        elems = [
+            Paragraph(f"<b>{title}</b>", box_title_style),
+            Spacer(1, 2),
+            Paragraph(clean_body, st.callout_text)
+        ]
+
+    pad_v = 10 if tone == "amber" else 5
+    pad_h = 14 if tone == "amber" else 8
 
     t = Table([[elems]], colWidths=[printable_width])
     t.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, -1), bg_col),
         ('BOX', (0, 0), (-1, -1), 1, border_col),
-        ('TOPPADDING', (0, 0), (-1, -1), 5),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
-        ('LEFTPADDING', (0, 0), (-1, -1), 8),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+        ('TOPPADDING', (0, 0), (-1, -1), pad_v),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), pad_v),
+        ('LEFTPADDING', (0, 0), (-1, -1), pad_h),
+        ('RIGHTPADDING', (0, 0), (-1, -1), pad_h),
     ]))
     return t
 
@@ -337,6 +404,21 @@ def build_institutional_pdf(
         topMargin=46,
         bottomMargin=46
     )
+
+    def sanitize_obj(data: Any) -> Any:
+        if isinstance(data, str):
+            s = data.replace("₹", "Rs. ").replace("\u20b9", "Rs. ")
+            s = re.sub(r'(?:Rs\.\s*)+', 'Rs. ', s)
+            s = s.replace("–", "-").replace("—", "-").replace("’", "'").replace("‘", "'").replace('”', '"').replace('“', '"')
+            return s
+        elif isinstance(data, dict):
+            return {k: sanitize_obj(v) for k, v in data.items()}
+        elif isinstance(data, list):
+            return [sanitize_obj(item) for item in data]
+        return data
+
+    metrics = sanitize_obj(metrics) if isinstance(metrics, dict) else {}
+    dossier_dict = sanitize_obj(dossier_dict) if isinstance(dossier_dict, dict) else {}
 
     st = InstitutionalStyles()
     story: List[Any] = []
@@ -496,10 +578,20 @@ def build_institutional_pdf(
     sec4_scen = a6.get('section4_scenario_matrix', {})
     base_target = sec4_scen.get('base_case', {}).get('fair_target_price', cmp_str)
     base_ret = sec4_scen.get('base_case', {}).get('expected_return', '+18.0%')
+    base_tgt_str = str(base_target).strip()
+    if not base_tgt_str.startswith("Rs."):
+        base_tgt_str = f"Rs. {base_tgt_str}"
+    base_tgt_str = re.sub(r'(?:Rs\.\s*)+', 'Rs. ', base_tgt_str)
+
+    epv_raw = str(a6.get('section2_asset_yield_valuation', {}).get('5_earnings_power_value_epv', f'Rs. {cmp_str}')).strip()
+    if not epv_raw.startswith("Rs."):
+        epv_raw = f"Rs. {epv_raw}"
+    epv_raw = re.sub(r'(?:Rs\.\s*)+', 'Rs. ', epv_raw)
+
     summary_val_data = [
         [Paragraph("<b>Valuation Metric</b>", st.tbl_header), Paragraph("<b>Current CMP</b>", st.tbl_header), Paragraph("<b>Base Fair Target</b>", st.tbl_header), Paragraph("<b>24M Expected Return</b>", st.tbl_header), Paragraph("<b>Margin of Safety</b>", st.tbl_header)],
-        [Paragraph("Intrinsic Equity Valuation", st.tbl_cell_bold), Paragraph(f"Rs. {cmp_str}", st.tbl_cell_center), Paragraph(str(base_target), st.tbl_cell_center), Paragraph(str(base_ret), st.tbl_cell_center), Paragraph(f"{dossier_dict.get('margin_of_safety_pct', 18.5):.1f}%", st.tbl_cell_center)],
-        [Paragraph("Earnings Power Value (EPV)", st.tbl_cell_bold), Paragraph(f"Rs. {cmp_str}", st.tbl_cell_center), Paragraph(str(a6.get('section2_asset_yield_valuation', {}).get('5_earnings_power_value_epv', 'Rs. ' + cmp_str)), st.tbl_cell_center), Paragraph("+12.0% Steady-State", st.tbl_cell_center), Paragraph("Downside Floor Protection", st.tbl_cell_center)],
+        [Paragraph("Intrinsic Equity Valuation", st.tbl_cell_bold), Paragraph(f"Rs. {cmp_str}", st.tbl_cell_center), Paragraph(base_tgt_str, st.tbl_cell_center), Paragraph(str(base_ret), st.tbl_cell_center), Paragraph(f"{dossier_dict.get('margin_of_safety_pct', 18.5):.1f}%", st.tbl_cell_center)],
+        [Paragraph("Earnings Power Value (EPV)", st.tbl_cell_bold), Paragraph(f"Rs. {cmp_str}", st.tbl_cell_center), Paragraph(epv_raw, st.tbl_cell_center), Paragraph("+12.0% Steady-State", st.tbl_cell_center), Paragraph("Downside Floor Protection", st.tbl_cell_center)],
     ]
     t_sum_val = Table(summary_val_data, colWidths=[printable_width * 0.28, printable_width * 0.18, printable_width * 0.20, printable_width * 0.18, printable_width * 0.16])
     t_sum_val.setStyle(TableStyle([
@@ -1635,10 +1727,14 @@ def build_institutional_pdf(
         [Paragraph("<b>Scenario</b>", st.tbl_header), Paragraph("<b>Growth Assumption</b>", st.tbl_header), Paragraph("<b>Fair Target Price</b>", st.tbl_header), Paragraph("<b>Expected Return Spread</b>", st.tbl_header)]
     ]
     for sc_name, sc_data in sec4_scen.items():
+        price_val = str(sc_data.get('fair_target_price', 'N/A')).strip()
+        if not price_val.startswith("Rs."):
+            price_val = f"Rs. {price_val}"
+        price_val = re.sub(r'(?:Rs\.\s*)+', 'Rs. ', price_val)
         scen_rows.append([
             Paragraph(f"<b>{sc_name.replace('_', ' ').upper()}</b>", st.tbl_cell_bold),
             Paragraph(str(sc_data.get('growth_assumed', 'Base Hurdle')), st.tbl_cell),
-            Paragraph(f"<b>Rs. {sc_data.get('fair_target_price', 'N/A')}</b>", st.tbl_cell_center),
+            Paragraph(f"<b>{price_val}</b>", st.tbl_cell_center),
             Paragraph(f"<b>{sc_data.get('expected_return', 'N/A')}</b>", st.tbl_cell_center)
         ])
     t_scen = Table(scen_rows, colWidths=[printable_width * 0.25, printable_width * 0.35, printable_width * 0.20, printable_width * 0.20])
@@ -1657,20 +1753,60 @@ def build_institutional_pdf(
     story.append(Spacer(1, 6))
 
     story.append(Paragraph("6.5 Critical Thesis Invalidation Triggers & Stop-Loss Conditions", st.section_heading))
-    inv_text = "<br/>".join([f"&bull; <b>Trigger {idx}:</b> {clean_markdown_for_pdf(str(t))}" for idx, t in enumerate(invalidation, start=1)])
-    if not inv_text:
-        inv_text = (
-            "&bull; <b>Trigger 1:</b> Deterioration in core asset quality with Gross NPA rising >150 bps above historical median.<br/>"
-            "&bull; <b>Trigger 2:</b> Sustained margin compression with Net Interest Margin contracting >50 bps across two fiscal quarters.<br/>"
-            "&bull; <b>Trigger 3:</b> Capital adequacy erosion with Tier-1 CET-1 buffer falling below regulatory risk threshold (13.5%)."
+
+    trigger_title_style = ParagraphStyle(
+        'TriggerCalloutTitle',
+        parent=st.callout_title,
+        fontName='Helvetica-Bold',
+        fontSize=9.5,
+        leading=13,
+        textColor=colors.HexColor("#c2410c"),
+        spaceAfter=6,
+        alignment=TA_LEFT
+    )
+    trigger_body_style = ParagraphStyle(
+        'TriggerCalloutItem',
+        parent=st.body_text,
+        fontName='Helvetica',
+        fontSize=9,
+        leading=13.5,
+        textColor=colors.HexColor("#1e293b"),
+        leftIndent=14,
+        firstLineIndent=-10,
+        spaceAfter=4,
+        alignment=TA_LEFT
+    )
+
+    triggers_content_flowables = [
+        Paragraph("<b>CRITICAL THESIS INVALIDATION &amp; CAPITAL PRESERVATION TRIGGERS</b>", trigger_title_style)
+    ]
+
+    default_invalidation = [
+        "Deterioration in core asset quality with Gross NPA rising >150 bps above historical median.",
+        "Sustained margin compression with Net Interest Margin contracting >50 bps across two fiscal quarters.",
+        "Capital adequacy erosion with Tier-1 CET-1 buffer falling below regulatory risk threshold (13.5%)."
+    ]
+    raw_triggers = invalidation if invalidation else default_invalidation
+
+    for idx, t in enumerate(raw_triggers, start=1):
+        raw_t = str(t).strip()
+        clean_t = re.sub(r'^(?:Trigger\s*\d+\s*[:.-]?|\d+[\s.:)\-]|[-*•])\s*', '', raw_t)
+        clean_t = clean_markdown_for_pdf(clean_t)
+        triggers_content_flowables.append(
+            Paragraph(f"<b>Trigger {idx}:</b> {clean_t}", trigger_body_style, bulletText='•')
         )
-    story.append(make_callout_box(
-        inv_text,
-        title="CRITICAL THESIS INVALIDATION & CAPITAL PRESERVATION TRIGGERS",
-        tone="danger",
-        printable_width=printable_width,
-        st=st
-    ))
+
+    callout_data = [[triggers_content_flowables]]
+    callout_table = Table(callout_data, colWidths=[printable_width])
+    callout_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor("#fff7ed")),
+        ('BOX', (0, 0), (-1, -1), 1, colors.HexColor("#f97316")),
+        ('TOPPADDING', (0, 0), (-1, -1), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
+        ('LEFTPADDING', (0, 0), (-1, -1), 14),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 14),
+    ]))
+    story.append(callout_table)
 
     # Explicit Divider: End of Page 21
     story.append(PageBreak())
@@ -1688,17 +1824,18 @@ def build_institutional_pdf(
         "listed across the National Stock Exchange of India (NSE) and Bombay Stock Exchange (BSE).",
         st.body_text
     ))
-    story.append(Paragraph(
-        "<b>The 7 Autonomous Research Agents:</b><br/>"
-        "&bull; <b>Agent 0 (Taxonomy Classifier):</b> Dynamically resolves companies into 1 of 12 canonical Indian sector archetypes.<br/>"
-        "&bull; <b>Agent 1 (Moat & Qualitative Auditor):</b> Evaluates competitive moat durability, network effects, and switching costs.<br/>"
-        "&bull; <b>Agent 2 (Forensic Accounting Detective):</b> Scans multi-year financial statements for accrual manipulation and CFO divergence.<br/>"
-        "&bull; <b>Agent 3 (Solvency & Capital Allocator):</b> Analyzes balance sheet leverage, DuPont returns, and debt servicing cushions.<br/>"
-        "&bull; <b>Agent 4 (Governance & Master RPT):</b> Audits promoter pledging, executive compensation, and related-party pricing fidelity.<br/>"
-        "&bull; <b>Agent 5 (Sector KPI Specialist):</b> Benchmarks granular operational throughput against sector-specific KPIs.<br/>"
-        "&bull; <b>Agent 6 (Valuation & CIO Synthesizer):</b> Synthesizes walk-the-talk scorecards, valuation floors, and reverse DCF hurdle tests.",
-        st.body_text
-    ))
+    story.append(Paragraph("<b>The 7 Autonomous Research Agents:</b>", st.body_text))
+    agent_desc_list = [
+        ("Agent 0 (Taxonomy Classifier)", "Dynamically resolves companies into 1 of 12 canonical Indian sector archetypes."),
+        ("Agent 1 (Moat & Qualitative Auditor)", "Evaluates competitive moat durability, network effects, and switching costs."),
+        ("Agent 2 (Forensic Accounting Detective)", "Scans multi-year financial statements for accrual manipulation and CFO divergence."),
+        ("Agent 3 (Solvency & Capital Allocator)", "Analyzes balance sheet leverage, DuPont returns, and debt servicing cushions."),
+        ("Agent 4 (Governance & Master RPT)", "Audits promoter pledging, executive compensation, and related-party pricing fidelity."),
+        ("Agent 5 (Sector KPI Specialist)", "Benchmarks granular operational throughput against sector-specific KPIs."),
+        ("Agent 6 (Valuation & CIO Synthesizer)", "Synthesizes walk-the-talk scorecards, valuation floors, and reverse DCF hurdle tests."),
+    ]
+    for ag_title, ag_desc in agent_desc_list:
+        story.append(Paragraph(f"<b>{ag_title}:</b> {ag_desc}", st.bullet_text, bulletText='•'))
 
     story.append(Spacer(1, 4))
     story.append(Paragraph("7.2 Institutional Rating Definitions & Risk Bands", st.section_heading))
