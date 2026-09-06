@@ -203,19 +203,20 @@ def build_presentation_pdf(ticker, company_name, metrics, dossier_dict):
     story = []
 
     # 1. Executive Title Block
+    primary_val_title = metrics.get('primary_valuation', 'Reverse DCF')
     story.append(Paragraph(f"<b>{company_name}</b> ({ticker})", title_style))
-    story.append(Paragraph(f"Institutional Equity Research Dossier | Sector: {metrics.get('sector', 'N/A')} | Implied 10Y FCF CAGR: <b>{metrics.get('implied_cagr', 'N/A')}</b>", subtitle_style))
+    story.append(Paragraph(f"Institutional Equity Research Dossier | Sector: {metrics.get('sector', 'N/A')} | Primary Valuation: <b>{primary_val_title}</b> ({metrics.get('implied_cagr', 'N/A')})", subtitle_style))
 
     # 2. Key Metrics Card Table
     kpi_data = [
         [
             Paragraph(f"<b>Current Price:</b> Rs. {metrics.get('cmp', 'N/A')}", body_style),
             Paragraph(f"<b>Market Cap:</b> Rs. {metrics.get('mcap', 'N/A')} Cr", body_style),
-            Paragraph(f"<b>P/E Ratio:</b> {metrics.get('pe', 'N/A')}", body_style)
+            Paragraph(f"<b>{metrics.get('stat4_tag', 'P/E Ratio')}:</b> {metrics.get('stat4_num', 'N/A')}", body_style)
         ],
         [
             Paragraph(f"<b>52W Range:</b> Rs. {metrics.get('range', 'N/A')}", body_style),
-            Paragraph(f"<b>EV/EBITDA:</b> {metrics.get('ev_ebitda', 'N/A')}", body_style),
+            Paragraph(f"<b>{metrics.get('stat5_tag', 'EV/EBITDA')}:</b> {metrics.get('stat5_num', 'N/A')}", body_style),
             Paragraph(f"<b>Final Verdict:</b> <b>{metrics.get('verdict', 'HOLD')}</b>", body_style)
         ]
     ]
@@ -720,14 +721,45 @@ def main():
         </div>
         """, unsafe_allow_html=True)
 
+        sector_key = dossier.get("sector_key", "CONSUMER_DURABLES_FMCG")
+        banned = dossier.get("banned_metrics", [])
+        
+        # Sector-adaptive labels and metrics for KPI tiles
+        if any("trailing p/e" in b.lower() for b in banned) or sector_key == "REAL_ESTATE":
+            stat4_tag = "P / NAV"
+            stat4_num = a6.get("audit_metrics", {}).get("P/BV Ratio", "N/A")
+        else:
+            stat4_tag = "Trailing P/E"
+            stat4_num = f"{pe:,.1f}x" if pe > 0 else "N/A"
+
+        if any("ev/ebitda" in b.lower() for b in banned) or sector_key in ["BFSI_BANKS", "BFSI_NBFC"]:
+            stat5_tag = "P / BV"
+            stat5_num = a6.get("audit_metrics", {}).get("P/BV Ratio", "N/A")
+        else:
+            stat5_tag = "EV / EBITDA"
+            stat5_num = f"{ev_ebitda:,.1f}x" if ev_ebitda > 0 else "N/A"
+
+        if any("reverse dcf" in b.lower() or "free cash flow" in b.lower() for b in banned) or sector_key in ["BFSI_BANKS", "BFSI_NBFC"]:
+            stat6_tag = "Sustainable RoE"
+            stat6_num = a6.get("audit_metrics", {}).get("Valuation Hurdle Metric", str(implied_cagr))
+        elif sector_key == "REAL_ESTATE":
+            stat6_tag = "Presales Hurdle"
+            stat6_num = a6.get("audit_metrics", {}).get("Valuation Hurdle Metric", str(implied_cagr))
+        elif sector_key == "METALS_MINING":
+            stat6_tag = "Cycle Hurdle"
+            stat6_num = a6.get("audit_metrics", {}).get("Valuation Hurdle Metric", str(implied_cagr))
+        else:
+            stat6_tag = "Implied 10Y FCF"
+            stat6_num = f"{implied_cagr}%" if not str(implied_cagr).endswith("%") else str(implied_cagr)
+
         # 6-Column Glass KPI Grid
         k1, k2, k3, k4, k5, k6 = st.columns(6)
         k1.markdown(f"<div class='glass-stat'><div class='stat-tag'>CMP</div><div class='stat-num'>₹{cmp:,.2f}</div></div>", unsafe_allow_html=True)
         k2.markdown(f"<div class='glass-stat'><div class='stat-tag'>Market Cap</div><div class='stat-num'>₹{mcap:,.1f} Cr</div></div>", unsafe_allow_html=True)
         k3.markdown(f"<div class='glass-stat'><div class='stat-tag'>52W Range</div><div class='stat-num'>₹{range_val}</div></div>", unsafe_allow_html=True)
-        k4.markdown(f"<div class='glass-stat'><div class='stat-tag'>Trailing P/E</div><div class='stat-num'>{pe:,.1f}x</div></div>" if pe > 0 else "<div class='glass-stat'><div class='stat-tag'>Trailing P/E</div><div class='stat-num'>N/A</div></div>", unsafe_allow_html=True)
-        k5.markdown(f"<div class='glass-stat'><div class='stat-tag'>EV / EBITDA</div><div class='stat-num'>{ev_ebitda:,.1f}x</div></div>" if ev_ebitda > 0 else "<div class='glass-stat'><div class='stat-tag'>EV / EBITDA</div><div class='stat-num'>N/A</div></div>", unsafe_allow_html=True)
-        k6.markdown(f"<div class='glass-stat'><div class='stat-tag'>Implied 10Y FCF</div><div class='stat-num'>{implied_cagr}%</div></div>", unsafe_allow_html=True)
+        k4.markdown(f"<div class='glass-stat'><div class='stat-tag'>{stat4_tag}</div><div class='stat-num'>{stat4_num}</div></div>", unsafe_allow_html=True)
+        k5.markdown(f"<div class='glass-stat'><div class='stat-tag'>{stat5_tag}</div><div class='stat-num'>{stat5_num}</div></div>", unsafe_allow_html=True)
+        k6.markdown(f"<div class='glass-stat'><div class='stat-tag'>{stat6_tag}</div><div class='stat-num'>{stat6_num}</div></div>", unsafe_allow_html=True)
 
         st.markdown("<div style='height: 16px;'></div>", unsafe_allow_html=True)
 
@@ -746,12 +778,17 @@ def main():
         # Prepare Presentation PDF Data
         pdf_metrics = {
             'sector': sector,
-            'implied_cagr': f"{implied_cagr}%",
+            'primary_valuation': a6.get('primary_valuation', 'Standard Architecture'),
+            'implied_cagr': str(implied_cagr),
+            'stat4_tag': stat4_tag,
+            'stat4_num': stat4_num,
+            'stat5_tag': stat5_tag,
+            'stat5_num': stat5_num,
+            'stat6_tag': stat6_tag,
+            'stat6_num': stat6_num,
             'cmp': f"{cmp:,.2f}",
             'mcap': f"{mcap:,.1f}",
-            'pe': f"{pe:,.1f}x" if pe > 0 else "N/A",
             'range': range_val,
-            'ev_ebitda': f"{ev_ebitda:,.1f}x" if ev_ebitda > 0 else "N/A",
             'verdict': verdict
         }
 
@@ -813,22 +850,22 @@ def main():
 
         inval_pdf_lines = [f"  - {trig}" for trig in a6.get("invalidation_triggers", [])]
         agent6_pdf_text = f"""• Management Walk-the-Talk Audit:
-  - Target 1: {a6.get('section1_management_walk_the_talk', {}).get('1_historical_delivery_1', {}).get('target', 'Core Operational Target')} -> {a6.get('section1_management_walk_the_talk', {}).get('1_historical_delivery_1', {}).get('verdict')}
+  - Target 1: {a6.get('section1_management_walk_the_talk', {}).get('1_historical_delivery_1', {}).get('target', 'Operational Target')} -> {a6.get('section1_management_walk_the_talk', {}).get('1_historical_delivery_1', {}).get('verdict')}
   - Target 2: {a6.get('section1_management_walk_the_talk', {}).get('1_historical_delivery_2', {}).get('target', 'Capital Allocation Target')} -> {a6.get('section1_management_walk_the_talk', {}).get('1_historical_delivery_2', {}).get('verdict')}
-  - Target 3: {a6.get('section1_management_walk_the_talk', {}).get('1_historical_delivery_3', {}).get('target', 'Operating Cash Flow Conversion')} -> {a6.get('section1_management_walk_the_talk', {}).get('1_historical_delivery_3', {}).get('verdict')}
-• Independent Asset & Yield Valuation Floors (Non-DCF / Non-Relative):
-  - Tangible Book Value (TBV): {a6.get('section2_asset_yield_valuation', {}).get('1_tangible_book_value_per_share')}
-  - Graham Net-Net (NCAV): {a6.get('section2_asset_yield_valuation', {}).get('2_graham_net_net_ncav')}
-  - Stressed Liquidation Value: {a6.get('section2_asset_yield_valuation', {}).get('3_liquidation_value_stressed')}
-  - Owner Earnings Yield: {a6.get('section2_asset_yield_valuation', {}).get('4_owner_earnings_yield')}
-  - Earnings Power Value (EPV, 0% Growth): {a6.get('section2_asset_yield_valuation', {}).get('5_earnings_power_value_epv')}
-  - Dividend Yield & Organic Coverage: {a6.get('section2_asset_yield_valuation', {}).get('6_dividend_yield_and_fcf_payout')}
-• Reverse DCF Hurdle Test (WACC 11.5%, Terminal Growth 5.5%):
-  - Implied 10-Year FCF CAGR: {implied_cagr}% ({a6.get('section3_reverse_dcf', {}).get('2_reality_check_vs_guidance')})
-• 3-Scenario Valuation Matrix:
-  - Bear Case: Target {a6.get('section4_scenario_matrix', {}).get('bear_case', {}).get('fair_target_price')} ({a6.get('section4_scenario_matrix', {}).get('bear_case', {}).get('expected_return')}) | Growth: {a6.get('section4_scenario_matrix', {}).get('bear_case', {}).get('growth_assumed')}
-  - Base Case: Target {a6.get('section4_scenario_matrix', {}).get('base_case', {}).get('fair_target_price')} ({a6.get('section4_scenario_matrix', {}).get('base_case', {}).get('expected_return')}) | Growth: {a6.get('section4_scenario_matrix', {}).get('base_case', {}).get('growth_assumed')}
-  - Bull Case: Target {a6.get('section4_scenario_matrix', {}).get('bull_case', {}).get('fair_target_price')} ({a6.get('section4_scenario_matrix', {}).get('bull_case', {}).get('expected_return')}) | Growth: {a6.get('section4_scenario_matrix', {}).get('bull_case', {}).get('growth_assumed')}
+  - Target 3: {a6.get('section1_management_walk_the_talk', {}).get('1_historical_delivery_3', {}).get('target', 'Operating Delivery')} -> {a6.get('section1_management_walk_the_talk', {}).get('1_historical_delivery_3', {}).get('verdict')}
+• Independent Asset & Yield Valuation Floors:
+"""
+        for fl_k, fl_v in a6.get("section2_asset_yield_valuation", {}).items():
+            agent6_pdf_text += f"  - {fl_k.replace('_', ' ').title()}: {fl_v}\n"
+
+        agent6_pdf_text += f"• Primary Valuation Architecture: {a6.get('primary_valuation', 'Sector Architecture')}\n"
+        for r_k, r_v in a6.get("section3_reverse_dcf", {}).items():
+            agent6_pdf_text += f"  - {r_k.replace('_', ' ').title()}: {r_v}\n"
+
+        agent6_pdf_text += f"""• 3-Scenario Valuation Matrix:
+  - Bear Case: Target {a6.get('section4_scenario_matrix', {}).get('bear_case', {}).get('fair_target_price')} ({a6.get('section4_scenario_matrix', {}).get('bear_case', {}).get('expected_return')}) | {a6.get('section4_scenario_matrix', {}).get('bear_case', {}).get('growth_assumed')}
+  - Base Case: Target {a6.get('section4_scenario_matrix', {}).get('base_case', {}).get('fair_target_price')} ({a6.get('section4_scenario_matrix', {}).get('base_case', {}).get('expected_return')}) | {a6.get('section4_scenario_matrix', {}).get('base_case', {}).get('growth_assumed')}
+  - Bull Case: Target {a6.get('section4_scenario_matrix', {}).get('bull_case', {}).get('fair_target_price')} ({a6.get('section4_scenario_matrix', {}).get('bull_case', {}).get('expected_return')}) | {a6.get('section4_scenario_matrix', {}).get('bull_case', {}).get('growth_assumed')}
 • Thesis Invalidation Triggers:
 """ + "\n".join(inval_pdf_lines)
 
@@ -1040,7 +1077,7 @@ def main():
             st.caption("System Prompt dynamically loaded from: `agent6_valuation_cio.txt`")
             st.markdown(f"**CIO Final Rating Badge**: `{a6.get('institutional_rating')}`")
             st.markdown(f"**CIO Synthesis**: {a6.get('summary')}")
-            cio_tabs = st.tabs(["Section 1: Walk-the-Talk", "Section 2: Asset & Yield Floors", "Section 3: Reverse DCF", "Section 4: Scenario Matrix", "Invalidation Triggers"])
+            cio_tabs = st.tabs(["Section 1: Walk-the-Talk", "Section 2: Asset & Yield Floors", "Section 3: Valuation Architecture", "Section 4: Scenario Matrix", "Invalidation Triggers"])
             with cio_tabs[0]:
                 st.markdown("##### 📜 Historical Promise vs Delivery Audit")
                 wtt = a6.get("section1_management_walk_the_talk", {})
@@ -1053,23 +1090,23 @@ def main():
                     else:
                         st.markdown(f"**Forward Guidance Realism**: {v}")
             with cio_tabs[1]:
-                st.markdown("##### 🛡️ Independent Valuation Floors (Non-DCF / Non-Relative)")
+                st.markdown("##### 🛡️ Independent Valuation Floors")
                 floors = a6.get("section2_asset_yield_valuation", {})
                 for k, v in floors.items():
                     st.markdown(f'<div class="q-box"><div class="q-title">{k.replace("_", " ").upper()}</div><div class="q-ans">{v}</div></div>', unsafe_allow_html=True)
             with cio_tabs[2]:
-                st.markdown("##### 🧮 Reverse DCF Hurdle Test")
+                st.markdown(f"##### 🧮 {a6.get('primary_valuation', 'Valuation Architecture & Hurdle Test')}")
                 rdcf = a6.get("section3_reverse_dcf", {})
                 for k, v in rdcf.items():
                     st.markdown(f'<div class="q-box"><div class="q-title">{k.replace("_", " ").upper()}</div><div class="q-ans">{v}</div></div>', unsafe_allow_html=True)
                 dcf_data = a6.get("dcf_model", {})
                 sens = dcf_data.get("sensitivity_matrix", {})
                 if sens and "matrix" in sens:
-                    st.markdown("###### Reverse DCF Sensitivity Matrix (Intrinsic Fair Value per Share ₹)")
+                    st.markdown("###### Valuation Sensitivity Matrix (Intrinsic Fair Value per Share ₹)")
                     df_sens = pd.DataFrame(
                         sens["matrix"],
-                        index=[f"Terminal Growth: {tg}" for tg in sens.get("terminal_growth_labels", [])],
-                        columns=[f"WACC: {w}" for w in sens.get("wacc_labels", [])]
+                        index=[str(tg) for tg in sens.get("terminal_growth_labels", [])],
+                        columns=[str(w) for w in sens.get("wacc_labels", [])]
                     )
                     st.dataframe(df_sens.style.format("₹{:,.1f}"), use_container_width=True)
             with cio_tabs[3]:

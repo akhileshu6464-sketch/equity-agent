@@ -1,6 +1,7 @@
 """
 Multi-Agent Institutional Equity Pipeline Coordinator
 Orchestrates Agents 0 through 6, ensuring all checklist prompts from .txt files are executed without omission.
+Integrates Universal Sector-Aware Routing & Valuation Architecture.
 """
 
 import logging
@@ -125,21 +126,52 @@ class EquityAgentPipeline:
         # 3. Agent 0: Classifier (agent0_classifier.txt)
         audit0 = self.agent0.analyze(company_data, context)
         primary_sector = audit0.get("primary_sector", "")
-        context["taxonomy"] = primary_sector
-        context["routing_profile"] = audit0.get("routing_profile", {})
+        sector_key = audit0.get("sector_key", "CONSUMER_DURABLES_FMCG")
+        archetype = audit0.get("archetype", {})
 
-        # Defensive Banking/NBFC (BFSI) check: skip CCC and OCF/PAT
-        is_banking = (
-            "banking" in primary_sector.lower()
-            or "nbfc" in primary_sector.lower()
-            or "financial" in primary_sector.lower()
-            or "bfsi" in primary_sector.lower()
-        )
-        context["is_banking"] = is_banking
-        context["skip_ccc"] = is_banking
-        context["skip_ocf_pat"] = is_banking
-        if is_banking:
-            logger.info(f"{normalized_ticker} classified as Banking/NBFC (BFSI). Skipping Cash Conversion Cycle and OCF/PAT calculations.")
+        context["taxonomy"] = primary_sector
+        context["sector_key"] = sector_key
+        context["archetype"] = archetype
+        context["routing_profile"] = audit0.get("routing_profile", {})
+        context["banned_metrics"] = archetype.get("banned_metrics", [])
+        context["required_kpis"] = archetype.get("required_kpis", [])
+        context["primary_valuation"] = archetype.get("primary_valuation", "")
+
+        # Granular sector archetype flags
+        is_bfsi = sector_key in ["BFSI_BANKS", "BFSI_NBFC"]
+        is_banking = sector_key == "BFSI_BANKS"
+        is_nbfc = sector_key == "BFSI_NBFC"
+        is_it_services = sector_key == "IT_SERVICES"
+        is_real_estate = sector_key == "REAL_ESTATE"
+        is_metals_mining = sector_key == "METALS_MINING"
+        is_oil_gas = sector_key == "OIL_GAS_ENERGY"
+        is_pharma = sector_key == "PHARMA_HEALTHCARE"
+        is_infra = sector_key == "INFRA_CAPITAL_GOODS_EPC"
+        is_auto = sector_key == "AUTOMOTIVE"
+        is_consumer = sector_key == "CONSUMER_DURABLES_FMCG"
+        is_retail = sector_key == "RETAIL_QUICK_SERVICE"
+        is_chemicals = sector_key == "CHEMICALS_SPECIALTY"
+
+        context["is_bfsi"] = is_bfsi
+        context["is_banking"] = is_bfsi  # Backward-compatible flag
+        context["is_nbfc"] = is_nbfc
+        context["is_it_services"] = is_it_services
+        context["is_real_estate"] = is_real_estate
+        context["is_metals_mining"] = is_metals_mining
+        context["is_oil_gas"] = is_oil_gas
+        context["is_pharma"] = is_pharma
+        context["is_infra"] = is_infra
+        context["is_auto"] = is_auto
+        context["is_consumer"] = is_consumer
+        context["is_retail"] = is_retail
+        context["is_chemicals"] = is_chemicals
+
+        context["skip_ccc"] = any(b in ["cash conversion cycle", "ccc", "cash conversion cycle (ccc)"] for b in [x.lower() for x in context["banned_metrics"]])
+        context["skip_ocf_pat"] = is_bfsi or any("free cash flow" in x.lower() for x in context["banned_metrics"])
+        context["skip_dcf"] = any("dcf" in x.lower() for x in context["banned_metrics"])
+
+        if is_bfsi:
+            logger.info(f"{normalized_ticker} classified as BFSI ({sector_key}). Tailoring pipeline to bank/lender accounting.")
 
         # 4. Agent 1: Qualitative & Moat Auditor (agent1_qualitative.txt)
         audit1 = self.agent1.analyze(company_data, context)
@@ -179,6 +211,12 @@ class EquityAgentPipeline:
             "ev_to_ebitda": company_data.get("ev_to_ebitda"),
             "company_data": company_data,
             "search_intel": search_intel,
+            "sector_key": sector_key,
+            "primary_sector": primary_sector,
+            "archetype": archetype,
+            "primary_valuation": archetype.get("primary_valuation", ""),
+            "banned_metrics": archetype.get("banned_metrics", []),
+            "required_kpis": archetype.get("required_kpis", []),
             "risk_pills": {
                 "Moat & Business": audit1.get("risk_pill", "GREEN"),
                 "Forensics": audit2.get("risk_pill", "GREEN"),

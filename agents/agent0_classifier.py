@@ -2,47 +2,36 @@
 Agent 0: Classifier
 System prompt loaded from: agent0_classifier.txt
 Assigns the company to exactly one of the 12 standard sectors and outputs the routing profile JSON.
+Integrated with Universal Sector Taxonomy & Routing Engine (sector_guard.py).
 """
 
 import re
 from typing import Dict, Any, List
 from agents.base_agent import BaseAgent
+from agents.sector_guard import resolve_sector_archetype, get_archetype_by_key, SECTOR_TAXONOMY
 
 
 class Agent0Classifier(BaseAgent):
     """Institutional Equity Classification Specialist."""
 
-    SECTORS = [
-        "Technology & SaaS / IT Services",
-        "Banking, NBFCs & Financial Services (BFSI)",
-        "Retail, E-Commerce & QSR",
-        "Real Estate & REITs",
-        "Manufacturing, Industrial & Automotive",
-        "Healthcare, Pharma & CDMO",
-        "Oil, Gas, Energy & Utilities",
-        "Mining & Metals",
-        "Infrastructure, EPC & Logistics",
-        "Chemicals & Specialty Materials",
-        "Telecommunications & Media",
-        "Consumer Durables & FMCG"
-    ]
+    SECTORS = [config["display_name"] for config in SECTOR_TAXONOMY.values()]
 
-    # Deterministic fallback dictionary for Nifty 50 giants and conglomerates (guarantees 100% classification accuracy)
+    # Deterministic fallback dictionary for Nifty 50 giants and conglomerates
     CONGLOMERATE_OVERRIDES = {
-        "RELIANCE.NS": ("Oil, Gas, Energy & Utilities", "O2C (Refining & Petrochemicals), Telecom (Jio) & Retail"),
-        "RELIANCE.BO": ("Oil, Gas, Energy & Utilities", "O2C (Refining & Petrochemicals), Telecom (Jio) & Retail"),
-        "LT.NS": ("Infrastructure, EPC & Logistics", "Heavy Engineering, Construction & Defense EPC"),
-        "LT.BO": ("Infrastructure, EPC & Logistics", "Heavy Engineering, Construction & Defense EPC"),
-        "ITC.NS": ("Consumer Durables & FMCG", "Cigarettes, FMCG & Agri-Business"),
-        "ITC.BO": ("Consumer Durables & FMCG", "Cigarettes, FMCG & Agri-Business"),
-        "TATAMOTORS.NS": ("Manufacturing, Industrial & Automotive", "Commercial Vehicles, Passenger Vehicles & EV Mobility"),
-        "TATAMOTORS.BO": ("Manufacturing, Industrial & Automotive", "Commercial Vehicles, Passenger Vehicles & EV Mobility"),
-        "TCS.NS": ("Technology & SaaS / IT Services", "Enterprise IT Consulting & Digital Engineering"),
-        "TCS.BO": ("Technology & SaaS / IT Services", "Enterprise IT Consulting & Digital Engineering"),
-        "HDFCBANK.NS": ("Banking, NBFCs & Financial Services (BFSI)", "Retail & Corporate Lending, Deposits & Payments"),
-        "HDFCBANK.BO": ("Banking, NBFCs & Financial Services (BFSI)", "Retail & Corporate Lending, Deposits & Payments"),
-        "CROMPTON.NS": ("Consumer Durables & FMCG", "Electric Consumer Durables (Fans, Pumps, Lighting & Small Domestic Appliances)"),
-        "CROMPTON.BO": ("Consumer Durables & FMCG", "Electric Consumer Durables (Fans, Pumps, Lighting & Small Domestic Appliances)")
+        "RELIANCE.NS": ("OIL_GAS_ENERGY", "Oil, Gas, Energy & Utilities", "O2C (Refining & Petrochemicals), Telecom (Jio) & Retail"),
+        "RELIANCE.BO": ("OIL_GAS_ENERGY", "Oil, Gas, Energy & Utilities", "O2C (Refining & Petrochemicals), Telecom (Jio) & Retail"),
+        "LT.NS": ("INFRA_CAPITAL_GOODS_EPC", "Infrastructure, EPC & Logistics", "Heavy Engineering, Construction & Defense EPC"),
+        "LT.BO": ("INFRA_CAPITAL_GOODS_EPC", "Infrastructure, EPC & Logistics", "Heavy Engineering, Construction & Defense EPC"),
+        "ITC.NS": ("CONSUMER_DURABLES_FMCG", "Consumer Durables & FMCG", "Cigarettes, FMCG & Agri-Business"),
+        "ITC.BO": ("CONSUMER_DURABLES_FMCG", "Consumer Durables & FMCG", "Cigarettes, FMCG & Agri-Business"),
+        "TATAMOTORS.NS": ("AUTOMOTIVE", "Manufacturing, Industrial & Automotive", "Commercial Vehicles, Passenger Vehicles & EV Mobility"),
+        "TATAMOTORS.BO": ("AUTOMOTIVE", "Manufacturing, Industrial & Automotive", "Commercial Vehicles, Passenger Vehicles & EV Mobility"),
+        "TCS.NS": ("IT_SERVICES", "Technology & SaaS / IT Services", "Enterprise IT Consulting & Digital Engineering"),
+        "TCS.BO": ("IT_SERVICES", "Technology & SaaS / IT Services", "Enterprise IT Consulting & Digital Engineering"),
+        "HDFCBANK.NS": ("BFSI_BANKS", "Banking, NBFCs & Financial Services (BFSI)", "Retail & Corporate Lending, Deposits & Payments"),
+        "HDFCBANK.BO": ("BFSI_BANKS", "Banking, NBFCs & Financial Services (BFSI)", "Retail & Corporate Lending, Deposits & Payments"),
+        "CROMPTON.NS": ("CONSUMER_DURABLES_FMCG", "Consumer Durables & FMCG", "Electric Consumer Durables (Fans, Pumps, Lighting & Small Domestic Appliances)"),
+        "CROMPTON.BO": ("CONSUMER_DURABLES_FMCG", "Consumer Durables & FMCG", "Electric Consumer Durables (Fans, Pumps, Lighting & Small Domestic Appliances)")
     }
 
     def __init__(self):
@@ -80,7 +69,8 @@ class Agent0Classifier(BaseAgent):
             norm_key += ".NS"
 
         if norm_key in self.CONGLOMERATE_OVERRIDES:
-            primary_sector, sub_vertical = self.CONGLOMERATE_OVERRIDES[norm_key]
+            sector_key, primary_sector, sub_vertical = self.CONGLOMERATE_OVERRIDES[norm_key]
+            archetype = get_archetype_by_key(sector_key)
             if "RELIANCE" in norm_key:
                 hybrid_verticals = [
                     "Telecommunications & Digital Services (Jio Infocomm)",
@@ -108,8 +98,14 @@ class Agent0Classifier(BaseAgent):
             else:
                 _, hybrid_verticals = self._identify_sub_verticals(ticker, short_name, primary_sector, industry_yf, summary_yf)
         else:
-            # Assign to exactly ONE of the 12 sectors using ground truth metadata
-            primary_sector = self._classify_primary_sector(ticker, short_name, sector_yf, industry_yf, summary_yf)
+            # Universal Sector Archetype Resolution via sector_guard
+            archetype = resolve_sector_archetype({
+                "sector": sector_yf,
+                "industry": industry_yf,
+                "longBusinessSummary": summary_yf
+            })
+            sector_key = archetype["sector_key"]
+            primary_sector = archetype["display_name"]
             sub_vertical, hybrid_verticals = self._identify_sub_verticals(ticker, short_name, primary_sector, industry_yf, summary_yf)
 
         # 3. Revenue Engine Summary (>60% revenue and operating profit generator)
@@ -117,14 +113,21 @@ class Agent0Classifier(BaseAgent):
 
         routing_profile = {
             "ticker": ticker,
+            "sector_key": sector_key,
             "primary_sector": primary_sector,
+            "display_name": archetype.get("display_name", primary_sector),
             "sub_vertical": sub_vertical,
-            "revenue_engine_summary": revenue_engine
+            "revenue_engine_summary": revenue_engine,
+            "required_kpis": archetype.get("required_kpis", []),
+            "primary_valuation": archetype.get("primary_valuation", ""),
+            "banned_metrics": archetype.get("banned_metrics", []),
+            "archetype": archetype
         }
 
         flags = [
-            f"**Assigned Sector (1 of 12)**: {primary_sector}",
+            f"**Assigned Sector (1 of 12)**: {primary_sector} (`{sector_key}`)",
             f"**Sub-Vertical**: {sub_vertical}",
+            f"**Primary Valuation**: {archetype.get('primary_valuation', 'N/A')}",
             f"**Secondary / Hybrid Verticals**: {', '.join(hybrid_verticals) if hybrid_verticals else 'None identified'}",
             f"**Revenue Engine**: {revenue_engine}"
         ]
@@ -135,90 +138,29 @@ class Agent0Classifier(BaseAgent):
             "system_prompt": prompt_with_truth,
             "risk_pill": "GREEN",
             "routing_profile": routing_profile,
+            "sector_key": sector_key,
             "primary_sector": primary_sector,
+            "display_name": archetype.get("display_name", primary_sector),
             "sub_vertical": sub_vertical,
             "hybrid_verticals": hybrid_verticals,
             "revenue_engine_summary": revenue_engine,
-            "summary": f"Classified under **{primary_sector}** with sub-vertical **{sub_vertical}**. {revenue_engine}",
+            "required_kpis": archetype.get("required_kpis", []),
+            "primary_valuation": archetype.get("primary_valuation", ""),
+            "banned_metrics": archetype.get("banned_metrics", []),
+            "archetype": archetype,
+            "summary": f"Classified under **{archetype.get('display_name', primary_sector)}** (`{sector_key}`) with sub-vertical **{sub_vertical}**. {revenue_engine}",
             "flags": flags,
             "audit_metrics": {
                 "Primary Sector": primary_sector,
+                "Sector Key": sector_key,
                 "Sub-Vertical": sub_vertical,
-                "Hybrid Verticals Count": len(hybrid_verticals),
+                "Primary Valuation": archetype.get("primary_valuation", "N/A"),
+                "Required KPIs Count": len(archetype.get("required_kpis", [])),
+                "Banned Metrics Count": len(archetype.get("banned_metrics", [])),
                 "YFinance Sector": sector_yf or "N/A",
                 "YFinance Industry": industry_yf or "N/A"
             }
         }
-
-    def _classify_primary_sector(self, ticker: str, name: str, sector: str, industry: str, summary: str) -> str:
-        sec_lower = (sector or "").lower().strip()
-        ind_lower = (industry or "").lower().strip()
-        s = f"{ticker} {name} {sector} {industry} {summary}".lower()
-
-        # Conglomerate rule: Check if energy, oil refining, or heavy industrial is present
-        is_energy_or_oil = (
-            "energy" in sec_lower
-            or "oil" in ind_lower
-            or "gas" in ind_lower
-            or "petroleum" in ind_lower
-            or "refining" in ind_lower
-            or "refin" in s
-            or "petrochem" in s
-        )
-
-        # High-confidence official yfinance Sector / Industry mapping first
-        if "financial" in sec_lower or "bank" in ind_lower or "nbfc" in ind_lower or "insurance" in ind_lower:
-            return "Banking, NBFCs & Financial Services (BFSI)"
-
-        if is_energy_or_oil or "utilities" in sec_lower:
-            return "Oil, Gas, Energy & Utilities"
-
-        if "technology" in sec_lower or "software" in ind_lower or "it services" in ind_lower:
-            return "Technology & SaaS / IT Services"
-
-        # Explicit Conglomerate Guard: NEVER classify an oil refining, energy, or telecom conglomerate as Healthcare/Pharma!
-        if ("healthcare" in sec_lower or "pharma" in ind_lower or "biotechnology" in ind_lower) and not is_energy_or_oil:
-            return "Healthcare, Pharma & CDMO"
-
-        if "basic materials" in sec_lower:
-            if "steel" in ind_lower or "metal" in ind_lower or "mining" in ind_lower or "aluminum" in ind_lower:
-                return "Mining & Metals"
-            return "Chemicals & Specialty Materials"
-
-        if "real estate" in sec_lower or "reit" in ind_lower:
-            return "Real Estate & REITs"
-
-        if "telecommunication" in sec_lower or "media" in ind_lower:
-            return "Telecommunications & Media"
-
-        # Check Consumer Durables & FMCG (Crompton, Havells, Voltas, Whirlpool, Dabur, HUL, etc.)
-        if ("crompton" in s or "fan" in s or "lighting" in s or "appliance" in s or "durables" in s or "fmcg" in s 
-            or "consumer cyclical" in sec_lower or "consumer defensive" in sec_lower or "household" in s
-            or "furnishings" in ind_lower or "consumer goods" in s):
-            return "Consumer Durables & FMCG"
-
-        # Healthcare check with regex to avoid substring collisions (e.g. 'api' inside 'capital' or 'capacity')
-        if not is_energy_or_oil and bool(re.search(r'\b(pharma|pharmaceutical|biotech|hospital|healthcare|cdmo|clinical)\b', s)):
-            return "Healthcare, Pharma & CDMO"
-
-        # Check Mining & Metals
-        if "mining" in s or "metal" in s or "steel" in s or "aluminum" in s or "iron ore" in s or "coal" in s:
-            return "Mining & Metals"
-
-        # Check Chemicals & Specialty Materials
-        if "chemical" in s or "specialty material" in s or "fluorine" in s or "fertilizer" in s or "polymer" in s:
-            return "Chemicals & Specialty Materials"
-
-        # Check Infrastructure, EPC & Logistics
-        if "infrastructure" in s or "epc" in s or "logistics" in s or "port" in s or "shipping" in s or "road" in s or "construction" in ind_lower:
-            return "Infrastructure, EPC & Logistics"
-
-        # Check Retail, E-Commerce & QSR
-        if "retail" in s or "e-commerce" in s or "qsr" in s or "restaurant" in s or "supermarket" in s:
-            return "Retail, E-Commerce & QSR"
-
-        # Default to Manufacturing, Industrial & Automotive
-        return "Manufacturing, Industrial & Automotive"
 
     def _identify_sub_verticals(self, ticker: str, name: str, primary_sector: str, industry: str, summary: str) -> tuple[str, List[str]]:
         s = f"{ticker} {name} {summary}".lower()
@@ -239,18 +181,36 @@ class Agent0Classifier(BaseAgent):
                 "Organized Retail & E-Commerce (Reliance Retail)",
                 "Green Energy Gigafactories & Solar / Hydrogen Value Chain"
             ]
-        elif primary_sector == "Consumer Durables & FMCG":
+        elif "consumer" in primary_sector.lower():
             sub_vertical = "Consumer Electricals & Kitchen Appliances"
             hybrids = ["Commercial & Industrial Lighting Solutions", "Renewable Solar Installations"]
-        elif primary_sector == "Banking, NBFCs & Financial Services (BFSI)":
+        elif "banking" in primary_sector.lower() or "nbfc" in primary_sector.lower():
             sub_vertical = "Retail & Corporate Lending"
             hybrids = ["Wealth Management & Mutual Fund Distribution", "General & Life Insurance Cross-Selling"]
-        elif primary_sector == "Technology & SaaS / IT Services":
+        elif "technology" in primary_sector.lower() or "it" in primary_sector.lower():
             sub_vertical = "Enterprise IT Consulting & Digital Engineering"
             hybrids = ["Proprietary Cloud Platforms & IP Assets", "AI/ML Solutions & Workflow Automation"]
-        elif primary_sector == "Oil, Gas, Energy & Utilities":
+        elif "oil" in primary_sector.lower() or "energy" in primary_sector.lower():
             sub_vertical = "Hydrocarbon Refining, Petrochemicals & Energy Distribution"
             hybrids = ["Petrochemical Downstream Derivatives", "Renewable Energy & Biofuels"]
+        elif "pharma" in primary_sector.lower():
+            sub_vertical = "Active Pharmaceutical Ingredients (API) & Formulations"
+            hybrids = ["Contract Development and Manufacturing (CDMO)", "Specialty Biosimilars"]
+        elif "auto" in primary_sector.lower():
+            sub_vertical = "Automotive OEM Mobility Solutions"
+            hybrids = ["Electric Vehicle Powertrains", "Connected Vehicle Telematics"]
+        elif "metals" in primary_sector.lower():
+            sub_vertical = "Primary Metal Smelting & Rolling"
+            hybrids = ["Captive Power Generation", "Value-Added Alloy Products"]
+        elif "real estate" in primary_sector.lower():
+            sub_vertical = "Residential & Commercial Property Development"
+            hybrids = ["Ancillary Facility Management", "Leased Commercial Portfolios"]
+        elif "infra" in primary_sector.lower():
+            sub_vertical = "Industrial EPC & Civil Infrastructure"
+            hybrids = ["Transportation & Rail EPC", "Renewable Energy Turnkey Systems"]
+        elif "chemicals" in primary_sector.lower():
+            sub_vertical = "Specialty Fine Chemicals & Polymers"
+            hybrids = ["Agro-Intermediates", "Performance Industrial Materials"]
 
         return sub_vertical, hybrids
 
