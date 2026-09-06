@@ -1,11 +1,13 @@
 """
-Test Complete 7-Agent Pipeline on CROMPTON.NS
-Validates dynamic prompt loading from .txt files and execution across all unabridged checklist sections.
+Test Complete 7-Agent Pipeline on NSE/BSE Equities (e.g. CROMPTON.NS, HDFCBANK.NS, TCS.NS)
+Validates dynamic prompt loading from .txt files, unabridged checklist execution,
+sector-aware qualitative audits (Agent 1), and BFSI prohibition guards.
 """
 
 import sys
 import os
 import json
+import re
 
 # Configure stdout and stderr for UTF-8 in Windows consoles
 if sys.platform == "win32":
@@ -21,13 +23,13 @@ sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 from agents.pipeline import EquityAgentPipeline
 
 
-def test_crompton_pipeline():
+def test_pipeline(ticker: str = "CROMPTON.NS"):
     print("=" * 80)
-    print("🚀 RUNNING 7-AGENT INSTITUTIONAL EQUITY AUDIT ON CROMPTON.NS")
+    print(f"🚀 RUNNING 7-AGENT INSTITUTIONAL EQUITY AUDIT ON {ticker}")
     print("=" * 80)
 
     pipeline = EquityAgentPipeline()
-    dossier = pipeline.run_pipeline("CROMPTON.NS", wacc=0.115, terminal_growth=0.055)
+    dossier = pipeline.run_pipeline(ticker, wacc=0.115, terminal_growth=0.055)
 
     assert dossier is not None, "Pipeline returned None"
 
@@ -56,9 +58,49 @@ def test_crompton_pipeline():
     print("  • Part 1 (Business Model):", a1.get("part1_business_model", {}).get("1_core_product_service")[:120], "...")
     print("  • Part 2 (Moat Source):", a1.get("part2_competitive_moat", {}).get("2_moat_source"))
     print("  • Part 3 (TAM & Growth):", a1.get("part3_industry_growth", {}).get("2_tam_and_headroom")[:120], "...")
-    print("  • Part 5 (Scalability):", a1.get("part5_operations_scalability", {}).get("1_operating_leverage")[:120], "...")
+    print("  • Part 5 (Operations & Scalability):")
+    p5 = a1.get("part5_operations_scalability", {})
+    print("      - Operating Leverage:", p5.get("1_operating_leverage"))
+    print("      - Sourcing / Supply Chain Risk:", p5.get("2_supply_chain_risks"))
+    print("      - Capital Intensity:", p5.get("3_capital_intensity"))
     print("  • Part 6 (Scuttlebutt):", a1.get("part6_scuttlebutt", {}).get("1_customer_sentiment")[:120], "...")
     print("  • Part 7 (Biggest Failure Point):", a1.get("part7_qualitative_risks", {}).get("4_single_biggest_failure_point"))
+
+    # Validate BFSI Prohibition Guard if applicable
+    sector_key = a0.get("sector_key", "")
+    is_bfsi = sector_key in ["BFSI_BANKS", "BFSI_NBFC"] or "Bank" in dossier.get("industry", "") or "Banks" in dossier.get("sector", "")
+    if is_bfsi:
+        print("\n🔍 VERIFYING BFSI PROHIBITION GUARD FOR AGENT 1...")
+        banned_terms = ["inventory", "raw material", "factory", "machinery"]
+        found_violations = []
+
+        def check_banned(obj, path=""):
+            if isinstance(obj, str):
+                for b in banned_terms:
+                    if re.search(rf"\b{b}\b", obj, re.IGNORECASE):
+                        found_violations.append(f"{path}: '{obj}' contains '{b}'")
+            elif isinstance(obj, dict):
+                for k, v in obj.items():
+                    check_banned(v, f"{path}.{k}" if path else k)
+            elif isinstance(obj, list):
+                for idx, v in enumerate(obj):
+                    check_banned(v, f"{path}[{idx}]")
+
+        check_banned(a1, "agent_1")
+        if found_violations:
+            print("❌ BFSI PROHIBITION VIOLATIONS FOUND:")
+            for v in found_violations:
+                print(f"   - {v}")
+            raise AssertionError(f"Agent 1 contains prohibited terms for BFSI stock {ticker}: {found_violations}")
+        else:
+            print("✅ BFSI PROHIBITION GUARD VERIFIED: Zero banned industrial words found in Agent 1!")
+
+        # Verify Part 5 specific content for BFSI
+        p5_text = " ".join(p5.values()).lower()
+        assert "cost-to-income" in p5_text or "digital transaction" in p5_text, "Part 5 must evaluate Cost-to-Income / digital operating leverage for BFSI!"
+        assert "casa" in p5_text or "liability" in p5_text or "deposit" in p5_text, "Part 5 must evaluate deposit/liability sourcing risks for BFSI!"
+        assert "cet-1" in p5_text or "tier-1" in p5_text or "rwa" in p5_text or "crar" in p5_text, "Part 5 must evaluate Tier-1 CET-1 capital intensity for BFSI!"
+        print("✅ BFSI PART 5 ARCHETYPE VERIFIED: Evaluates Cost-to-Income, deposit liabilities, and Tier-1 CET-1 capital.")
 
     # Agent 2: Forensics (agent2_forensics.txt)
     a2 = dossier["agent_2"]
@@ -104,7 +146,7 @@ def test_crompton_pipeline():
     print("  • Section 2 (Valuation Floors):")
     for k, v in a6.get("section2_asset_yield_valuation", {}).items():
         print(f"      - {k}: {v}")
-    print("  • Section 3 (Reverse DCF):", a6.get("section3_reverse_dcf", {}).get("1_implied_fcf_cagr_priced_in"))
+    print("  • Section 3 (Reverse DCF / Primary Valuation):", a6.get("section3_reverse_dcf", {}).get("1_implied_fcf_cagr_priced_in"))
     print("  • Section 4 (Scenario Matrix):")
     for sc_name, sc_data in a6.get("section4_scenario_matrix", {}).items():
         print(f"      - {sc_name.upper()}: Target {sc_data.get('fair_target_price')} ({sc_data.get('expected_return')}) | Growth: {sc_data.get('growth_assumed')}")
@@ -113,9 +155,15 @@ def test_crompton_pipeline():
         print(f"      - {trig}")
 
     print("\n" + "=" * 80)
-    print("✅ ALL 7 AGENTS EXECUTED SUCCESSFULLY WITH COMPLETE UNABRIDGED CHECKLIST PROMPTS!")
+    print(f"✅ ALL 7 AGENTS EXECUTED SUCCESSFULLY FOR {ticker} WITH COMPLETE UNABRIDGED CHECKLIST PROMPTS!")
     print("=" * 80)
+    return dossier
+
+
+# Backward compatibility alias
+test_crompton_pipeline = lambda: test_pipeline("CROMPTON.NS")
 
 
 if __name__ == "__main__":
-    test_crompton_pipeline()
+    target_ticker = sys.argv[1] if len(sys.argv) > 1 else "CROMPTON.NS"
+    test_pipeline(target_ticker)
