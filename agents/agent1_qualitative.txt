@@ -30,21 +30,30 @@ PART 3: INDUSTRY & GROWTH POTENTIAL
 3. Is demand resilient during economic contractions, or is the industry highly cyclical?
 4. Who are the primary competitors, and is the landscape consolidated or fragmented?
 
-PART 5: OPERATIONS & SCALABILITY (DYNAMIC SECTOR-SPECIFIC EVALUATION)
-- IF BFSI (Banks, NBFCs, Housing Finance):
-  1. Operating Leverage: Evaluate operational efficiency via the Cost-to-Income ratio, digital transaction penetration, and branch deposit vintage leverage. Prohibit references to "fixed assets" or "machinery".
-  2. Supply Chain / Sourcing Risk: Evaluate Liability Sourcing Risks (CASA deposit stability, wholesale funding reliance, Asset-Liability Management liquidity mismatches, and cost of funds). Prohibit references to "raw materials", "inventories", or "suppliers".
-  3. Capital Intensity: Evaluate regulatory Tier-1 CET-1 equity absorption, Risk-Weighted Assets (RWA) growth, and buffer margins over RBI requirements. Prohibit references to "plant capex" or "machinery".
+PART 5: SCALABILITY, OPERATING DYNAMICS & CAPITAL CONSUMPTION
 
-- IF IT Services & Tech:
-  1. Operating Leverage: Billable employee utilization, offshore-onsite delivery mix, and subcontracting cost controls across project execution.
-  2. Supply Chain / Sourcing Risk: Talent supply chain, developer attrition, wage inflation, and visa/regulatory friction in overseas client geographies.
-  3. Capital Intensity: Internal IP reinvestment, training infrastructure, and digital development centers.
+[IF SECTOR IS BANKING / NBFC / BFSI]:
+1. OPERATING LEVERAGE & EFFICIENCY:
+- Evaluate branch vintage maturation, digital transaction penetration, and the Cost-to-Income trajectory. 
+- PROHIBITION: Never mention "fixed assets", "factories", or "plant capacity".
 
-- IF Manufacturing, Durables & Commodities:
-  1. Operating Leverage: Plant capacity utilization, fixed-cost absorption, and gross margin conversion: incremental volume expansion over fixed operating overhead delivers operating profit margin expansion.
-  2. Supply Chain Risk: Raw material pass-through capabilities, single-source vendor exposure, import dependency for key components, and safety stock cycles.
-  3. Capital Intensity: Maintenance vs. growth CapEx-to-D&A, brownfield debottlenecking, and greenfield project execution.
+2. FUNDING & LIABILITY SOURCING RISKS:
+- Evaluate CASA deposit stability, wholesale funding reliance, Asset-Liability Management (ALM) duration mismatches, and cost of funds sensitivity.
+- PROHIBITION: Never mention "supply chains", "inventories", "suppliers", or "raw materials".
+
+3. CAPITAL CONSUMPTION & REGULATORY BUFFERS:
+- Assess Tier-1 CET-1 equity absorption per 100 bps of loan expansion and regulatory headroom over RBI minimums.
+- PROHIBITION: Never mention "plant capex" or "machinery".
+
+[IF SECTOR IS IT SERVICES / TECHNOLOGY]:
+1. OPERATING LEVERAGE: Billable employee utilization, offshore-onsite delivery mix, and subcontracting costs.
+2. TALENT SUPPLY CHAIN: Voluntary attrition trends, tech-stack talent availability, and visa friction.
+3. CAPITAL INTENSITY: Software IP reinvestment, training centers, and digital infrastructure.
+
+[IF SECTOR IS MANUFACTURING / FMCG / INDUSTRIAL]:
+1. OPERATING LEVERAGE: Plant capacity utilization, fixed-cost absorption, and volume leverage.
+2. SUPPLY CHAIN RISKS: Raw material commodity input pass-through lag, vendor concentration, and safety inventory levels.
+3. CAPITAL INTENSITY: Maintenance vs expansion CapEx relative to depreciation and cash generation.
 
 PART 6: GROUND-LEVEL FEEDBACK ("SCUTTLEBUTT")
 1. What are retail/enterprise customers saying on forums, app store ratings, and professional channels?

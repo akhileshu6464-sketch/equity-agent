@@ -26,6 +26,62 @@ class Agent1Qualitative(BaseAgent):
             prompt_file="agent1_qualitative.txt"
         )
 
+    def load_prompt(
+        self,
+        filename: str = "agent1_qualitative.txt",
+        sector_key: str = "",
+        is_bfsi: bool = False,
+        is_it_services: bool = False
+    ) -> str:
+        """
+        Dynamically loads system prompt from agent1_qualitative.txt and adapts Part 5
+        so banking/BFSI entities receive ONLY BFSI conditions without manufacturing contamination.
+        """
+        raw_prompt = super().load_prompt(filename or self.prompt_file)
+        if not raw_prompt:
+            return ""
+
+        if is_bfsi or sector_key in ["BFSI_BANKS", "BFSI_NBFC"]:
+            part5_content = """PART 5: SCALABILITY, OPERATING DYNAMICS & CAPITAL CONSUMPTION
+
+[IF SECTOR IS BANKING / NBFC / BFSI]:
+1. OPERATING LEVERAGE & EFFICIENCY:
+- Evaluate branch vintage maturation, digital transaction penetration, and the Cost-to-Income trajectory. 
+- PROHIBITION: Never mention "fixed assets", "factories", or "plant capacity".
+
+2. FUNDING & LIABILITY SOURCING RISKS:
+- Evaluate CASA deposit stability, wholesale funding reliance, Asset-Liability Management (ALM) duration mismatches, and cost of funds sensitivity.
+- PROHIBITION: Never mention "supply chains", "inventories", "suppliers", or "raw materials".
+
+3. CAPITAL CONSUMPTION & REGULATORY BUFFERS:
+- Assess Tier-1 CET-1 equity absorption per 100 bps of loan expansion and regulatory headroom over RBI minimums.
+- PROHIBITION: Never mention "plant capex" or "machinery"."""
+        elif is_it_services or sector_key == "IT_SERVICES":
+            part5_content = """PART 5: SCALABILITY, OPERATING DYNAMICS & CAPITAL CONSUMPTION
+
+[IF SECTOR IS IT SERVICES / TECHNOLOGY]:
+1. OPERATING LEVERAGE: Billable employee utilization, offshore-onsite delivery mix, and subcontracting costs.
+2. TALENT SUPPLY CHAIN: Voluntary attrition trends, tech-stack talent availability, and visa friction.
+3. CAPITAL INTENSITY: Software IP reinvestment, training centers, and digital infrastructure."""
+        else:
+            part5_content = """PART 5: SCALABILITY, OPERATING DYNAMICS & CAPITAL CONSUMPTION
+
+[IF SECTOR IS MANUFACTURING / FMCG / INDUSTRIAL]:
+1. OPERATING LEVERAGE: Plant capacity utilization, fixed-cost absorption, and volume leverage.
+2. SUPPLY CHAIN RISKS: Raw material commodity input pass-through lag, vendor concentration, and safety inventory levels.
+3. CAPITAL INTENSITY: Maintenance vs expansion CapEx relative to depreciation and cash generation."""
+
+        pattern = re.compile(
+            r"PART 5: SCALABILITY, OPERATING DYNAMICS & CAPITAL CONSUMPTION.*?(?=PART 6:)",
+            re.DOTALL
+        )
+        if pattern.search(raw_prompt):
+            tailored_prompt = pattern.sub(part5_content + "\n\n", raw_prompt)
+        else:
+            tailored_prompt = raw_prompt
+
+        return tailored_prompt
+
     def _enforce_bfsi_prohibitions(self, obj: Any) -> Any:
         """
         Recursively scans and sanitizes all strictly banned terms ('inventory', 'raw material',
@@ -98,6 +154,14 @@ class Agent1Qualitative(BaseAgent):
             or "Software" in industry
         )
 
+        # Dynamically load tailored system prompt for this sector
+        self.system_prompt = self.load_prompt(
+            self.prompt_file,
+            sector_key=sector_key,
+            is_bfsi=is_bfsi,
+            is_it_services=is_it_services
+        )
+
         # Clean product / business description from yfinance summary
         business_desc = summary[:280].strip() if summary else f"Core operations in {industry} ({sector})."
         if not business_desc.endswith('.'):
@@ -137,11 +201,11 @@ class Agent1Qualitative(BaseAgent):
                 "4_primary_competitors": f"Operates in an institutional landscape alongside leading public and private sector commercial banks and NBFCs in {industry}."
             }
 
-            # PART 5: Operations & Scalability (BFSI Dynamic Dimensions)
+            # PART 5: SCALABILITY, OPERATING DYNAMICS & CAPITAL CONSUMPTION (BFSI)
             part5 = {
-                "1_operating_leverage": "Operating Leverage: Evaluated via the Cost-to-Income ratio, digital transaction penetration, and branch deposit vintage leverage. As digital transactions account for >90% of retail throughput and mature branches scale deposit balances, non-interest operating expenses grow significantly slower than net interest income and fee streams.",
-                "2_supply_chain_risks": "Liability Sourcing Risk: Evaluated via liability stability, CASA deposit ratio, wholesale funding reliance, Asset-Liability Management (ALM) liquidity mismatches, and blended cost of funds. A granular retail deposit franchise protects against systemic liquidity squeezes and wholesale refinancing volatility.",
-                "3_capital_intensity": "Capital Intensity: Evaluated through regulatory Tier-1 CET-1 equity absorption, Risk-Weighted Assets (RWA) growth, and buffer margins maintained well above RBI regulatory minimums. Sustained Return on Assets (RoA >1.5-2.0%) generates ample internal capital to fund double-digit balance sheet expansion without frequent equity dilution."
+                "1_operating_leverage": "OPERATING LEVERAGE & EFFICIENCY: Evaluated via branch vintage maturation, digital transaction penetration (>90%), and the Cost-to-Income trajectory. Non-interest operating expenses grow significantly slower than net interest income and fee streams.",
+                "2_supply_chain_risks": "FUNDING & LIABILITY SOURCING RISKS: Evaluated via CASA deposit stability, wholesale funding reliance, Asset-Liability Management (ALM) duration mismatches, and cost of funds sensitivity. A granular retail deposit franchise protects against systemic liquidity squeezes and wholesale refinancing volatility.",
+                "3_capital_intensity": "CAPITAL CONSUMPTION & REGULATORY BUFFERS: Evaluated via Tier-1 CET-1 equity absorption per 100 bps of loan expansion and regulatory headroom maintained well above RBI minimums (11.5% CRAR). Strong internal capital generation (RoA >1.5-2.0%) funds double-digit balance sheet expansion without frequent equity dilution."
             }
 
             part6 = {
@@ -206,11 +270,11 @@ class Agent1Qualitative(BaseAgent):
                 "4_primary_competitors": f"Operates alongside leading domestic and multinational IT services providers in {industry}."
             }
 
-            # PART 5: Operations & Scalability (IT Services Dynamic Dimensions)
+            # PART 5: SCALABILITY, OPERATING DYNAMICS & CAPITAL CONSUMPTION (IT Services)
             part5 = {
-                "1_operating_leverage": "Operating Leverage: Billable employee utilization, offshore-onsite delivery mix, and subcontracting cost controls across digital project execution.",
-                "2_supply_chain_risks": "Supply Chain / Sourcing Risk: Talent supply chain, developer attrition, wage inflation pressures, and visa/regulatory friction in overseas delivery markets.",
-                "3_capital_intensity": "Capital Intensity: Internal IP reinvestment, training infrastructure, and digital development centers funded with minimal maintenance capital requirements."
+                "1_operating_leverage": "OPERATING LEVERAGE: Billable employee utilization, offshore-onsite delivery mix, and subcontracting costs across digital project execution.",
+                "2_supply_chain_risks": "TALENT SUPPLY CHAIN: Voluntary attrition trends, tech-stack talent availability, and visa friction in overseas client delivery markets.",
+                "3_capital_intensity": "CAPITAL INTENSITY: Software IP reinvestment, training centers, and digital infrastructure funded with minimal maintenance capital requirements."
             }
 
             part6 = {
@@ -275,11 +339,11 @@ class Agent1Qualitative(BaseAgent):
                 "4_primary_competitors": f"Operates alongside leading domestic and multinational corporations in {industry} in an increasingly consolidating landscape."
             }
 
-            # PART 5: Operations & Scalability (Manufacturing / Durables Dynamic Dimensions)
+            # PART 5: SCALABILITY, OPERATING DYNAMICS & CAPITAL CONSUMPTION (Manufacturing/Industrial)
             part5 = {
-                "1_operating_leverage": "Operating Leverage: Plant capacity utilization, fixed-cost absorption, and gross margin conversion: incremental volume expansion over fixed operating overhead delivers operating profit margin expansion.",
-                "2_supply_chain_risks": "Supply Chain Risk: Raw material pass-through capabilities, single-source vendor exposure, import dependency for key components, and safety stock cycles.",
-                "3_capital_intensity": "Capital Intensity: Maintenance vs. growth CapEx-to-D&A, brownfield debottlenecking, and greenfield project execution funded predominantly via internal operating cash generation."
+                "1_operating_leverage": "OPERATING LEVERAGE: Plant capacity utilization, fixed-cost absorption, and volume leverage: incremental volume expansion over fixed operating overhead delivers operating profit margin expansion.",
+                "2_supply_chain_risks": "SUPPLY CHAIN RISKS: Raw material commodity input pass-through lag, vendor concentration, and safety inventory levels.",
+                "3_capital_intensity": "CAPITAL INTENSITY: Maintenance vs expansion CapEx relative to depreciation and cash generation."
             }
 
             part6 = {

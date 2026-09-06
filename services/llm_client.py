@@ -187,9 +187,9 @@ CRITICAL RULES:
                 "4_primary_competitors": f"Operates in an institutional landscape alongside leading public and private sector commercial banks and NBFCs in {industry}."
             }
             p5_scale = {
-                "1_operating_leverage": "Operating Leverage: Evaluated via the Cost-to-Income ratio, digital transaction penetration, and branch deposit vintage leverage. As digital transactions account for >90% of retail throughput and mature branches scale deposit balances, non-interest operating expenses grow significantly slower than net interest income and fee streams.",
-                "2_supply_chain_risks": "Liability Sourcing Risk: Evaluated via liability stability, CASA deposit ratio, wholesale funding reliance, Asset-Liability Management (ALM) liquidity mismatches, and blended cost of funds. A granular retail deposit franchise protects against systemic liquidity squeezes and wholesale refinancing volatility.",
-                "3_capital_intensity": "Capital Intensity: Evaluated through regulatory Tier-1 CET-1 equity absorption, Risk-Weighted Assets (RWA) growth, and buffer margins maintained well above RBI regulatory minimums. Sustained Return on Assets (RoA >1.5-2.0%) generates ample internal capital to fund double-digit balance sheet expansion without frequent equity dilution."
+                "1_operating_leverage": "OPERATING LEVERAGE & EFFICIENCY: Evaluated via branch vintage maturation, digital transaction penetration (>90%), and the Cost-to-Income trajectory. Non-interest operating expenses grow significantly slower than net interest income and fee streams.",
+                "2_supply_chain_risks": "FUNDING & LIABILITY SOURCING RISKS: Evaluated via CASA deposit stability, wholesale funding reliance, Asset-Liability Management (ALM) duration mismatches, and cost of funds sensitivity. A granular retail deposit franchise protects against systemic liquidity squeezes and wholesale refinancing volatility.",
+                "3_capital_intensity": "CAPITAL CONSUMPTION & REGULATORY BUFFERS: Evaluated via Tier-1 CET-1 equity absorption per 100 bps of loan expansion and regulatory headroom maintained well above RBI minimums (11.5% CRAR). Strong internal capital generation (RoA >1.5-2.0%) funds double-digit balance sheet expansion without frequent equity dilution."
             }
             p6_scuttle = {
                 "1_customer_sentiment": f"Established institutional trust and high customer stickiness in {industry}, with high user ratings for digital mobile/net banking platforms and reliable branch servicing reach.",
@@ -234,9 +234,9 @@ CRITICAL RULES:
                 "4_primary_competitors": f"Operates alongside leading domestic and multinational IT services providers in {industry}."
             }
             p5_scale = {
-                "1_operating_leverage": "Operating Leverage: Billable employee utilization, offshore-onsite delivery mix, and subcontracting cost controls across digital project execution.",
-                "2_supply_chain_risks": "Supply Chain / Sourcing Risk: Talent supply chain, developer attrition, wage inflation pressures, and visa/regulatory friction in overseas delivery markets.",
-                "3_capital_intensity": "Capital Intensity: Internal IP reinvestment, training infrastructure, and digital development centers funded with minimal maintenance capital requirements."
+                "1_operating_leverage": "OPERATING LEVERAGE: Billable employee utilization, offshore-onsite delivery mix, and subcontracting costs across digital project execution.",
+                "2_supply_chain_risks": "TALENT SUPPLY CHAIN: Voluntary attrition trends, tech-stack talent availability, and visa friction in overseas client delivery markets.",
+                "3_capital_intensity": "CAPITAL INTENSITY: Software IP reinvestment, training centers, and digital infrastructure funded with minimal maintenance capital requirements."
             }
             p6_scuttle = {
                 "1_customer_sentiment": f"Strong enterprise customer satisfaction scores (CSAT) and high contract renewal rates across Fortune 500 accounts in {industry}.",
@@ -281,9 +281,9 @@ CRITICAL RULES:
                 "4_primary_competitors": f"Operates alongside leading domestic and multinational corporations in {industry} in an increasingly consolidating landscape."
             }
             p5_scale = {
-                "1_operating_leverage": "Operating Leverage: Plant capacity utilization, fixed-cost absorption, and gross margin conversion: incremental volume expansion over fixed operating overhead delivers operating profit margin expansion.",
-                "2_supply_chain_risks": "Supply Chain Risk: Raw material pass-through capabilities, single-source vendor exposure, import dependency for key components, and safety stock cycles.",
-                "3_capital_intensity": "Capital Intensity: Maintenance vs. growth CapEx-to-D&A, brownfield debottlenecking, and greenfield project execution funded predominantly via internal operating cash generation."
+                "1_operating_leverage": "OPERATING LEVERAGE: Plant capacity utilization, fixed-cost absorption, and volume leverage: incremental volume expansion over fixed operating overhead delivers operating profit margin expansion.",
+                "2_supply_chain_risks": "SUPPLY CHAIN RISKS: Raw material commodity input pass-through lag, vendor concentration, and safety inventory levels.",
+                "3_capital_intensity": "CAPITAL INTENSITY: Maintenance vs expansion CapEx relative to depreciation and cash generation."
             }
             p6_scuttle = {
                 "1_customer_sentiment": f"Established market goodwill and reputable brand perception for product reliability and after-sales support in {industry}.",
@@ -623,6 +623,32 @@ CRITICAL RULES:
             "section4_scenario_matrix": scenarios,
             "invalidation_triggers": invalidation
         }
+
+        # Enforce BFSI word prohibitions if applicable
+        if is_bfsi:
+            def sanitize_bfsi(obj):
+                replacements = [
+                    (re.compile(r'\braw\s+materials\b', re.IGNORECASE), "capital inputs"),
+                    (re.compile(r'\braw\s+material\b', re.IGNORECASE), "capital input"),
+                    (re.compile(r'\binventories\b', re.IGNORECASE), "liquid assets"),
+                    (re.compile(r'\binventory\b', re.IGNORECASE), "liquid assets"),
+                    (re.compile(r'\bfactories\b', re.IGNORECASE), "operating facilities"),
+                    (re.compile(r'\bfactory\b', re.IGNORECASE), "operating facility"),
+                    (re.compile(r'\bmachineries\b', re.IGNORECASE), "operating infrastructure"),
+                    (re.compile(r'\bmachinery\b', re.IGNORECASE), "operating infrastructure"),
+                ]
+                if isinstance(obj, str):
+                    t = obj
+                    for pat, repl in replacements:
+                        t = pat.sub(repl, t)
+                    return t
+                elif isinstance(obj, dict):
+                    return {k: sanitize_bfsi(v) for k, v in obj.items()}
+                elif isinstance(obj, list):
+                    return [sanitize_bfsi(x) for x in obj]
+                return obj
+
+            agent_1 = sanitize_bfsi(agent_1)
 
         # Assemble unified Stage 2 response
         return {
