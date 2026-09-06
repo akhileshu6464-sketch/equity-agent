@@ -45,7 +45,7 @@ class NumberedCanvas(canvas.Canvas):
         self.setFont("Helvetica", 8)
         self.setFillColor(colors.HexColor("#718096"))
         # Header rule & text
-        self.drawString(15 * mm, 285 * mm, "BHARATALPHA RESEARCH | INSTITUTIONAL EQUITY REPORT")
+        self.drawString(15 * mm, 285 * mm, "RESEARCH BEAST | INSTITUTIONAL EQUITY REPORT")
         self.setStrokeColor(colors.HexColor("#CBD5E0"))
         self.setLineWidth(0.5)
         self.line(15 * mm, 282 * mm, 195 * mm, 282 * mm)
@@ -287,7 +287,7 @@ def build_presentation_pdf(ticker, company_name, metrics, dossier_dict):
 
 # Page configuration
 st.set_page_config(
-    page_title="BharatAlpha | 7-Agent Institutional Equity Analyst",
+    page_title="Research Beast - Institutional Equity Intelligence",
     page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -569,7 +569,7 @@ def render_glass_stat(tag: str, num: str) -> str:
 
 def main():
     # Sidebar
-    st.sidebar.title("🏛️ BharatAlpha Research")
+    st.sidebar.title("🏛️ Research Beast")
     st.sidebar.caption("Unabridged 7-Agent Institutional Equity Pipeline")
 
     st.sidebar.subheader("Valuation & DCF Assumptions")
@@ -595,12 +595,14 @@ def main():
 
     # STATE 1: Hero Landing (Shows when no search has been initiated)
     if not st.session_state.active_ticker:
-        st.markdown("<div style='height: 12vh;'></div>", unsafe_allow_html=True)
-        
         st.markdown("""
-        <div class="glass-panel" style="max-width: 680px; margin: 0 auto; text-align: center;">
-            <h1 style="font-size: 2.4rem; font-weight: 800; margin-bottom: 8px; letter-spacing: -0.02em;">BharatAlpha Research</h1>
-            <p style="color: #94a3b8; font-size: 0.95rem; margin-bottom: 28px;">Institutional Equity Intelligence • 7-Agent Autonomous Audit</p>
+        <div style="text-align: center; margin-top: 14vh; margin-bottom: 32px;">
+            <h1 style="font-size: 3.2rem; font-weight: 800; letter-spacing: -0.03em; color: #ffffff; margin-bottom: 10px; text-shadow: 0 4px 20px rgba(0,0,0,0.5);">
+                Research Beast
+            </h1>
+            <p style="color: #94a3b8; font-size: 1.05rem; font-weight: 500; letter-spacing: 0.02em; margin: 0;">
+                Institutional Equity Intelligence &bull; 7-Agent Autonomous Audit
+            </p>
         </div>
         """, unsafe_allow_html=True)
 
