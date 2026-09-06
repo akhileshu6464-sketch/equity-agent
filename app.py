@@ -9,41 +9,214 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 from typing import Dict, Any
-from fpdf import FPDF
+import io
+import re
+
+from reportlab.lib.pagesizes import A4
+from reportlab.lib import colors
+from reportlab.lib.units import inch, mm
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak, KeepTogether
+from reportlab.pdfgen import canvas
 
 from agents.pipeline import EquityAgentPipeline
 
 
-class PDFReport(FPDF):
-    def header(self):
-        self.set_font('Helvetica', 'B', 14)
-        self.cell(0, 10, f'{self.ticker} - Institutional Equity Audit', border=False, align='C')
-        self.ln(12)
+class NumberedCanvas(canvas.Canvas):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._saved_page_states = []
 
-    def footer(self):
-        self.set_y(-15)
-        self.set_font('Helvetica', 'I', 8)
-        self.cell(0, 10, f'Page {self.page_no()}', border=False, align='C')
+    def showPage(self):
+        self._saved_page_states.append(dict(self.__dict__))
+        self._startPage()
+
+    def save(self):
+        num_pages = len(self._saved_page_states)
+        for state in self._saved_page_states:
+            self.__dict__.update(state)
+            self.draw_page_decorations(num_pages)
+            super().showPage()
+        super().save()
+
+    def draw_page_decorations(self, page_count):
+        self.saveState()
+        self.setFont("Helvetica", 8)
+        self.setFillColor(colors.HexColor("#718096"))
+        # Header rule & text
+        self.drawString(15 * mm, 285 * mm, "BHARATALPHA RESEARCH | INSTITUTIONAL EQUITY REPORT")
+        self.setStrokeColor(colors.HexColor("#CBD5E0"))
+        self.setLineWidth(0.5)
+        self.line(15 * mm, 282 * mm, 195 * mm, 282 * mm)
+        # Footer
+        page_text = f"Page {self._pageNumber} of {page_count}"
+        self.drawRightString(195 * mm, 12 * mm, page_text)
+        self.drawString(15 * mm, 12 * mm, "CONFIDENTIAL - PREPARED FOR INSTITUTIONAL CLIENTS")
+        self.line(15 * mm, 15 * mm, 195 * mm, 15 * mm)
+        self.restoreState()
 
 
-def generate_pdf(report_text: str, ticker: str) -> bytes:
-    pdf = PDFReport()
-    pdf.ticker = ticker
-    pdf.add_page()
-    pdf.set_auto_page_break(auto=True, margin=15)
-    pdf.set_font("Helvetica", size=10)
+def clean_markdown_for_pdf(text):
+    """Strip raw markdown formatting artifacts cleanly into HTML tags recognized by ReportLab."""
+    if not text:
+        return ""
+    # Clean bullet points before removing non-ASCII
+    text = text.replace('•', '&bull;').replace(' - ', '&bull; ')
+    # Remove emoji and control characters that break standard PDF fonts
+    text = re.sub(r'[^\x00-\x7F]+', ' ', text)
+    # Convert bold **text** to <b>text</b>
+    text = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', text)
+    # Convert italic *text* to <i>text</i>
+    text = re.sub(r'\*(.*?)\*', r'<i>\1</i>', text)
+    # Remove markdown headers (#, ##, ###)
+    text = re.sub(r'^#+\s*', '', text)
+    return text.strip()
+
+
+def build_presentation_pdf(ticker, company_name, metrics, dossier_dict):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        leftMargin=15 * mm,
+        rightMargin=15 * mm,
+        topMargin=20 * mm,
+        bottomMargin=20 * mm
+    )
+
+    styles = getSampleStyleSheet()
     
-    # Sanitize text to latin-1 to avoid fpdf encoding crashes
-    clean_text = report_text.replace('₹', 'Rs. ').encode('latin-1', 'replace').decode('latin-1')
+    # Custom Palette Typography
+    navy_dark = colors.HexColor("#0F172A")
+    navy_blue = colors.HexColor("#1E3A8A")
+    border_gray = colors.HexColor("#E2E8F0")
+    light_bg = colors.HexColor("#F8FAFC")
     
-    for line in clean_text.split('\n'):
-        if not line.strip():
-            pdf.ln(3)
-        else:
-            pdf.set_x(pdf.l_margin)
-            pdf.multi_cell(0, 5, line)
+    title_style = ParagraphStyle(
+        'DocTitle',
+        parent=styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=18,
+        leading=22,
+        textColor=navy_dark,
+        spaceAfter=6
+    )
     
-    return bytes(pdf.output())
+    subtitle_style = ParagraphStyle(
+        'SubTitle',
+        parent=styles['Normal'],
+        fontName='Helvetica',
+        fontSize=10,
+        leading=13,
+        textColor=colors.HexColor("#475569"),
+        spaceAfter=12
+    )
+
+    section_heading = ParagraphStyle(
+        'SecHeading',
+        parent=styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=12,
+        leading=16,
+        textColor=navy_blue,
+        spaceBefore=10,
+        spaceAfter=6,
+        keepWithNext=True
+    )
+
+    body_style = ParagraphStyle(
+        'BodyDark',
+        parent=styles['Normal'],
+        fontName='Helvetica',
+        fontSize=9,
+        leading=13,
+        textColor=colors.HexColor("#1E293B")
+    )
+
+    story = []
+
+    # 1. Executive Title Block
+    story.append(Paragraph(f"<b>{company_name}</b> ({ticker})", title_style))
+    story.append(Paragraph(f"Institutional Equity Research Dossier | Sector: {metrics.get('sector', 'N/A')} | Implied 10Y FCF CAGR: <b>{metrics.get('implied_cagr', 'N/A')}</b>", subtitle_style))
+
+    # 2. Key Metrics Card Table
+    kpi_data = [
+        [
+            Paragraph(f"<b>Current Price:</b> Rs. {metrics.get('cmp', 'N/A')}", body_style),
+            Paragraph(f"<b>Market Cap:</b> Rs. {metrics.get('mcap', 'N/A')} Cr", body_style),
+            Paragraph(f"<b>P/E Ratio:</b> {metrics.get('pe', 'N/A')}", body_style)
+        ],
+        [
+            Paragraph(f"<b>52W Range:</b> Rs. {metrics.get('range', 'N/A')}", body_style),
+            Paragraph(f"<b>EV/EBITDA:</b> {metrics.get('ev_ebitda', 'N/A')}", body_style),
+            Paragraph(f"<b>Final Verdict:</b> <b>{metrics.get('verdict', 'HOLD')}</b>", body_style)
+        ]
+    ]
+    kpi_table = Table(kpi_data, colWidths=[60 * mm, 60 * mm, 60 * mm])
+    kpi_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), light_bg),
+        ('BOX', (0, 0), (-1, -1), 1, border_gray),
+        ('INNERGRID', (0, 0), (-1, -1), 0.5, border_gray),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('LEFTPADDING', (0, 0), (-1, -1), 8),
+    ]))
+    story.append(kpi_table)
+    story.append(Spacer(1, 10))
+
+    # 3. Risk Pill Status Bar Table
+    story.append(Paragraph("Executive Risk Pill Dashboard", section_heading))
+    risk_headers = ["Moat & Business", "Forensic Accounting", "Solvency & Capital", "Governance & RPT", "Industry Operational KPIs", "Valuation Floor"]
+    pills = dossier_dict.get('risk_pills', {})
+    risk_values = [
+        Paragraph(f"<b>{pills.get('moat', 'GREEN')}</b>", body_style),
+        Paragraph(f"<b>{pills.get('forensics', 'GREEN')}</b>", body_style),
+        Paragraph(f"<b>{pills.get('solvency', 'GREEN')}</b>", body_style),
+        Paragraph(f"<b>{pills.get('governance', 'GREEN')}</b>", body_style),
+        Paragraph(f"<b>{pills.get('industry', 'GREEN')}</b>", body_style),
+        Paragraph(f"<b>{pills.get('valuation', 'GREEN')}</b>", body_style)
+    ]
+    risk_table = Table([risk_headers, risk_values], colWidths=[30 * mm] * 6)
+    risk_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), navy_blue),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 7),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('BOX', (0, 0), (-1, -1), 0.5, border_gray),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+    ]))
+    story.append(risk_table)
+    story.append(Spacer(1, 12))
+
+    # 4. Agent Sections formatted as clean tables and paragraphs
+    agent_names = [
+        ("Agent 0: Industry Taxonomy & Routing Profile", dossier_dict.get('agent0')),
+        ("Agent 1: Qualitative & Economic Moat Analysis", dossier_dict.get('agent1')),
+        ("Agent 2: Forensic Accounting Detective", dossier_dict.get('agent2')),
+        ("Agent 3: Balance Sheet, Solvency & Capital Health", dossier_dict.get('agent3')),
+        ("Agent 4: Corporate Governance & Master RPT Audit", dossier_dict.get('agent4')),
+        ("Agent 5: Industry Operational KPIs", dossier_dict.get('agent5')),
+        ("Agent 6: CIO Valuation, Asset Floors & Reverse DCF", dossier_dict.get('agent6')),
+    ]
+
+    for title, content in agent_names:
+        if not content:
+            continue
+        story.append(Paragraph(title, section_heading))
+        clean_content = clean_markdown_for_pdf(content)
+        # Parse into bullet points or clean paragraphs
+        for line in clean_content.split('\n'):
+            line = line.strip()
+            if line:
+                story.append(Paragraph(line, body_style))
+                story.append(Spacer(1, 2))
+        story.append(Spacer(1, 8))
+
+    doc.build(story, canvasmaker=NumberedCanvas)
+    buffer.seek(0)
+    return buffer.getvalue()
 
 # Page configuration
 st.set_page_config(
@@ -410,12 +583,118 @@ def main():
     st.markdown(full_report_md, unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # Direct PDF Download Button
-    pdf_data = generate_pdf(full_report_md, ticker)
+    # Prepare Presentation PDF Data
+    pdf_metrics = {
+        'sector': dossier.get('sector', 'N/A'),
+        'implied_cagr': f"{dossier.get('implied_growth_pct', 'N/A')}%",
+        'cmp': f"{cmp:,.2f}",
+        'mcap': f"{mcap_cr:,.1f}",
+        'pe': f"{pe:,.1f}x" if pe > 0 else "N/A",
+        'range': f"{low_52:,.0f} - {high_52:,.0f}",
+        'ev_ebitda': f"{ev_ebitda:,.1f}x" if ev_ebitda > 0 else "N/A",
+        'verdict': rating
+    }
+
+    pdf_pills = {
+        'moat': pills.get('Moat & Business', 'GREEN'),
+        'forensics': pills.get('Forensics', 'GREEN'),
+        'solvency': pills.get('Solvency', 'GREEN'),
+        'governance': pills.get('Governance', 'GREEN'),
+        'industry': pills.get('Industry KPIs', 'GREEN'),
+        'valuation': pills.get('Valuation', 'GREEN'),
+    }
+
+    agent0_pdf_text = f"""• Primary Sector (Assigned 1 of 12): {a0.get('primary_sector')}
+• Sub-Vertical: {a0.get('sub_vertical')}
+• Revenue Engine (>60% Profit Generator): {a0.get('revenue_engine_summary')}
+• Secondary / Hybrid Business Verticals: {', '.join(a0.get('hybrid_verticals', [])) if a0.get('hybrid_verticals') else 'None'}"""
+
+    agent1_pdf_text = f"""• Core Product / Service: {a1.get('part1_business_model', {}).get('1_core_product_service')}
+• Revenue Mechanics: {a1.get('part1_business_model', {}).get('2_revenue_model')}
+• Customer Concentration & Switching Costs: {a1.get('part1_business_model', {}).get('3_customer_concentration')} | {a1.get('part1_business_model', {}).get('4_switching_costs')}
+• Sales Engine: {a1.get('part1_business_model', {}).get('5_sales_process')}
+• Economic Moat Source & Trajectory: {a1.get('part2_competitive_moat', {}).get('2_moat_source')} ({a1.get('part2_competitive_moat', {}).get('3_moat_trajectory')})
+• Barriers to Entry: {a1.get('part2_competitive_moat', {}).get('1_barriers_to_entry')}
+• Pricing Power & Pass-Through: {a1.get('part2_competitive_moat', {}).get('5_pricing_power')}
+• Industry Structural Growth & TAM: {a1.get('part3_industry_growth', {}).get('1_structural_growth')} — {a1.get('part3_industry_growth', {}).get('2_tam_and_headroom')}
+• Cyclicality & Recession Resilience: {a1.get('part3_industry_growth', {}).get('3_cyclicality_recession')}
+• Scalability & Operating Leverage: {a1.get('part5_operations_scalability', {}).get('1_operating_leverage')}
+• Supply Chain Risks & Capital Intensity: {a1.get('part5_operations_scalability', {}).get('2_supply_chain_risks')} | {a1.get('part5_operations_scalability', {}).get('3_capital_intensity')}
+• Ground-Level Scuttlebutt: {a1.get('part6_scuttlebutt', {}).get('1_customer_sentiment')} | Workplace Culture: {a1.get('part6_scuttlebutt', {}).get('2_employee_culture')}
+• Single Biggest Operational Failure Point: {a1.get('part7_qualitative_risks', {}).get('4_single_biggest_failure_point')}"""
+
+    agent2_pdf_text = f"""• 5-Year Cumulative CFO vs PAT Conversion: {a2.get('part15_revenue_quality', {}).get('3_cfo_pat_divergence')}
+• Receivables & DSO Trajectory: {a2.get('part15_revenue_quality', {}).get('2_dso_trajectory')} (Channel Stuffing Check: {a2.get('part15_revenue_quality', {}).get('1_receivables_vs_revenue')})
+• Depreciation & Asset Useful Lifespans: {a2.get('part13_depreciation', {}).get('1_useful_lifespan_extension')} | Method: {a2.get('part13_depreciation', {}).get('2_depreciation_method_change')}
+• CapEx vs D&A Relationship: {a2.get('part13_depreciation', {}).get('3_capex_vs_da_relationship')}
+• SG&A Growth vs Top-Line Revenue: {a2.get('part14_sga_anomalies', {}).get('1_sga_growth_vs_revenue')}
+• Stock-Based Compensation & Overhead: {a2.get('part14_sga_anomalies', {}).get('4_stock_based_compensation')} | Miscellany: {a2.get('part14_sga_anomalies', {}).get('5_unexplained_miscellaneous_spikes')}
+• Goodwill & Intangible Assets Load: {a2.get('part16_balance_sheet', {}).get('1_goodwill_percentage')}
+• Auditor Independence & Pedigree: {a2.get('part16_balance_sheet', {}).get('3_auditor_management_turnover')}"""
+
+    agent3_pdf_text = f"""• Balance Sheet Leverage: Total Debt: Rs. {a3.get('audit_metrics', {}).get('Total Debt')}, Net Debt: Rs. {a3.get('audit_metrics', {}).get('Net Debt')} (Net Debt/Equity: {a3.get('audit_metrics', {}).get('Net Debt / Equity')}, Total Debt/Equity: {a3.get('audit_metrics', {}).get('Total Debt / Equity')})
+• Liquid Cash Buffer: Rs. {a3.get('audit_metrics', {}).get('Cash & Equivalents')} in cash and short-term equivalents
+• Debt Service Headroom: Normalized Interest Coverage: {a3.get('audit_metrics', {}).get('Normalized Interest Coverage')}
+• Working Capital Cycle (Cash Conversion Cycle): {a3.get('audit_metrics', {}).get('Cash Conversion Cycle')} ({a3.get('part11_working_capital', {}).get('1_cash_conversion_cycle')})
+• Return on Invested Capital (ROIC): {a3.get('part9_cash_flow_roic', {}).get('5_roic_vs_wacc')}
+• Free Cash Flow & Margin: FCF Margin: {a3.get('audit_metrics', {}).get('FCF Margin')} ({a3.get('part9_cash_flow_roic', {}).get('2_fcf_trajectory')})
+• FCF Dividend Sustainability: {a3.get('part12_capital_allocation', {}).get('4_dividend_fcf_sustainability')} (Coverage: {a3.get('audit_metrics', {}).get('FCF Dividend Coverage')})"""
+
+    agent4_pdf_text = f"""• Promoter Alignment & Encumbrance: {a4.get('section1_promoter_integrity', {}).get('2_promoter_pledge_percentage')}
+• Executive Remuneration vs PAT: {a4.get('section2_executive_remuneration', {}).get('1_ceo_remuneration_vs_pat')} (CEO-to-Median-Employee Ratio: {a4.get('audit_metrics', {}).get('CEO / Median Pay')})
+• Incentive Hurdle Alignment: {a4.get('section2_executive_remuneration', {}).get('3_incentive_hurdle_alignment')}
+• Politically Exposed Persons (PEP) & Rent-Seeking: {a4.get('section3_pep_rent_seeking', {}).get('1_pep_presence')} | Dependency: {a4.get('section3_pep_rent_seeking', {}).get('2_government_concession_dependency')}
+• Master RPT Pricing & Arm's Length Validation: {a4.get('section4_master_rpt', {}).get('pricing_validation', {}).get('pricing_arms_length')}
+• Capital Siphoning & Corporate Guarantees: {a4.get('section4_master_rpt', {}).get('capital_siphoning', {}).get('unsecured_loans_to_insiders')} | Guarantees: {a4.get('section4_master_rpt', {}).get('capital_siphoning', {}).get('corporate_guarantees')}
+• RPT Revenue & Disclosure Governance: RPT % of Revenue: {a4.get('audit_metrics', {}).get('RPT % of Revenue')} | Audit Committee Sign-Off: {a4.get('section4_master_rpt', {}).get('governance_disclosures', {}).get('audit_committee_preapproval')}"""
+
+    a5_pdf_lines = [f"• {k}: {v}" for k, v in a5.get("kpi_results", {}).items()]
+    agent5_pdf_text = f"Sector Checklist Activated: {a5.get('activated_checklist_section')}\n" + "\n".join(a5_pdf_lines)
+
+    inval_pdf_lines = [f"  - {trig}" for trig in a6.get("invalidation_triggers", [])]
+    agent6_pdf_text = f"""• Management Walk-the-Talk Audit:
+  - Target 1: {a6.get('section1_management_walk_the_talk', {}).get('1_historical_delivery_1', {}).get('target', 'Core Operational Target')} -> {a6.get('section1_management_walk_the_talk', {}).get('1_historical_delivery_1', {}).get('verdict')}
+  - Target 2: {a6.get('section1_management_walk_the_talk', {}).get('1_historical_delivery_2', {}).get('target', 'Capital Allocation Target')} -> {a6.get('section1_management_walk_the_talk', {}).get('1_historical_delivery_2', {}).get('verdict')}
+  - Target 3: {a6.get('section1_management_walk_the_talk', {}).get('1_historical_delivery_3', {}).get('target', 'Operating Cash Flow Conversion')} -> {a6.get('section1_management_walk_the_talk', {}).get('1_historical_delivery_3', {}).get('verdict')}
+• Independent Asset & Yield Valuation Floors (Non-DCF / Non-Relative):
+  - Tangible Book Value (TBV): {a6.get('section2_asset_yield_valuation', {}).get('1_tangible_book_value_per_share')}
+  - Graham Net-Net (NCAV): {a6.get('section2_asset_yield_valuation', {}).get('2_graham_net_net_ncav')}
+  - Stressed Liquidation Value: {a6.get('section2_asset_yield_valuation', {}).get('3_liquidation_value_stressed')}
+  - Owner Earnings Yield: {a6.get('section2_asset_yield_valuation', {}).get('4_owner_earnings_yield')}
+  - Earnings Power Value (EPV, 0% Growth): {a6.get('section2_asset_yield_valuation', {}).get('5_earnings_power_value_epv')}
+  - Dividend Yield & Organic Coverage: {a6.get('section2_asset_yield_valuation', {}).get('6_dividend_yield_and_fcf_payout')}
+• Reverse DCF Hurdle Test (WACC 11.5%, Terminal Growth 5.5%):
+  - Implied 10-Year FCF CAGR: {dossier.get('implied_growth_pct')}% ({a6.get('section3_reverse_dcf', {}).get('2_reality_check_vs_guidance')})
+• 3-Scenario Valuation Matrix:
+  - Bear Case: Target {a6.get('section4_scenario_matrix', {}).get('bear_case', {}).get('fair_target_price')} ({a6.get('section4_scenario_matrix', {}).get('bear_case', {}).get('expected_return')}) | Growth: {a6.get('section4_scenario_matrix', {}).get('bear_case', {}).get('growth_assumed')}
+  - Base Case: Target {a6.get('section4_scenario_matrix', {}).get('base_case', {}).get('fair_target_price')} ({a6.get('section4_scenario_matrix', {}).get('base_case', {}).get('expected_return')}) | Growth: {a6.get('section4_scenario_matrix', {}).get('base_case', {}).get('growth_assumed')}
+  - Bull Case: Target {a6.get('section4_scenario_matrix', {}).get('bull_case', {}).get('fair_target_price')} ({a6.get('section4_scenario_matrix', {}).get('bull_case', {}).get('expected_return')}) | Growth: {a6.get('section4_scenario_matrix', {}).get('bull_case', {}).get('growth_assumed')}
+• Thesis Invalidation Triggers:
+""" + "\n".join(inval_pdf_lines)
+
+    pdf_dossier_dict = {
+        'risk_pills': pdf_pills,
+        'agent0': agent0_pdf_text,
+        'agent1': agent1_pdf_text,
+        'agent2': agent2_pdf_text,
+        'agent3': agent3_pdf_text,
+        'agent4': agent4_pdf_text,
+        'agent5': agent5_pdf_text,
+        'agent6': agent6_pdf_text,
+    }
+
+    # Generate presentation-grade institutional PDF
+    pdf_data = build_presentation_pdf(
+        ticker=symbol,
+        company_name=company_name,
+        metrics=pdf_metrics,
+        dossier_dict=pdf_dossier_dict
+    )
+
     st.download_button(
-        label="📄 Download Full Institutional PDF Dossier",
+        label="📄 Download Institutional Presentation PDF Dossier",
         data=pdf_data,
-        file_name=f"{ticker}_Institutional_Audit.pdf",
+        file_name=f"{symbol}_Institutional_Research_Dossier.pdf",
         mime="application/pdf"
     )
 
