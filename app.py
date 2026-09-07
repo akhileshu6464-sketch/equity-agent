@@ -503,12 +503,18 @@ def render_audit_card(key_or_title: str, item: Any):
     - Level D (amber): Capital Allocation & Return Impact
     Falls back cleanly to standard q-box for flat strings or legacy dicts.
     """
-    if isinstance(item, dict) and "historical_trend_and_metrics" in item:
+    has_4tier = isinstance(item, dict) and any(
+        k in item for k in [
+            "historical_trend_and_metrics", "trajectory_and_metrics", "level_a",
+            "operational_mechanics_and_drivers", "operational_drivers", "level_b"
+        ]
+    )
+    if has_4tier:
         title = item.get("title") or key_or_title.replace("_", " ").upper()
-        level_a = item.get("historical_trend_and_metrics", "").strip()
-        level_b = item.get("operational_mechanics_and_drivers", "").strip()
-        level_c = item.get("competitive_context_and_benchmarks", "").strip()
-        level_d = item.get("thesis_implication_and_risks", "").strip()
+        level_a = (item.get("historical_trend_and_metrics") or item.get("trajectory_and_metrics") or item.get("level_a") or "").strip()
+        level_b = (item.get("operational_mechanics_and_drivers") or item.get("operational_drivers") or item.get("level_b") or "").strip()
+        level_c = (item.get("competitive_context_and_benchmarks") or item.get("peer_comparison") or item.get("level_c") or "").strip()
+        level_d = (item.get("thesis_implication_and_risks") or item.get("thesis_invalidation") or item.get("level_d") or "").strip()
 
         card_html = f"""
         <div class="q-box" style="margin-bottom: 16px; padding: 16px; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; background: rgba(15, 23, 42, 0.5);">
@@ -965,10 +971,14 @@ def main():
                 "Part 7: Qualitative Risks"
             ])
             with t_moat[0]:
-                for d_key in ["dimension_1", "dimension_2", "dimension_3", "dimension_4", "dimension_5"]:
+                rendered_titles = set()
+                for d_key in ["dimension_1", "dimension_2", "dimension_3", "dimension_4", "dimension_5", "pillar_1", "pillar_2", "pillar_3", "pillar_4"]:
                     d_val = moat_obj.get(d_key) or a1.get(d_key)
                     if d_val and isinstance(d_val, dict):
-                        render_audit_card(d_val.get("title", d_key.replace("_", " ").title()), d_val)
+                        c_title = d_val.get("title", d_key.replace("_", " ").title())
+                        if c_title not in rendered_titles:
+                            render_audit_card(c_title, d_val)
+                            rendered_titles.add(c_title)
             with t_moat[1]:
                 for k, v in a1.get("part1_business_model", {}).items():
                     render_audit_card(k, v)
