@@ -914,19 +914,33 @@ def main():
                 m2_cols[idx % 3].metric(k, str(v))
 
             cfo_pat_data = a2.get("cfo_pat_series", [])
-            if cfo_pat_data:
-                st.markdown("##### 📊 5-Year Cash Flow Divergence (CFO vs Net Profit)")
-                df_cfo = pd.DataFrame(cfo_pat_data)
-                fig_cfo = go.Figure()
-                fig_cfo.add_trace(go.Bar(x=df_cfo["year"], y=df_cfo["pat_cr"], name="PAT (Net Profit ₹ Cr)", marker_color="#38bdf8"))
-                fig_cfo.add_trace(go.Bar(x=df_cfo["year"], y=df_cfo["cfo_cr"], name="CFO (Operating Cash Flow ₹ Cr)", marker_color="#34d399"))
-                fig_cfo.update_layout(
-                    barmode="group", height=300, margin=dict(l=20, r=20, t=30, b=20),
-                    paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                    font=dict(color="#94a3b8"),
-                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-                )
-                st.plotly_chart(fig_cfo, use_container_width=True)
+            df_cfo = pd.DataFrame(cfo_pat_data) if cfo_pat_data else pd.DataFrame()
+            if isinstance(df_cfo, pd.DataFrame) and not df_cfo.empty and "Year" in df_cfo.columns and "year" not in df_cfo.columns:
+                df_cfo = df_cfo.rename(columns={"Year": "year", "Net Profit (PAT)": "pat_cr", "Cash Flow from Operations (CFO)": "cfo_cr"})
+
+            st.markdown("##### 📊 5-Year Cash Flow Divergence (CFO vs Net Profit)")
+            # Safe CFO vs PAT chart rendering
+            is_bfsi_co = is_bfsi(sector, industry) or sector_key in ["BFSI_BANKS", "BFSI_NBFC"]
+            if is_bfsi_co:
+                # Banks do not use CFO vs PAT; display Net Interest Income (NII) vs PAT or a clean message
+                st.info("Operating Cash Flow (CFO) chart is not applicable for Financial Institutions. Balance sheet and asset quality metrics are audited in the KPIs & Solvency sections.")
+            else:
+                # For Non-BFSI / Industrial companies, ensure columns exist before plotting
+                if isinstance(df_cfo, pd.DataFrame) and not df_cfo.empty and "year" in df_cfo.columns and "pat_cr" in df_cfo.columns:
+                    fig_cfo = go.Figure()
+                    fig_cfo.add_trace(go.Bar(x=df_cfo["year"], y=df_cfo["pat_cr"], name="PAT (Net Profit ₹ Cr)", marker_color="#38bdf8"))
+                    if "cfo_cr" in df_cfo.columns:
+                        fig_cfo.add_trace(go.Bar(x=df_cfo["year"], y=df_cfo["cfo_cr"], name="CFO (₹ Cr)", marker_color="#10b981"))
+                    fig_cfo.update_layout(
+                        barmode="group",
+                        template="plotly_dark",
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        plot_bgcolor="rgba(0,0,0,0)",
+                        margin=dict(l=10, r=10, t=30, b=10)
+                    )
+                    st.plotly_chart(fig_cfo, use_container_width=True)
+                else:
+                    st.warning("Historical CFO/PAT data not available for this ticker.")
 
             f_tabs = st.tabs(["Part 13: D&A Manipulation", "Part 14: SG&A Anomalies", "Part 15: Revenue Quality (CFO/PAT)", "Part 16: Goodwill & Governance"])
             with f_tabs[0]:
