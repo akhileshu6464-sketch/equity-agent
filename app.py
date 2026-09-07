@@ -275,6 +275,16 @@ st.markdown("""
     color: #f87171;
     border: 1px solid rgba(248, 113, 113, 0.35);
 }
+.pill-cyan {
+    background: rgba(56, 189, 248, 0.15);
+    color: #38bdf8;
+    border: 1px solid rgba(56, 189, 248, 0.35);
+}
+.pill-indigo {
+    background: rgba(129, 140, 248, 0.15);
+    color: #818cf8;
+    border: 1px solid rgba(129, 140, 248, 0.35);
+}
 
 /* Container Tab Strip */
 .stTabs [data-baseweb="tab-list"] {
@@ -896,7 +906,7 @@ def main():
 
         # Institutional Tabbed Breakdown (Retains all audit bullets and triggers)
         tab0, tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
-            "🏷️ Overview", "🛡️ Moat", "🔍 Forensics", "⚖️ Solvency", "🏛️ Governance", "📈 KPIs", "🎯 Valuation", "🎙️ Concall"
+            "🏷️ Overview", "🛡️ Moat", "🔍 Forensics", "⚖️ Solvency", "🏛️ Governance & Leadership", "📈 KPIs", "🎯 Valuation", "🎙️ Concall"
         ])
 
         with tab0:
@@ -1047,30 +1057,169 @@ def main():
 
         with tab4:
             st.markdown("<div class='glass-panel'>", unsafe_allow_html=True)
-            st.markdown(f"**Governance Status**: {render_risk_pill('Governance', gov_status)}", unsafe_allow_html=True)
-            st.markdown(f"**Audit Findings**: {a4.get('summary')}")
-            m4_items = list(a4.get("audit_metrics", {}).items())
-            m4_cols = st.columns(3)
-            for idx, (k, v) in enumerate(m4_items):
-                m4_cols[idx % 3].metric(k, str(v))
+            
+            dim1 = a4.get("dimension1_leadership_pedigree", {})
+            dim2 = a4.get("dimension2_crisis_playbook", {})
+            dim3 = a4.get("dimension3_credibility_audit", {})
+            dim4 = a4.get("dimension4_competitor_matrix", {})
+            cred_verdict = a4.get("credibility_verdict", dim3.get("credibility_verdict", "HIGH INTEGRITY"))
+            
+            cred_badge_class = "pill-green" if "HIGH" in cred_verdict.upper() else ("pill-yellow" if "PRAGMATIC" in cred_verdict.upper() else "pill-red")
 
-            g_tabs = st.tabs(["Section 1: Promoter Integrity & Pledge", "Section 2: Executive Remuneration", "Section 3: PEP & Political Risk", "Section 4: Master RPT Audit"])
+            col_gov_top1, col_gov_top2 = st.columns([3, 1])
+            with col_gov_top1:
+                st.markdown(f"**Governance Status**: {render_risk_pill('Governance', gov_status)} &nbsp;&nbsp;|&nbsp;&nbsp; **Management Credibility Verdict**: <span class='pill-badge {cred_badge_class}'>{cred_verdict}</span>", unsafe_allow_html=True)
+                st.markdown(f"**Audit Findings**: {a4.get('summary', '')}")
+            with col_gov_top2:
+                peers_list = dim4.get("primary_peers", [])
+                peers_text = ", ".join(peers_list[:3]) if peers_list else "Listed Sector Peers"
+                st.markdown(f"<div style='text-align: right;'><span class='stat-tag'>Primary Benchmark Peers</span><br><strong style='color: #cbd5e1; font-size: 0.88rem;'>{peers_text}</strong></div>", unsafe_allow_html=True)
+
+            m4_items = list(a4.get("audit_metrics", {}).items())
+            m4_cols = st.columns(len(m4_items) if 0 < len(m4_items) <= 5 else 4)
+            for idx, (k, v) in enumerate(m4_items):
+                m4_cols[idx % len(m4_cols)].metric(k, str(v))
+
+            st.markdown("<div style='height: 16px;'></div>", unsafe_allow_html=True)
+
+            g_tabs = st.tabs([
+                "👑 Leadership & Incentives",
+                "🛡️ Crisis Playbook",
+                "🤝 Credibility & Commitment",
+                "⚔️ Competitor Benchmark",
+                "🔍 Master RPT & Integrity"
+            ])
+
             with g_tabs[0]:
+                st.markdown("##### 👑 Executive Leadership Pedigree & Incentive Alignment")
+                execs = dim1.get("key_executives", [])
+                if execs:
+                    for ex in execs:
+                        st.markdown(f"""
+                        <div class="q-box" style="margin-bottom: 14px; padding: 16px; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; background: rgba(15, 23, 42, 0.5);">
+                            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 6px;">
+                                <div>
+                                    <span style="font-size: 1.05rem; font-weight: 700; color: #f8fafc;">{ex.get('name', 'Executive')}</span>
+                                    <span style="color: #94a3b8; font-size: 0.85rem; margin-left: 8px;">— {ex.get('role', 'Executive Role')}</span>
+                                </div>
+                                <div>
+                                    <span class="pill-badge pill-cyan" style="font-size: 0.72rem;">{ex.get('tenure', 'Tenure N/A')}</span>
+                                </div>
+                            </div>
+                            <div style="font-size: 0.84rem; color: #cbd5e1; line-height: 1.5; margin-bottom: 6px;">
+                                <strong>Background:</strong> {ex.get('background', 'N/A')}
+                            </div>
+                            <div style="font-size: 0.84rem; color: #94a3b8; line-height: 1.5; margin-bottom: 6px;">
+                                <strong>Past Institutional Affiliation:</strong> {ex.get('past_affiliation', 'N/A')}
+                            </div>
+                            <div style="font-size: 0.84rem; color: #34d399; line-height: 1.5;">
+                                <strong>Incentive Alignment:</strong> {ex.get('incentive_alignment', 'N/A')}
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                if dim1.get("skin_in_the_game"):
+                    render_audit_card("Executive Skin-in-the-Game", dim1.get("skin_in_the_game"))
+                if dim1.get("governance_structure"):
+                    render_audit_card("Board Independence & Oversight", dim1.get("governance_structure"))
+
                 for k, v in a4.get("section1_promoter_integrity", {}).items():
                     render_audit_card(k, v)
-            with g_tabs[1]:
                 for k, v in a4.get("section2_executive_remuneration", {}).items():
                     render_audit_card(k, v)
+
+            with g_tabs[1]:
+                st.markdown("##### 🛡️ Historical Crisis Playbook & Downturn Resilience")
+                if dim2.get("downturn_resilience_summary"):
+                    st.info(f"**Crisis Execution Summary:** {dim2.get('downturn_resilience_summary')}")
+                
+                crises = dim2.get("crisis_history", [])
+                if crises:
+                    for cr in crises:
+                        st.markdown(f"""
+                        <div class="q-box" style="margin-bottom: 14px; padding: 16px; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; background: rgba(15, 23, 42, 0.5);">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 6px;">
+                                <span style="font-size: 0.95rem; font-weight: 700; color: #f8fafc;">💥 {cr.get('crisis_event', 'Macro Dislocation')}</span>
+                                <span class="pill-badge pill-yellow" style="font-size: 0.72rem;">{cr.get('timeline', 'Historical')}</span>
+                            </div>
+                            <div style="font-size: 0.84rem; color: #f87171; line-height: 1.5; margin-bottom: 6px;">
+                                <strong>Macro Shock Impact:</strong> {cr.get('macro_shock_impact', 'N/A')}
+                            </div>
+                            <div style="font-size: 0.84rem; color: #818cf8; line-height: 1.5; margin-bottom: 6px;">
+                                <strong>Management Execution:</strong> {cr.get('management_execution', 'N/A')}
+                            </div>
+                            <div style="font-size: 0.84rem; color: #34d399; line-height: 1.5;">
+                                <strong>Capital Preservation & Share Gain Outcome:</strong> {cr.get('capital_preservation_outcome', 'N/A')}
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                if dim2.get("crisis_playbook_analysis"):
+                    render_audit_card("Downturn Resilience Playbook", dim2.get("crisis_playbook_analysis"))
+
             with g_tabs[2]:
+                st.markdown(f"##### 🤝 Management Credibility & Guidance Delivery Audit")
+                st.markdown(f"""
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 14px; padding: 12px 16px; background: rgba(15, 23, 42, 0.6); border-radius: 10px; border: 1px solid rgba(255,255,255,0.08);">
+                    <div><span class='stat-tag'>Official Credibility Verdict</span><br><span class='pill-badge {cred_badge_class}' style='font-size: 0.88rem;'>{cred_verdict}</span></div>
+                    <div style="font-size: 0.85rem; color: #cbd5e1; line-height: 1.5; border-left: 1px solid rgba(255,255,255,0.1); padding-left: 14px;">
+                        {dim3.get('verdict_justification', 'Exemplary management track record of delivering on stated public guidance.')}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+                g_rows = dim3.get("guidance_vs_delivery", [])
+                if g_rows:
+                    st.markdown("**3-5 Year Guidance vs Delivery Matrix**")
+                    df_guidance = pd.DataFrame(g_rows)
+                    df_guidance = df_guidance.rename(columns={
+                        "parameter": "Parameter",
+                        "management_guidance": "Management Guidance",
+                        "reported_delivery": "Reported Delivery",
+                        "audit_verdict": "Audit Verdict"
+                    })
+                    st.dataframe(df_guidance, use_container_width=True, hide_index=True)
+
+                if dim3.get("forensic_governance_integrity"):
+                    render_audit_card("Forensic Integrity & Stewardship", dim3.get("forensic_governance_integrity"))
+
                 for k, v in a4.get("section3_pep_rent_seeking", {}).items():
                     render_audit_card(k, v)
+
             with g_tabs[3]:
-                st.markdown("##### 🔍 Master Related Party Transactions (RPT) Matrix")
+                st.markdown("##### ⚔️ Direct Competitor Benchmark Matrix")
+                b_table = dim4.get("benchmark_table", [])
+                if b_table:
+                    df_bench = pd.DataFrame(b_table)
+                    rename_map = {"metric": "Metric Dimension", "company": company_name, "commentary": "Institutional Assessment"}
+                    if "peer1" in df_bench.columns:
+                        rename_map["peer1"] = "Peer 1"
+                    if "peer2" in df_bench.columns:
+                        rename_map["peer2"] = "Peer 2"
+                    df_bench = df_bench.rename(columns=rename_map)
+                    st.dataframe(df_bench, use_container_width=True, hide_index=True)
+
+                if dim4.get("valuation_differential_rationale"):
+                    st.markdown(f"""
+                    <div class="q-box" style="margin-top: 14px; margin-bottom: 14px; padding: 14px 18px; border-left: 4px solid #38bdf8; background: rgba(56, 189, 248, 0.05);">
+                        <span class="stat-tag" style="color: #38bdf8; font-size: 0.78rem;">VALUATION MULTIPLE DIFFERENTIAL RATIONALE</span>
+                        <div style="font-size: 0.86rem; color: #cbd5e1; line-height: 1.6; margin-top: 4px;">
+                            {dim4.get('valuation_differential_rationale')}
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                if dim4.get("competitive_advantage_analysis"):
+                    render_audit_card("Moat Hegemony & Competitive Advantage", dim4.get("competitive_advantage_analysis"))
+
+            with g_tabs[4]:
+                st.markdown("##### 🔍 Master Related Party Transactions (RPT) & Integrity Audit")
                 rpt = a4.get("section4_master_rpt", {})
                 for sub_name, sub_dict in rpt.items():
                     st.markdown(f"**{sub_name.replace('_', ' ').title()}**")
                     for sub_k, sub_v in sub_dict.items():
                         render_audit_card(sub_k, sub_v)
+
             st.markdown("</div>", unsafe_allow_html=True)
 
         with tab5:

@@ -98,7 +98,12 @@ CRITICAL INSTITUTIONAL DEPTH & 4-TIER SCHEMA RULES:
 5. Strictly obey all banned metrics for this archetype ({financial_payload.get('sector_profile', {}).get('banned_metrics', [])}). NEVER cite banned metrics.
 6. If BFSI (Bank/NBFC), strictly NEVER mention 'inventory', 'raw material', 'factory', or 'machinery'.
 7. Use the exact pre-calculated figures from the financial payload. Do not invent contradictory numbers.
-8. Output MUST be valid JSON conforming exactly to the expected dossier schema with all 8 agent structures (agent_0, agent_1, agent_2, agent_3, agent_4, agent_5, agent_6, agent_7), risk_pills, and institutional_rating.
+8. For Agent 4 (Governance & Leadership), output MUST include:
+   - 'dimension1_leadership_pedigree': with 'key_executives', 'skin_in_the_game' (4-tier), 'governance_structure' (4-tier)
+   - 'dimension2_crisis_playbook': with 'crisis_history', 'crisis_playbook_analysis' (4-tier), 'downturn_resilience_summary'
+   - 'dimension3_credibility_audit': with 'guidance_vs_delivery', 'credibility_verdict' ('HIGH INTEGRITY'|'PRAGMATIC'|'PROMOTER-EXTRACTIVE'), 'verdict_justification', 'forensic_governance_integrity' (4-tier)
+   - 'dimension4_competitor_matrix': with 'primary_peers', 'benchmark_table', 'competitive_advantage_analysis' (4-tier), 'valuation_differential_rationale'
+9. Output MUST be valid JSON conforming exactly to the expected dossier schema with all 8 agent structures (agent_0, agent_1, agent_2, agent_3, agent_4, agent_5, agent_6, agent_7), risk_pills, and institutional_rating.
 """
 
         body = {
