@@ -488,7 +488,7 @@ def build_institutional_pdf(
     a5 = get_agent_dict('agent_5', 'agent5')
     a6 = get_agent_dict('agent_6', 'agent6')
     a7 = get_agent_dict('agent_7', 'agent7')
-    if not a7 or not isinstance(a7, dict) or not a7.get('guidance_summary'):
+    if not a7 or not isinstance(a7, dict) or not (a7.get('guidance_summary') or a7.get('revenue_growth_guidance')):
         try:
             from agents.agent7_concall import run_agent7_concall_analysis
             a7 = run_agent7_concall_analysis(
@@ -1960,32 +1960,43 @@ def build_institutional_pdf(
         st.body_text
     ))
 
-    guidance_data = a7.get('guidance_summary', {})
+    guidance_data = a7.get('guidance_summary', {}) if isinstance(a7.get('guidance_summary'), dict) else {}
     margin_data = a7.get('margin_outlook', {})
-    capex_data = a7.get('capex_plans', {})
+    capex_data = a7.get('capex_plans', {}) if isinstance(a7.get('capex_plans'), dict) else {}
     ops_data = a7.get('operational_disclosures', {})
     tone_data = a7.get('tone_sentiment', {})
+
+    rev_target_str = a7.get('revenue_growth_guidance') or guidance_data.get('revenue_growth_target', 'Projected 12.0% - 15.0% YoY volume expansion')
+    if isinstance(margin_data, dict):
+        margin_corridor_str = margin_data.get('target_corridor', guidance_data.get('margin_outlook', 'Operating spread protection corridor'))
+    else:
+        margin_corridor_str = str(margin_data or 'Operating spread protection corridor')
+    capex_outlay_str = a7.get('committed_capex') or capex_data.get('total_outlay_cr', guidance_data.get('capex_commitments', 'Committed capital outlay'))
+    strat_asp_str = a7.get('strategic_aspirations') or guidance_data.get('medium_term_aspirations', 'ROCE compounding and market share leadership')
+    capex_proj_str = a7.get('capex_projects') or capex_data.get('key_projects', 'Capacity modernization and operational debottlenecking')
+    capex_time_str = a7.get('capex_timeline') or capex_data.get('commissioning_timeline', 'Phased over next 6-8 fiscal quarters')
+    capex_fund_str = a7.get('funding_mode') or capex_data.get('funding_mode', 'Internal operating cash flows; zero long-term leverage')
 
     guidance_tbl = [
         [Paragraph("<b>Guidance Dimension</b>", st.tbl_header), Paragraph("<b>Management Guidance & Target Corridor</b>", st.tbl_header), Paragraph("<b>Execution Trajectory</b>", st.tbl_header)],
         [
             Paragraph("<b>Revenue / Volume Target</b>", st.tbl_cell_bold),
-            Paragraph(clean_markdown_for_pdf(str(guidance_data.get('revenue_growth_target', 'Projected 12.0% - 15.0% YoY volume expansion'))), st.tbl_cell),
+            Paragraph(clean_markdown_for_pdf(str(rev_target_str)), st.tbl_cell),
             Paragraph("Medium-Term Expansion", st.tbl_cell_center)
         ],
         [
             Paragraph("<b>Margin Corridor Outlook</b>", st.tbl_cell_bold),
-            Paragraph(clean_markdown_for_pdf(str(margin_data.get('target_corridor', guidance_data.get('margin_outlook', 'Operating spread protection corridor')))), st.tbl_cell),
+            Paragraph(clean_markdown_for_pdf(str(margin_corridor_str)), st.tbl_cell),
             Paragraph("Spread Protection", st.tbl_cell_center)
         ],
         [
             Paragraph("<b>CapEx & Investment Outlay</b>", st.tbl_cell_bold),
-            Paragraph(clean_markdown_for_pdf(str(capex_data.get('total_outlay_cr', guidance_data.get('capex_commitments', 'Committed capital outlay')))), st.tbl_cell),
+            Paragraph(clean_markdown_for_pdf(str(capex_outlay_str)), st.tbl_cell),
             Paragraph("Milestone Tracked", st.tbl_cell_center)
         ],
         [
             Paragraph("<b>Strategic Aspirations</b>", st.tbl_cell_bold),
-            Paragraph(clean_markdown_for_pdf(str(guidance_data.get('medium_term_aspirations', 'ROCE compounding and market share leadership'))), st.tbl_cell),
+            Paragraph(clean_markdown_for_pdf(str(strat_asp_str)), st.tbl_cell),
             Paragraph("Multi-Year Horizon", st.tbl_cell_center)
         ],
     ]
@@ -2005,11 +2016,27 @@ def build_institutional_pdf(
     story.append(Spacer(1, 8))
 
     story.append(Paragraph("7.2 Sector-Specific Operational & Capacity Disclosures", st.section_heading))
+    if isinstance(ops_data, list):
+        sec_m1 = ops_data[0].get('value', str(ops_data[0])) if len(ops_data) > 0 and isinstance(ops_data[0], dict) else (str(ops_data[0]) if len(ops_data) > 0 else 'Operational trajectory confirmed in line with seasonal trends')
+        sec_m2 = ops_data[1].get('value', str(ops_data[1])) if len(ops_data) > 1 and isinstance(ops_data[1], dict) else (str(ops_data[1]) if len(ops_data) > 1 else 'Cost pass-through and input efficiency maintained')
+        sec_m3 = ops_data[2].get('value', str(ops_data[2])) if len(ops_data) > 2 and isinstance(ops_data[2], dict) else (str(ops_data[2]) if len(ops_data) > 2 else 'Operating capacity and balance sheet liquidity buffers intact')
+        ops_comm = a7.get('operational_commentary') or 'Management reiterated disciplined operating focus and strong capacity headroom.'
+    elif isinstance(ops_data, dict):
+        sec_m1 = str(ops_data.get('sector_metric_1', 'Operational trajectory confirmed in line with seasonal trends'))
+        sec_m2 = str(ops_data.get('sector_metric_2', 'Cost pass-through and input efficiency maintained'))
+        sec_m3 = str(ops_data.get('sector_metric_3', 'Operating capacity and balance sheet liquidity buffers intact'))
+        ops_comm = str(ops_data.get('commentary', 'Management reiterated disciplined operating focus and strong capacity headroom.'))
+    else:
+        sec_m1 = 'Operational trajectory confirmed in line with seasonal trends'
+        sec_m2 = 'Cost pass-through and input efficiency maintained'
+        sec_m3 = 'Operating capacity and balance sheet liquidity buffers intact'
+        ops_comm = 'Management reiterated disciplined operating focus and strong capacity headroom.'
+
     ops_tbl = [
         [Paragraph("<b>Audit Metric / Parameter</b>", st.tbl_header), Paragraph("<b>Management Disclosed Status & Corridor</b>", st.tbl_header)],
-        [Paragraph("<b>Primary Sector Metric 1</b>", st.tbl_cell_bold), Paragraph(clean_markdown_for_pdf(str(ops_data.get('sector_metric_1', 'Operational trajectory confirmed in line with seasonal trends'))), st.tbl_cell)],
-        [Paragraph("<b>Primary Sector Metric 2</b>", st.tbl_cell_bold), Paragraph(clean_markdown_for_pdf(str(ops_data.get('sector_metric_2', 'Cost pass-through and input efficiency maintained'))), st.tbl_cell)],
-        [Paragraph("<b>Primary Sector Metric 3</b>", st.tbl_cell_bold), Paragraph(clean_markdown_for_pdf(str(ops_data.get('sector_metric_3', 'Operating capacity and balance sheet liquidity buffers intact'))), st.tbl_cell)],
+        [Paragraph("<b>Primary Sector Metric 1</b>", st.tbl_cell_bold), Paragraph(clean_markdown_for_pdf(sec_m1), st.tbl_cell)],
+        [Paragraph("<b>Primary Sector Metric 2</b>", st.tbl_cell_bold), Paragraph(clean_markdown_for_pdf(sec_m2), st.tbl_cell)],
+        [Paragraph("<b>Primary Sector Metric 3</b>", st.tbl_cell_bold), Paragraph(clean_markdown_for_pdf(sec_m3), st.tbl_cell)],
     ]
     t_ops = Table(ops_tbl, colWidths=[printable_width * 0.32, printable_width * 0.68])
     t_ops.setStyle(TableStyle([
@@ -2027,10 +2054,10 @@ def build_institutional_pdf(
     story.append(Spacer(1, 6))
 
     story.append(Paragraph(
-        f"<b>CapEx & Project Execution Details:</b> Key commitments: {clean_markdown_for_pdf(str(capex_data.get('key_projects', 'Capacity modernization and operational debottlenecking')))}. "
-        f"<b>Commissioning Schedule:</b> {clean_markdown_for_pdf(str(capex_data.get('commissioning_timeline', 'Phased over next 6-8 fiscal quarters')))}. "
-        f"<b>Financing Source:</b> {clean_markdown_for_pdf(str(capex_data.get('funding_mode', 'Internal operating cash flows; zero long-term leverage')))}. "
-        f"<b>Operational Assessment:</b> {clean_markdown_for_pdf(str(ops_data.get('commentary', 'Management reiterated disciplined operating focus and strong capacity headroom.')))}",
+        f"<b>CapEx & Project Execution Details:</b> Key commitments: {clean_markdown_for_pdf(str(capex_proj_str))}. "
+        f"<b>Commissioning Schedule:</b> {clean_markdown_for_pdf(str(capex_time_str))}. "
+        f"<b>Financing Source:</b> {clean_markdown_for_pdf(str(capex_fund_str))}. "
+        f"<b>Operational Assessment:</b> {clean_markdown_for_pdf(str(ops_comm))}",
         st.body_text
     ))
 
@@ -2056,9 +2083,12 @@ def build_institutional_pdf(
     ]
     for qa in qa_list[:3]:
         posture_str = str(qa.get('posture', 'Realistic')).strip()
+        qa_ans = str(qa.get('answer') or qa.get('management_response', 'Addressed in call'))
+        qa_focus = str(qa.get('takeaway') or qa.get('scrutiny_focus', 'Margin sustainability'))
+        qa_inst = str(qa.get('analyst_institution') or qa.get('institution', 'Institutional Equities'))
         qa_tbl_rows.append([
-            Paragraph(f"<b>{clean_markdown_for_pdf(str(qa.get('analyst_institution', 'Institutional Equities')))}</b><br/><font color='#64748b' size='7.5'>Focus: {clean_markdown_for_pdf(str(qa.get('scrutiny_focus', 'Margin sustainability')))}</font>", st.tbl_cell),
-            Paragraph(f"<b>Q:</b> {clean_markdown_for_pdf(str(qa.get('question', 'Operational outlook query')))}<br/><br/><b>Management Response:</b> {clean_markdown_for_pdf(str(qa.get('management_response', 'Addressed in call')))}", st.tbl_cell),
+            Paragraph(f"<b>{clean_markdown_for_pdf(qa_inst)}</b><br/><font color='#64748b' size='7.5'>Focus: {clean_markdown_for_pdf(qa_focus)}</font>", st.tbl_cell),
+            Paragraph(f"<b>Q:</b> {clean_markdown_for_pdf(str(qa.get('question', 'Operational outlook query')))}<br/><br/><b>Management Response:</b> {clean_markdown_for_pdf(qa_ans)}", st.tbl_cell),
             Paragraph(f"<b>[{posture_str.upper()}]</b>", st.tbl_cell_center)
         ])
 
@@ -2079,16 +2109,28 @@ def build_institutional_pdf(
 
     story.append(Paragraph("7.4 Management Tone, Walk-backs & Commitment Integrity", st.section_heading))
 
+    if isinstance(tone_data, dict):
+        tone_call_str = str(tone_data.get('overall_tone', a7.get('tone_sentiment', 'Pragmatic')))
+        integrity_call_str = str(tone_data.get('commitment_integrity', a7.get('integrity_score', 'High')))
+        summary_call_str = str(tone_data.get('summary', a7.get('tone_summary', 'Management displayed balanced operational confidence without aggressive hyperbole.')))
+        walkback_call_str = str(tone_data.get('walkbacks_or_revisions', a7.get('guidance_revisions', 'No guidance walk-backs or delayed project delivery observed.')))
+    else:
+        tone_call_str = str(tone_data or a7.get('tone_sentiment', 'Pragmatic'))
+        integrity_call_str = str(a7.get('integrity_score', 'High'))
+        summary_call_str = str(a7.get('tone_summary', f"Management displayed balanced {tone_call_str.lower()} operational confidence without aggressive hyperbole."))
+        walkback_call_str = str(a7.get('guidance_revisions', a7.get('walkbacks_or_revisions', 'No guidance walk-backs or delayed project delivery observed.')))
+
+    is_bullish_tone = "BULLISH" in tone_call_str.upper()
     tone_callout_flowables = [
         Paragraph("<b>EXECUTIVE MANAGEMENT TONE &amp; GUIDANCE COMMITMENT INTEGRITY</b>", trigger_title_style),
-        Paragraph(f"<b>Overall Call Tone:</b> {clean_markdown_for_pdf(str(tone_data.get('overall_tone', 'Pragmatic')))} &bull; <b>Commitment Integrity Score:</b> {clean_markdown_for_pdf(str(tone_data.get('commitment_integrity', 'High')))}", trigger_body_style, bulletText='•'),
-        Paragraph(f"<b>Tone Summary:</b> {clean_markdown_for_pdf(str(tone_data.get('summary', 'Management displayed balanced operational confidence without aggressive hyperbole.')))}", trigger_body_style, bulletText='•'),
-        Paragraph(f"<b>Guidance Walk-Back Audit:</b> {clean_markdown_for_pdf(str(tone_data.get('walkbacks_or_revisions', 'No guidance walk-backs or delayed project delivery observed.')))}", trigger_body_style, bulletText='•'),
+        Paragraph(f"<b>Overall Call Tone:</b> {clean_markdown_for_pdf(tone_call_str)} &bull; <b>Commitment Integrity Score:</b> {clean_markdown_for_pdf(integrity_call_str)}", trigger_body_style, bulletText='•'),
+        Paragraph(f"<b>Tone Summary:</b> {clean_markdown_for_pdf(summary_call_str)}", trigger_body_style, bulletText='•'),
+        Paragraph(f"<b>Guidance Walk-Back Audit:</b> {clean_markdown_for_pdf(walkback_call_str)}", trigger_body_style, bulletText='•'),
     ]
     callout_tone_table = Table([[tone_callout_flowables]], colWidths=[printable_width])
     callout_tone_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor("#f0fdf4") if "Bullish" in str(tone_data.get('overall_tone')) else colors.HexColor("#f8fafc")),
-        ('BOX', (0, 0), (-1, -1), 1, colors.HexColor("#16a34a") if "Bullish" in str(tone_data.get('overall_tone')) else colors.HexColor("#94a3b8")),
+        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor("#f0fdf4") if is_bullish_tone else colors.HexColor("#f8fafc")),
+        ('BOX', (0, 0), (-1, -1), 1, colors.HexColor("#16a34a") if is_bullish_tone else colors.HexColor("#94a3b8")),
         ('TOPPADDING', (0, 0), (-1, -1), 8),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
         ('LEFTPADDING', (0, 0), (-1, -1), 12),

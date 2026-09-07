@@ -444,7 +444,7 @@ INSTITUTIONAL REPORTING STANDARDS:
         concall_raw_text = "\n\n".join(filter(None, concall_snippets))
 
         agent7_data = audit_dossier.get("agent_7")
-        if not agent7_data or not isinstance(agent7_data, dict) or not agent7_data.get("guidance_summary"):
+        if not agent7_data or not isinstance(agent7_data, dict) or not (agent7_data.get("guidance_summary") or agent7_data.get("revenue_growth_guidance")):
             agent7_data = run_agent7_concall_analysis(
                 ticker=normalized_ticker,
                 archetype=sector_prof,
