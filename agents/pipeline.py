@@ -1161,11 +1161,13 @@ def run_deep_institutional_pipeline(
     3. Assembles complete, uncompromised buy-side master dossier for app.py & PDF generator.
     """
     fin_service = FinancialDataService()
+    fin_service.clear_cache()
     norm_ticker = fin_service.normalize_ticker(ticker)
     
-    # 1. Fetch official statement data defensively
-    company_data = fin_service.get_company_data(norm_ticker, force_refresh=force_refresh)
+    # 1. Fetch official statement data defensively with full cache isolation
+    company_data = fin_service.get_company_data(norm_ticker, force_refresh=True)
     pipeline = EquityAgentPipeline()
+    pipeline.clear_cache()
     company_data = pipeline._sanitize_financials(company_data)
 
     # 2. Scrape news & concall intelligence

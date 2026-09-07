@@ -606,17 +606,30 @@ def main():
             # Sample Quick-Select Buttons
             st.markdown("<p style='text-align:center; color:#64748b; font-size:0.75rem; margin-top:12px;'>POPULAR INSTITUTIONAL TICKERS</p>", unsafe_allow_html=True)
             q1, q2, q3, q4 = st.columns(4)
-            if q1.button("CROMPTON", use_container_width=True): ticker_input = "CROMPTON.NS"
-            if q2.button("RELIANCE", use_container_width=True): ticker_input = "RELIANCE.NS"
-            if q3.button("HDFCBANK", use_container_width=True): ticker_input = "HDFCBANK.NS"
-            if q4.button("TCS", use_container_width=True): ticker_input = "TCS.NS"
+            ticker_search = None
+            if q1.button("CROMPTON", use_container_width=True): ticker_search = "CROMPTON.NS"
+            if q2.button("RELIANCE", use_container_width=True): ticker_search = "RELIANCE.NS"
+            if q3.button("HDFCBANK", use_container_width=True): ticker_search = "HDFCBANK.NS"
+            if q4.button("TCS", use_container_width=True): ticker_search = "TCS.NS"
+            if ticker_input: ticker_search = ticker_input
 
-            if ticker_input:
-                clean_ticker = ticker_input.strip().upper()
+            if ticker_search:
+                clean_ticker = ticker_search.strip().upper()
                 if not (clean_ticker.endswith(".NS") or clean_ticker.endswith(".BO")):
                     clean_ticker += ".NS"
-                st.session_state.active_ticker = clean_ticker
-                st.rerun()
+
+                # WIPE PREVIOUS STATE COMPLETELY TO PREVENT DATA CONTAMINATION
+                keys_to_clear = ["dossier", "dossier_data", "raw_financials", "active_ticker", "company_info", "dossier_cache", "company_data"]
+                for k in keys_to_clear:
+                    if k in st.session_state:
+                        del st.session_state[k]
+
+                st.session_state["active_ticker"] = clean_ticker
+
+                with st.spinner(f"Running isolated institutional audit for {clean_ticker}..."):
+                    # Ensure a completely fresh dictionary is returned
+                    st.session_state["dossier"] = run_deep_institutional_pipeline(clean_ticker)
+                    st.rerun()
 
     # STATE 2: Full Institutional Dossier (Shows after ticker selection)
     else:
@@ -628,46 +641,28 @@ def main():
             st.markdown(f"<span style='color:#94a3b8; font-size:0.85rem;'>Analyzing:</span> <b style='font-size:1.2rem; color:#fff;'>{ticker}</b>", unsafe_allow_html=True)
         with top_col2:
             if st.button("← Search Another Stock", use_container_width=True):
-                st.session_state.active_ticker = ""
+                # WIPE PREVIOUS STATE COMPLETELY TO PREVENT DATA CONTAMINATION
+                keys_to_clear = ["dossier", "dossier_data", "raw_financials", "active_ticker", "company_info", "dossier_cache", "company_data"]
+                for k in keys_to_clear:
+                    if k in st.session_state:
+                        del st.session_state[k]
+                st.session_state["active_ticker"] = ""
                 st.rerun()
 
-        # Pipeline Execution with Session State Caching
-        pipeline = get_pipeline()
-        cache_key = f"{ticker}_{wacc_input}_{terminal_g_input}_{base_g_input}"
-        if "dossier_cache" not in st.session_state:
-            st.session_state["dossier_cache"] = {}
-
-        dossier = None
-        if "dossier" in st.session_state and isinstance(st.session_state["dossier"], dict) and st.session_state["dossier"].get("ticker") == ticker:
-            dossier = st.session_state["dossier"]
-        elif cache_key in st.session_state["dossier_cache"]:
-            cached_dossier = st.session_state["dossier_cache"][cache_key]
-            c_sec = cached_dossier.get("sector", "")
-            c_ind = cached_dossier.get("industry", "")
-            # Invalidate stale cache: purge if contaminated or missing deep institutional keys
-            if is_bfsi(c_sec, c_ind):
-                a1_dump = str(cached_dossier.get("agent_1", {}))
-                if any(b in a1_dump.lower() for b in ["inventory", "raw material", "factory", "machinery"]):
-                    del st.session_state["dossier_cache"][cache_key]
-                    cached_dossier = None
-            if cached_dossier and ("moat" not in cached_dossier or "leadership" not in cached_dossier):
-                del st.session_state["dossier_cache"][cache_key]
-                cached_dossier = None
-            if cached_dossier:
-                dossier = cached_dossier
-                st.session_state["dossier"] = dossier
-
-        if not dossier:
-            with st.spinner("Running Deep Institutional 8-Agent Research Engine..."):
+        # Isolated Pipeline Execution
+        dossier = st.session_state.get("dossier")
+        # Strict validation: ensure dossier belongs specifically to the active ticker
+        if not dossier or not isinstance(dossier, dict) or dossier.get("ticker") != ticker:
+            with st.spinner(f"Running isolated institutional audit for {ticker}..."):
                 try:
                     dossier = run_deep_institutional_pipeline(
                         ticker=ticker,
                         wacc=wacc_input,
                         terminal_growth=terminal_g_input,
-                        base_growth=base_g_input
+                        base_growth=base_g_input,
+                        force_refresh=True
                     )
                     st.session_state["dossier"] = dossier
-                    st.session_state["dossier_cache"][cache_key] = dossier
                 except Exception as e:
                     err_msg = str(e)
                     if any(k in err_msg.lower() for k in ["rate limit", "429", "resourceexhausted", "quota"]):
