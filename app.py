@@ -276,27 +276,65 @@ st.markdown("""
     border: 1px solid rgba(248, 113, 113, 0.35);
 }
 
-/* Tab Navigation */
+/* Container Tab Strip */
 .stTabs [data-baseweb="tab-list"] {
-    gap: 10px;
-    background: rgba(255, 255, 255, 0.03);
-    backdrop-filter: blur(16px);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    padding: 8px;
-    border-radius: 16px;
+    gap: 8px !important;
+    background-color: rgba(15, 23, 42, 0.4) !important;
+    padding: 6px 10px !important;
+    border-radius: 14px !important;
+    border: 1px solid rgba(255, 255, 255, 0.06) !important;
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
 }
+
+/* Individual Tab Items (Inactive State) */
 .stTabs [data-baseweb="tab"] {
-    height: 42px;
-    border-radius: 10px;
-    color: #94a3b8;
-    font-weight: 600;
-    font-size: 0.85rem;
-    padding: 0 18px;
+    height: auto !important;
+    padding: 8px 16px !important;
+    background-color: transparent !important;
+    border: 1px solid transparent !important;
+    border-radius: 10px !important;
+    color: #94a3b8 !important; /* Muted Slate */
+    font-size: 0.88rem !important;
+    font-weight: 500 !important;
+    transition: all 0.25s ease-in-out !important;
 }
-.stTabs [aria-selected="true"] {
-    background: rgba(255, 255, 255, 0.12) !important;
+.stTabs [data-baseweb="tab"] p {
+    font-size: 0.88rem !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+/* Tab Hover Effect */
+.stTabs [data-baseweb="tab"]:hover {
+    color: #f1f5f9 !important;
+    background-color: rgba(255, 255, 255, 0.04) !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Active Tab (Sleek Elevated Glass Pill) */
+.stTabs [data-baseweb="tab"][aria-selected="true"] {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.03) 100%) !important;
     color: #ffffff !important;
-    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    font-weight: 600 !important;
+    border: 1px solid rgba(255, 255, 255, 0.18) !important;
+    box-shadow: 0 4px 15px -2px rgba(0, 0, 0, 0.4), 
+                inset 0 1px 1px 0 rgba(255, 255, 255, 0.2) !important;
+    border-radius: 10px !important;
+}
+.stTabs [data-baseweb="tab"][aria-selected="true"] p {
+    color: #ffffff !important;
+    font-weight: 600 !important;
+}
+
+/* Remove the harsh red underline highlight */
+.stTabs [data-baseweb="tab-highlight"] {
+    display: none !important;
+}
+
+/* Remove default bottom tab border line */
+.stTabs [data-baseweb="tab-border"] {
+    display: none !important;
 }
 
 /* Minimal Input Styling */
