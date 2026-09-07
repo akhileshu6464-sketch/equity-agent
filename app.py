@@ -496,18 +496,10 @@ def main():
         ticker = st.session_state.active_ticker
 
         # Minimal Top Navigation / Re-search Bar
-        top_col1, top_col2, top_col3 = st.columns([3.5, 1.2, 1.3])
+        top_col1, top_col2 = st.columns([4.2, 1.8])
         with top_col1:
             st.markdown(f"<span style='color:#94a3b8; font-size:0.85rem;'>Analyzing:</span> <b style='font-size:1.2rem; color:#fff;'>{ticker}</b>", unsafe_allow_html=True)
         with top_col2:
-            if st.button("🔄 Clear Cache", use_container_width=True):
-                st.session_state["dossier_cache"] = {}
-                st.cache_resource.clear()
-                pipeline_inst = get_pipeline()
-                if hasattr(pipeline_inst, "clear_cache"):
-                    pipeline_inst.clear_cache()
-                st.rerun()
-        with top_col3:
             if st.button("← Search Another Stock", use_container_width=True):
                 st.session_state.active_ticker = ""
                 st.rerun()
