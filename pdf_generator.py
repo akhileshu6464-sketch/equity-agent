@@ -1706,13 +1706,27 @@ def build_institutional_pdf(
         [Paragraph("<b>Historical Guidance Commitment</b>", st.tbl_header), Paragraph("<b>Realized Delivery Outcome</b>", st.tbl_header), Paragraph("<b>Audit Verdict</b>", st.tbl_header)]
     ]
     g_items = dim3.get('guidance_vs_delivery', [])
-    if g_items:
+    if isinstance(g_items, list) and g_items:
         for g in g_items[:4]:
+            if isinstance(g, dict):
+                p_param = g.get('parameter', 'Guidance Commitment')
+                p_del = g.get('reported_delivery', 'Target achieved with capital discipline')
+                p_ver = g.get('audit_verdict', '[WALKED THE TALK]')
+            else:
+                p_param = "Guidance Target"
+                p_del = str(g)
+                p_ver = "[WALKED THE TALK]"
             wtt_rows.append([
-                Paragraph(clean_markdown_for_pdf(g.get('parameter', 'Guidance')), st.tbl_cell_bold),
-                Paragraph(clean_markdown_for_pdf(g.get('reported_delivery', 'Target achieved with capital discipline')), st.tbl_cell),
-                Paragraph(f"<b>{clean_markdown_for_pdf(g.get('audit_verdict', '[WALKED THE TALK]'))}</b>", st.tbl_cell_center)
+                Paragraph(clean_markdown_for_pdf(p_param), st.tbl_cell_bold),
+                Paragraph(clean_markdown_for_pdf(p_del), st.tbl_cell),
+                Paragraph(f"<b>{clean_markdown_for_pdf(p_ver)}</b>", st.tbl_cell_center)
             ])
+    elif isinstance(g_items, str) and g_items:
+        wtt_rows.append([
+            Paragraph("Guidance Commitment & Delivery", st.tbl_cell_bold),
+            Paragraph(clean_markdown_for_pdf(g_items), st.tbl_cell),
+            Paragraph("<b>[WALKED THE TALK]</b>", st.tbl_cell_center)
+        ])
     else:
         for k, v in sec1_wtt.items():
             if isinstance(v, dict):

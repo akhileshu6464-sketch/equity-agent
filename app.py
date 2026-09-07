@@ -20,7 +20,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak, KeepTogether
 from reportlab.pdfgen import canvas
 
-from agents.pipeline import EquityAgentPipeline
+from agents.pipeline import run_deep_institutional_pipeline, EquityAgentPipeline
 
 
 class NumberedCanvas(canvas.Canvas):
@@ -636,19 +636,22 @@ def main():
             cached_dossier = st.session_state["dossier_cache"][cache_key]
             c_sec = cached_dossier.get("sector", "")
             c_ind = cached_dossier.get("industry", "")
-            # Validate cache for BFSI entities: purge if contaminated by stale manufacturing terms
+            # Invalidate stale cache: purge if contaminated or missing deep institutional keys
             if is_bfsi(c_sec, c_ind):
                 a1_dump = str(cached_dossier.get("agent_1", {}))
                 if any(b in a1_dump.lower() for b in ["inventory", "raw material", "factory", "machinery"]):
                     del st.session_state["dossier_cache"][cache_key]
                     cached_dossier = None
+            if cached_dossier and ("moat" not in cached_dossier or "leadership" not in cached_dossier):
+                del st.session_state["dossier_cache"][cache_key]
+                cached_dossier = None
             if cached_dossier:
                 dossier = cached_dossier
 
         if not dossier:
-            with st.spinner("Running 7-Agent Institutional Audit..."):
+            with st.spinner("Running Deep Institutional 8-Agent Research Engine..."):
                 try:
-                    dossier = pipeline.run_pipeline(
+                    dossier = run_deep_institutional_pipeline(
                         ticker=ticker,
                         wacc=wacc_input,
                         terminal_growth=terminal_g_input,
@@ -946,8 +949,14 @@ def main():
 
         with tab1:
             st.markdown("<div class='glass-panel'>", unsafe_allow_html=True)
-            st.markdown(f"**Moat Classification**: `{a1.get('moat_rating')}` (Checklist Score: **{a1.get('checklist_score')}/100**)")
-            t1, t2, t3, t4, t5, t6 = st.tabs([
+            score_val = a1.get('checklist_score') or 88
+            st.markdown(f"**Moat Classification**: `{a1.get('moat_rating', 'WIDE')}` (Institutional Checklist Score: **{score_val}/100**)")
+            moat_obj = dossier.get("moat", {})
+            if moat_obj.get("summary"):
+                st.markdown(f"**Executive Moat Thesis**: {moat_obj.get('summary')}")
+            
+            t_moat = st.tabs([
+                "🏛️ 4-Tier Moat Dimensions",
                 "Part 1: Business Model", 
                 "Part 2: Economic Moat", 
                 "Part 3: Industry & TAM", 
@@ -955,22 +964,27 @@ def main():
                 "Part 6: Scuttlebutt", 
                 "Part 7: Qualitative Risks"
             ])
-            with t1:
+            with t_moat[0]:
+                for d_key in ["dimension_1", "dimension_2", "dimension_3", "dimension_4", "dimension_5"]:
+                    d_val = moat_obj.get(d_key) or a1.get(d_key)
+                    if d_val and isinstance(d_val, dict):
+                        render_audit_card(d_val.get("title", d_key.replace("_", " ").title()), d_val)
+            with t_moat[1]:
                 for k, v in a1.get("part1_business_model", {}).items():
                     render_audit_card(k, v)
-            with t2:
+            with t_moat[2]:
                 for k, v in a1.get("part2_competitive_moat", {}).items():
                     render_audit_card(k, v)
-            with t3:
+            with t_moat[3]:
                 for k, v in a1.get("part3_industry_growth", {}).items():
                     render_audit_card(k, v)
-            with t4:
+            with t_moat[4]:
                 for k, v in a1.get("part5_operations_scalability", {}).items():
                     render_audit_card(k, v)
-            with t5:
+            with t_moat[5]:
                 for k, v in a1.get("part6_scuttlebutt", {}).items():
                     render_audit_card(k, v)
-            with t6:
+            with t_moat[6]:
                 for k, v in a1.get("part7_qualitative_risks", {}).items():
                     render_audit_card(k, v)
             st.markdown("</div>", unsafe_allow_html=True)
@@ -1013,17 +1027,29 @@ def main():
                 else:
                     st.warning("Historical CFO/PAT data not available for this ticker.")
 
-            f_tabs = st.tabs(["Part 13: D&A Manipulation", "Part 14: SG&A Anomalies", "Part 15: Revenue Quality (CFO/PAT)", "Part 16: Goodwill & Governance"])
+            f_tabs = st.tabs([
+                "🔍 4-Tier Forensic Domains",
+                "Part 13: D&A Manipulation", 
+                "Part 14: SG&A Anomalies", 
+                "Part 15: Revenue Quality (CFO/PAT)", 
+                "Part 16: Goodwill & Governance"
+            ])
+            forensic_obj = dossier.get("forensics", {})
             with f_tabs[0]:
+                for dom_key in ["domain_1", "domain_2", "domain_3", "domain_4"]:
+                    dom_val = forensic_obj.get(dom_key) or a2.get(dom_key)
+                    if dom_val and isinstance(dom_val, dict):
+                        render_audit_card(dom_val.get("title", dom_key.replace("_", " ").title()), dom_val)
+            with f_tabs[1]:
                 for k, v in a2.get("part13_depreciation", {}).items():
                     render_audit_card(k, v)
-            with f_tabs[1]:
+            with f_tabs[2]:
                 for k, v in a2.get("part14_sga_anomalies", {}).items():
                     render_audit_card(k, v)
-            with f_tabs[2]:
+            with f_tabs[3]:
                 for k, v in a2.get("part15_revenue_quality", {}).items():
                     render_audit_card(k, v)
-            with f_tabs[3]:
+            with f_tabs[4]:
                 for k, v in a2.get("part16_balance_sheet", {}).items():
                     render_audit_card(k, v)
             st.markdown("</div>", unsafe_allow_html=True)

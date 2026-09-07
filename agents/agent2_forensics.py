@@ -179,7 +179,7 @@ class Agent2Forensics(BaseAgent):
                 ),
                 "5_massive_asset_writedowns": make_audit_node(
                     title="Big-Bath Asset Writedowns & Impairment History",
-                    level_a=f"{gw_status} Goodwill and intangibles stand at ₹{round(goodwill / 1e7, 1)} Cr ({goodwill_assets_pct}% of Total Assets). No history of sudden restructuring charges or inventory write-offs.",
+                    level_a=f"{gw_status} Goodwill and intangibles stand at ₹{round(goodwill / 1e7, 1)} Cr ({goodwill_assets_pct}% of Total Assets). No history of sudden restructuring charges or unannounced asset write-offs.",
                     level_b="Carrying values of manufacturing assets are verified annually through fair market valuations and operational cash flow projections.",
                     level_c="Goodwill as a percentage of net worth is minimal, leaving the company immune to Ind-AS 36 impairment shocks.",
                     level_d="Shields reported book value from dilutive asset write-downs, preserving long-term net worth compounding."
