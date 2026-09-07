@@ -638,7 +638,9 @@ def main():
             st.session_state["dossier_cache"] = {}
 
         dossier = None
-        if cache_key in st.session_state["dossier_cache"]:
+        if "dossier" in st.session_state and isinstance(st.session_state["dossier"], dict) and st.session_state["dossier"].get("ticker") == ticker:
+            dossier = st.session_state["dossier"]
+        elif cache_key in st.session_state["dossier_cache"]:
             cached_dossier = st.session_state["dossier_cache"][cache_key]
             c_sec = cached_dossier.get("sector", "")
             c_ind = cached_dossier.get("industry", "")
@@ -653,6 +655,7 @@ def main():
                 cached_dossier = None
             if cached_dossier:
                 dossier = cached_dossier
+                st.session_state["dossier"] = dossier
 
         if not dossier:
             with st.spinner("Running Deep Institutional 8-Agent Research Engine..."):
@@ -663,6 +666,7 @@ def main():
                         terminal_growth=terminal_g_input,
                         base_growth=base_g_input
                     )
+                    st.session_state["dossier"] = dossier
                     st.session_state["dossier_cache"][cache_key] = dossier
                 except Exception as e:
                     err_msg = str(e)
@@ -914,11 +918,11 @@ def main():
         pdf_filename = f"{clean_comp_name} - Equity Research Report.pdf"
 
         # Institutional Tabbed Breakdown (Retains all audit bullets and triggers)
-        tab0, tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+        tab_overview, tab_moat, tab_forensics, tab_solvency, tab_gov, tab_kpi, tab_val, tab_concall = st.tabs([
             "🏷️ Overview", "🛡️ Moat", "🔍 Forensics", "⚖️ Solvency", "🏛️ Governance & Leadership", "📈 KPIs", "🎯 Valuation", "🎙️ Concall"
         ])
 
-        with tab0:
+        with tab_overview:
             st.markdown("<div class='glass-panel'>", unsafe_allow_html=True)
             col_left, col_right = st.columns(2)
             with col_left:
@@ -953,23 +957,22 @@ def main():
                 st.markdown("- *No secondary or hybrid business verticals identified.*")
             st.markdown("</div>", unsafe_allow_html=True)
 
-        with tab1:
+        with tab_moat:
             st.markdown("<div class='glass-panel'>", unsafe_allow_html=True)
-            score_val = a1.get('checklist_score') or 88
-            st.markdown(f"**Moat Classification**: `{a1.get('moat_rating', 'WIDE')}` (Institutional Checklist Score: **{score_val}/100**)")
-            moat_obj = dossier.get("moat", {})
-            if moat_obj.get("summary"):
-                st.markdown(f"**Executive Moat Thesis**: {moat_obj.get('summary')}")
-            
-            t_moat = st.tabs([
-                "🏛️ 4-Tier Moat Dimensions",
-                "Part 1: Business Model", 
-                "Part 2: Economic Moat", 
-                "Part 3: Industry & TAM", 
-                "Part 5: Scalability", 
-                "Part 6: Scuttlebutt", 
-                "Part 7: Qualitative Risks"
-            ])
+            st.markdown(dossier.get("moat"))
+            with st.expander("🔍 Explore Granular Checklist & Operational Dimensions", expanded=False):
+                score_val = a1.get('checklist_score') or 88
+                st.markdown(f"**Moat Classification**: `{a1.get('moat_rating', 'WIDE')}` (Institutional Checklist Score: **{score_val}/100**)")
+                moat_obj = dossier.get("moat", {})
+                t_moat = st.tabs([
+                    "🏛️ 4-Tier Moat Dimensions",
+                    "Part 1: Business Model", 
+                    "Part 2: Economic Moat", 
+                    "Part 3: Industry & TAM", 
+                    "Part 5: Scalability", 
+                    "Part 6: Scuttlebutt", 
+                    "Part 7: Qualitative Risks"
+                ])
             with t_moat[0]:
                 rendered_titles = set()
                 for d_key in ["dimension_1", "dimension_2", "dimension_3", "dimension_4", "dimension_5", "pillar_1", "pillar_2", "pillar_3", "pillar_4"]:
@@ -997,18 +1000,19 @@ def main():
             with t_moat[6]:
                 for k, v in a1.get("part7_qualitative_risks", {}).items():
                     render_audit_card(k, v)
+                pass
             st.markdown("</div>", unsafe_allow_html=True)
 
-        with tab2:
+        with tab_forensics:
             st.markdown("<div class='glass-panel'>", unsafe_allow_html=True)
-            st.markdown(f"**Forensic Status**: {render_risk_pill('Forensics', forensic_status)}", unsafe_allow_html=True)
-            st.markdown(f"**Detective Summary**: {a2.get('summary')}")
-            m2_items = list(a2.get("audit_metrics", {}).items())
-            m2_cols = st.columns(3)
-            for idx, (k, v) in enumerate(m2_items):
-                m2_cols[idx % 3].metric(k, str(v))
+            st.markdown(dossier.get("forensics"))
+            with st.expander("🔍 Explore Forensic Accounting Checklist & Accrual Sub-Audits", expanded=False):
+                m2_items = list(a2.get("audit_metrics", {}).items())
+                m2_cols = st.columns(3)
+                for idx, (k, v) in enumerate(m2_items):
+                    m2_cols[idx % 3].metric(k, str(v))
 
-            cfo_pat_data = a2.get("cfo_pat_series", [])
+                cfo_pat_data = a2.get("cfo_pat_series", [])
             df_cfo = pd.DataFrame(cfo_pat_data) if cfo_pat_data else pd.DataFrame()
             if isinstance(df_cfo, pd.DataFrame) and not df_cfo.empty and "Year" in df_cfo.columns and "year" not in df_cfo.columns:
                 df_cfo = df_cfo.rename(columns={"Year": "year", "Net Profit (PAT)": "pat_cr", "Cash Flow from Operations (CFO)": "cfo_cr"})
@@ -1062,9 +1066,10 @@ def main():
             with f_tabs[4]:
                 for k, v in a2.get("part16_balance_sheet", {}).items():
                     render_audit_card(k, v)
+                pass
             st.markdown("</div>", unsafe_allow_html=True)
 
-        with tab3:
+        with tab_solvency:
             st.markdown("<div class='glass-panel'>", unsafe_allow_html=True)
             st.markdown(f"**Solvency Status**: {render_risk_pill('Solvency', solvency_status)}", unsafe_allow_html=True)
             st.markdown(f"**Assessment**: {a3.get('summary')}")
@@ -1091,10 +1096,11 @@ def main():
                     render_audit_card(k, v)
             st.markdown("</div>", unsafe_allow_html=True)
 
-        with tab4:
+        with tab_gov:
             st.markdown("<div class='glass-panel'>", unsafe_allow_html=True)
-            
-            dim1 = a4.get("dimension1_leadership_pedigree", {})
+            st.markdown(dossier.get("gov") or dossier.get("leadership"))
+            with st.expander("🔍 Explore Granular Executive Profiles, Crisis History & RPT Audit", expanded=False):
+                dim1 = a4.get("dimension1_leadership_pedigree", {})
             dim2 = a4.get("dimension2_crisis_playbook", {})
             dim3 = a4.get("dimension3_credibility_audit", {})
             dim4 = a4.get("dimension4_competitor_matrix", {})
@@ -1256,9 +1262,10 @@ def main():
                     for sub_k, sub_v in sub_dict.items():
                         render_audit_card(sub_k, sub_v)
 
+                pass
             st.markdown("</div>", unsafe_allow_html=True)
 
-        with tab5:
+        with tab_kpi:
             st.markdown("<div class='glass-panel'>", unsafe_allow_html=True)
             st.markdown(f"**Activated Sector Checklist**: `{a5.get('activated_checklist_section')}`")
             st.markdown(f"**Summary**: {a5.get('summary')}")
@@ -1279,9 +1286,11 @@ def main():
                 render_audit_card(k, v)
             st.markdown("</div>", unsafe_allow_html=True)
 
-        with tab6:
+        with tab_val:
             st.markdown("<div class='glass-panel'>", unsafe_allow_html=True)
-            st.markdown(f"**CIO Final Rating Badge**: `{a6.get('institutional_rating')}`")
+            st.markdown(dossier.get("val") or dossier.get("valuation"))
+            with st.expander("🔍 Explore DCF Sensitivity Matrix & Scenario Details", expanded=False):
+                st.markdown(f"**CIO Final Rating Badge**: `{a6.get('institutional_rating')}`")
             st.markdown(f"**CIO Synthesis**: {a6.get('summary')}")
             cio_tabs = st.tabs(["Section 1: Walk-the-Talk", "Section 2: Asset & Yield Floors", "Section 3: Valuation Architecture", "Section 4: Scenario Matrix", "Invalidation Triggers"])
             with cio_tabs[0]:
@@ -1326,9 +1335,10 @@ def main():
                 st.markdown("##### 🚨 Thesis Invalidation Triggers")
                 for trig in a6.get("invalidation_triggers", []):
                     st.markdown(f'<div class="bullet-card">❌ {trig}</div>', unsafe_allow_html=True)
+                pass
             st.markdown("</div>", unsafe_allow_html=True)
 
-        with tab7:
+        with tab_concall:
             st.markdown("<div class='glass-panel'>", unsafe_allow_html=True)
             
             # Reconcile Tone & Integrity

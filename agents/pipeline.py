@@ -994,6 +994,157 @@ def resolve_benchmark_peers(ticker: str, is_bank: bool, sector_prof: Dict[str, A
         return [f"{disp} Listed Peer A", f"{disp} Listed Peer B", f"{disp} Listed Peer C"]
 
 
+
+class MarkdownDict(dict):
+    """Dictionary that returns full markdown text when passed to str() or st.markdown()."""
+    def __init__(self, data: Dict[str, Any], markdown_text: str = ""):
+        super().__init__(data)
+        self.markdown_text = markdown_text
+
+    def __str__(self) -> str:
+        return self.markdown_text if self.markdown_text else super().__str__()
+
+    def __repr__(self) -> str:
+        return super().__repr__()
+
+
+def build_moat_markdown(moat_out: Dict[str, Any], ticker: str, company_name: str, is_bank: bool) -> str:
+    summary = moat_out.get("summary", "")
+    rating = moat_out.get("moat_rating", "WIDE")
+    risk_pill = moat_out.get("risk_pill", "GREEN")
+    
+    md_lines = [
+        f"### 🛡️ Chapter 1: Economic Moat & Structural Scalability",
+        f"**Target Company**: `{company_name} ({ticker})` &nbsp;|&nbsp; **Moat Classification**: `{rating}` &nbsp;|&nbsp; **Risk Pill**: `{risk_pill}`",
+        f"\n**Executive Moat Thesis**:\n{summary}\n",
+        "---"
+    ]
+    
+    for idx, p_key in enumerate(["dimension_1", "dimension_2", "dimension_3", "dimension_4"], start=1):
+        p_val = moat_out.get(p_key) or moat_out.get(f"pillar_{idx}", {})
+        if isinstance(p_val, dict):
+            title = p_val.get("title", f"Pillar {idx}")
+            hist = p_val.get("historical_trend_and_metrics") or p_val.get("trajectory_and_metrics", "")
+            ops = p_val.get("operational_mechanics_and_drivers") or p_val.get("operational_drivers", "")
+            peer = p_val.get("competitive_context_and_benchmarks") or p_val.get("peer_comparison", "")
+            thesis = p_val.get("thesis_implication_and_risks") or p_val.get("thesis_invalidation", "")
+            
+            md_lines.append(f"\n#### Pillar {idx}: {title}")
+            if hist:
+                md_lines.append(f"- **Trajectory & Metrics**: {hist}")
+            if ops:
+                md_lines.append(f"- **Operational Drivers**: {ops}")
+            if peer:
+                md_lines.append(f"- **Peer Comparison**: {peer}")
+            if thesis:
+                md_lines.append(f"- **Thesis Invalidation Trigger**: {thesis}")
+            md_lines.append("")
+            
+    return "\n".join(md_lines)
+
+
+def build_forensics_markdown(forensic_out: Dict[str, Any], ticker: str, company_name: str, is_bank: bool) -> str:
+    summary = forensic_out.get("summary", "")
+    score = forensic_out.get("forensic_score", "CLEAN")
+    risk_pill = forensic_out.get("risk_pill", "GREEN")
+    
+    md_lines = [
+        f"### 🔍 Chapter 2: Forensic Audit & Earnings Quality",
+        f"**Target Company**: `{company_name} ({ticker})` &nbsp;|&nbsp; **Forensic Integrity**: `{score}` &nbsp;|&nbsp; **Risk Pill**: `{risk_pill}`",
+        f"\n**Detective Summary**:\n{summary}\n",
+        "---"
+    ]
+    
+    for idx, d_key in enumerate(["domain_1", "domain_2", "domain_3", "domain_4"], start=1):
+        d_val = forensic_out.get(d_key, {})
+        if isinstance(d_val, dict):
+            title = d_val.get("title", f"Domain {idx}")
+            hist = d_val.get("historical_trend_and_metrics") or d_val.get("trajectory_and_metrics", "")
+            ops = d_val.get("operational_mechanics_and_drivers") or d_val.get("operational_drivers", "")
+            peer = d_val.get("competitive_context_and_benchmarks") or d_val.get("peer_comparison", "")
+            thesis = d_val.get("thesis_implication_and_risks") or d_val.get("thesis_invalidation", "")
+            
+            md_lines.append(f"\n#### Domain {idx}: {title}")
+            if hist:
+                md_lines.append(f"- **Trajectory & Accounting Metrics**: {hist}")
+            if ops:
+                md_lines.append(f"- **Operational Mechanics & Accrual Policies**: {ops}")
+            if peer:
+                md_lines.append(f"- **Peer Comparison & Benchmark**: {peer}")
+            if thesis:
+                md_lines.append(f"- **Thesis Invalidation & Red Flags**: {thesis}")
+            md_lines.append("")
+            
+    return "\n".join(md_lines)
+
+
+def build_leadership_markdown(leadership_out: Dict[str, Any], ticker: str, company_name: str, is_bank: bool) -> str:
+    summary = leadership_out.get("summary", "")
+    cred = leadership_out.get("credibility_verdict", "HIGH INTEGRITY")
+    risk_pill = leadership_out.get("risk_pill", "GREEN")
+    
+    dim1 = leadership_out.get("dimension1_leadership_pedigree", {})
+    dim2 = leadership_out.get("dimension2_crisis_playbook", {})
+    dim3 = leadership_out.get("dimension3_credibility_audit", {})
+    dim4 = leadership_out.get("dimension4_competitor_matrix", {})
+    
+    md_lines = [
+        f"### 🏛️ Chapter 3: Leadership Pedigree, Crisis Playbook & Competitor Benchmark",
+        f"**Target Company**: `{company_name} ({ticker})` &nbsp;|&nbsp; **Management Credibility**: `{cred}` &nbsp;|&nbsp; **Risk Pill**: `{risk_pill}`",
+        f"\n**Governance & Integrity Summary**:\n{summary}\n",
+        "---",
+        f"\n#### 👑 Executive Leadership Profile & Promoter Skin-in-the-Game",
+        f"- **Historical Trajectory & Alignment**: {dim1.get('historical_trend_and_metrics', '')}",
+        f"- **Operational Drivers & Remuneration**: {dim1.get('operational_mechanics_and_drivers', '')}",
+        f"- **Peer Context & Stewardship**: {dim1.get('competitive_context_and_benchmarks', '')}",
+        f"- **Thesis Invalidation**: {dim1.get('thesis_implication_and_risks', '')}",
+        "",
+        f"\n#### 🛡️ Historical Crisis Playbook & Downturn Execution",
+        f"- **Empirical Crisis Navigation**: {dim2.get('historical_trend_and_metrics', '')}",
+        f"- **Counter-Cyclical Buffering**: {dim2.get('operational_mechanics_and_drivers', '')}",
+        f"- **Dislocation Outcomes**: {dim2.get('competitive_context_and_benchmarks', '')}",
+        f"- **Thesis Invalidation**: {dim2.get('thesis_implication_and_risks', '')}",
+        "",
+        f"\n#### 🤝 Promise vs Delivery Audit (3-Year Guidance Tracking)",
+        f"- **Guidance Audit Summary**: {dim3.get('verdict_justification', 'Consistent multi-year guidance delivery.')}",
+        "",
+        f"\n#### ⚔️ Direct Listed Competitor Benchmark",
+        f"- **Valuation Multiple Differential**: {dim4.get('valuation_differential_rationale', '')}"
+    ]
+    return "\n".join(md_lines)
+
+
+def build_valuation_markdown(val_out: Dict[str, Any], ticker: str, company_name: str, is_bank: bool) -> str:
+    summary = val_out.get("summary", "")
+    rating = val_out.get("institutional_rating", "BUY / ACCUMULATE")
+    prim = val_out.get("primary_valuation", "Reverse DCF / RoE Tree")
+    hurdle = val_out.get("implied_hurdle_rate", "N/A")
+    sc = val_out.get("scenario_analysis", {})
+    trigs = val_out.get("invalidation_triggers", [])
+    
+    bear = sc.get("bear_case", {})
+    base = sc.get("base_case", {})
+    bull = sc.get("bull_case", {})
+    
+    md_lines = [
+        f"### 🎯 Chapter 4: Valuation Hurdle Rates & Thesis Invalidation",
+        f"**Target Company**: `{company_name} ({ticker})` &nbsp;|&nbsp; **Institutional Rating**: `{rating}` &nbsp;|&nbsp; **Primary Valuation Architecture**: `{prim}`",
+        f"**Implied Operational Hurdle Rate**: `{hurdle}`",
+        f"\n**Valuation Synthesis**:\n{summary}\n",
+        "---",
+        "\n#### ⚖️ 3-Scenario Valuation Matrix",
+        f"- **BEAR CASE**: Target: `{bear.get('fair_target_price', 'N/A')}` ({bear.get('expected_return', 'N/A')}) — *{bear.get('thesis', '')}*",
+        f"- **BASE CASE**: Target: `{base.get('fair_target_price', 'N/A')}` ({base.get('expected_return', 'N/A')}) — *{base.get('thesis', '')}*",
+        f"- **BULL CASE**: Target: `{bull.get('fair_target_price', 'N/A')}` ({bull.get('expected_return', 'N/A')}) — *{bull.get('thesis', '')}*",
+        "",
+        "\n#### 🚨 Quantifiable Thesis Invalidation Triggers"
+    ]
+    for t in trigs:
+        md_lines.append(f"- ❌ **Trigger**: {t}")
+        
+    return "\n".join(md_lines)
+
+
 def run_deep_institutional_pipeline(
     ticker: str,
     wacc: float = 0.115,
@@ -1159,7 +1310,27 @@ def run_deep_institutional_pipeline(
     rating_str = str(inst_rating).upper()
     rating_color = "green" if any(k in rating_str for k in ["BUY", "ACCUMULATE"]) else ("red" if any(k in rating_str for k in ["AVOID", "TRIM", "SELL"]) else "yellow")
 
+    comp_name = meta.get("short_name", norm_ticker)
+    moat_md = build_moat_markdown(moat_out, norm_ticker, comp_name, is_bank)
+    forensic_md = build_forensics_markdown(forensic_out, norm_ticker, comp_name, is_bank)
+    leadership_md = build_leadership_markdown(leadership_out, norm_ticker, comp_name, is_bank)
+    val_md = build_valuation_markdown(val_out, norm_ticker, comp_name, is_bank)
+
+    moat_wrapped = MarkdownDict(moat_out, moat_md)
+    forensic_wrapped = MarkdownDict(forensic_out, forensic_md)
+    leadership_wrapped = MarkdownDict(leadership_out, leadership_md)
+    val_wrapped = MarkdownDict(val_out, val_md)
+
     return {
+        "moat_markdown": moat_md,
+        "forensics_markdown": forensic_md,
+        "leadership_markdown": leadership_md,
+        "gov_markdown": leadership_md,
+        "valuation_markdown": val_md,
+        "val_markdown": val_md,
+        "governance": leadership_wrapped,
+        "gov": leadership_wrapped,
+        "val": val_wrapped,
         "ticker": norm_ticker,
         "symbol": norm_ticker,
         "company_name": meta.get("short_name", norm_ticker),
@@ -1186,10 +1357,10 @@ def run_deep_institutional_pipeline(
         "rating_color": rating_color,
         "margin_of_safety_pct": 15.0,
         "implied_growth_pct": val_out.get("implied_hurdle_rate", agent_6.get("implied_growth_pct", "10.0%")),
-        "moat": moat_out,
-        "forensics": forensic_out,
-        "leadership": leadership_out,
-        "valuation": val_out,
+        "moat": moat_wrapped,
+        "forensics": forensic_wrapped,
+        "leadership": leadership_wrapped,
+        "valuation": val_wrapped,
         "agent_0": agent_0,
         "agent_1": agent_1,
         "agent_2": agent_2,
