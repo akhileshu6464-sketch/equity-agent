@@ -34,6 +34,7 @@ from agents.agent3_solvency import Agent3Solvency
 from agents.agent4_governance import Agent4Governance
 from agents.agent5_industry_kpi import Agent5IndustryKPI
 from agents.agent6_synthesizer import Agent6Synthesizer
+from agents.agent7_concall import Agent7Concall, run_agent7_concall_analysis
 
 logger = logging.getLogger("EquityPipeline.MasterCoordinator")
 
@@ -54,6 +55,7 @@ class EquityAgentPipeline:
         self.agent4 = Agent4Governance()
         self.agent5 = Agent5IndustryKPI()
         self.agent6 = Agent6Synthesizer()
+        self.agent7 = Agent7Concall()
 
     def clear_cache(self) -> None:
         """Clears all cached financial statements and data in pipeline."""
@@ -429,6 +431,26 @@ INSTITUTIONAL REPORTING STANDARDS:
         logger.info(f"Executing Stage 2 Unified CIO Audit for {normalized_ticker}...")
         audit_dossier = self.stage2_unified_audit(financial_payload, context)
 
+        # ---------------------------------------------------------------------
+        # AGENT 7: Concall & Management Guidance Analysis
+        # ---------------------------------------------------------------------
+        logger.info(f"Executing Agent 7 Concall Analysis for {normalized_ticker}...")
+        concall_snippets = []
+        if isinstance(search_intel, dict) and "sources" in search_intel:
+            concall_snippets = [s.get("snippet", "") for s in search_intel.get("sources", [])]
+        elif isinstance(search_intel, list):
+            concall_snippets = [str(s) for s in search_intel]
+        concall_raw_text = "\n\n".join(filter(None, concall_snippets))
+
+        agent7_data = audit_dossier.get("agent_7")
+        if not agent7_data or not isinstance(agent7_data, dict) or not agent7_data.get("guidance_summary"):
+            agent7_data = run_agent7_concall_analysis(
+                ticker=normalized_ticker,
+                archetype=sector_prof,
+                concall_raw_text=concall_raw_text,
+                company_data=company_data
+            )
+
         # Compile complete master dossier for app.py
         meta = financial_payload.get("company_meta", {})
         sector_prof = financial_payload.get("sector_profile", {})
@@ -471,7 +493,8 @@ INSTITUTIONAL REPORTING STANDARDS:
             "agent_3": audit_dossier.get("agent_3", {}),
             "agent_4": audit_dossier.get("agent_4", {}),
             "agent_5": audit_dossier.get("agent_5", {}),
-            "agent_6": audit_dossier.get("agent_6", {})
+            "agent_6": audit_dossier.get("agent_6", {}),
+            "agent_7": agent7_data
         }
 
         return full_dossier

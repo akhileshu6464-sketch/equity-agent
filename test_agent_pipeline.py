@@ -192,11 +192,25 @@ def test_pipeline(ticker: str = "CROMPTON.NS"):
     print("  • Invalidation Triggers:")
     for trig in a6.get("invalidation_triggers", []):
         print(f"      - {trig}")
+
+    # Agent 7: Concall & Guidance
+    a7 = dossier.get("agent_7")
+    assert a7, "Agent 7 concall analysis is missing from dossier!"
+    print("\n" + "-" * 80)
+    tone_dict = a7.get("tone_sentiment", {})
+    print(f"🎙️  [AGENT 7: CONCALL & GUIDANCE AUDITOR] (Tone: {tone_dict.get('overall_tone')}, Integrity: {tone_dict.get('commitment_integrity')})")
+    print(f"  • Call Period: {a7.get('call_period')}")
+    print(f"  • Revenue Target: {a7.get('guidance_summary', {}).get('revenue_growth_target')}")
+    print(f"  • Margin Corridor: {a7.get('margin_outlook', {}).get('target_corridor')}")
+    print(f"  • CapEx Outlay: {a7.get('capex_plans', {}).get('total_outlay_cr')}")
+    print(f"  • Q&A Highlights Count: {len(a7.get('qa_highlights', []))} scrutinized exchanges")
+    print(f"  • Management Tone Summary: {tone_dict.get('summary')}")
+
     # =========================================================================
-    # VERIFY 20+ PAGE INSTITUTIONAL REPORTLAB PDF BUILDER
+    # VERIFY 24-PAGE INSTITUTIONAL REPORTLAB PDF BUILDER
     # =========================================================================
     print("\n" + "=" * 80)
-    print("📄 [STAGE 3: VERIFY 20+ PAGE INSTITUTIONAL REPORTLAB PDF BUILDER]")
+    print("📄 [STAGE 3: VERIFY 24-PAGE INSTITUTIONAL REPORTLAB PDF BUILDER]")
     print("=" * 80)
     meta = dossier.get("financial_payload", {}).get("company_meta", {})
     metrics = {
@@ -233,8 +247,8 @@ def test_pipeline(ticker: str = "CROMPTON.NS"):
         f.write(pdf_bytes)
     print(f"  • Saved Institutional PDF Dossier to: {out_pdf_path}")
 
-    assert num_pages >= 20, f"Generated PDF has {num_pages} pages, which is less than the required 20+ pages!"
-    print(f"✅ INSTITUTIONAL REPORTLAB PDF VERIFIED: {num_pages} pages generated (>= 20 pages requirement satisfied)!")
+    assert num_pages >= 24, f"Generated PDF has {num_pages} pages, which is less than the required 24 pages!"
+    print(f"✅ INSTITUTIONAL REPORTLAB PDF VERIFIED: {num_pages} pages generated (>= 24 pages requirement satisfied)!")
 
     print("\n" + "=" * 80)
     print(f"✅ TWO-STAGE INSTITUTIONAL ENGINE EXECUTED SUCCESSFULLY FOR {ticker}!")

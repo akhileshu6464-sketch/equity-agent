@@ -90,7 +90,7 @@ CRITICAL INSTITUTIONAL DEPTH RULES:
 4. Strictly obey all banned metrics for this archetype ({financial_payload.get('sector_profile', {}).get('banned_metrics', [])}). NEVER cite banned metrics.
 5. If BFSI (Bank/NBFC), strictly NEVER mention 'inventory', 'raw material', 'factory', or 'machinery'.
 6. Use the exact pre-calculated figures from the financial payload. Do not invent contradictory numbers.
-7. Output MUST be valid JSON conforming exactly to the expected dossier schema with all 7 agent structures (agent_0, agent_1, agent_2, agent_3, agent_4, agent_5, agent_6), risk_pills, and institutional_rating.
+7. Output MUST be valid JSON conforming exactly to the expected dossier schema with all 8 agent structures (agent_0, agent_1, agent_2, agent_3, agent_4, agent_5, agent_6, agent_7), risk_pills, and institutional_rating.
 """
 
         body = {
@@ -654,6 +654,16 @@ CRITICAL INSTITUTIONAL DEPTH RULES:
 
             agent_1 = sanitize_bfsi(agent_1)
 
+        # ---------------------------------------------------------------------
+        # AGENT 7: Institutional Concall & Management Guidance Analyst
+        # ---------------------------------------------------------------------
+        try:
+            from agents.agent7_concall import run_agent7_concall_analysis
+            agent_7 = run_agent7_concall_analysis(ticker, sector_prof, "", company_data=meta)
+        except Exception as e:
+            logger.warning(f"Error generating agent 7 deterministic concall fallback: {e}")
+            agent_7 = {}
+
         # Assemble unified Stage 2 response
         return {
             "risk_pills": {
@@ -674,5 +684,7 @@ CRITICAL INSTITUTIONAL DEPTH RULES:
             "agent_3": agent_3,
             "agent_4": agent_4,
             "agent_5": agent_5,
-            "agent_6": agent_6
+            "agent_6": agent_6,
+            "agent_7": agent_7
         }
+

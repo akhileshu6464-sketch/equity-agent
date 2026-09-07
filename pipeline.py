@@ -121,6 +121,20 @@ def main():
     for trig in a6.get("invalidation_triggers", []):
         print(f"      - {trig}")
 
+    # Agent 7
+    a7 = dossier.get("agent_7", {})
+    if a7:
+        print("\n" + "-" * 80)
+        tone_info = a7.get("tone_sentiment", {})
+        print(f"🎙️  [AGENT 7: INSTITUTIONAL CONCALL & GUIDANCE ANALYST] (Tone: {tone_info.get('overall_tone')})")
+        guidance = a7.get("guidance_summary", {})
+        print(f"  • Revenue/Volume Guidance: {guidance.get('revenue_growth_target')}")
+        print(f"  • Margin Corridor Outlook: {guidance.get('margin_outlook')}")
+        print(f"  • Committed CapEx Outlay: {guidance.get('capex_commitments')}")
+        print(f"  • Commitment Integrity Rating: {tone_info.get('commitment_integrity')}")
+        for idx, qa in enumerate(a7.get("qa_highlights", [])[:2], 1):
+            print(f"  • Q&A Scrutiny #{idx} ({qa.get('analyst_institution')}): {qa.get('question')[:80]}... -> [{qa.get('posture')}]")
+
     print("\n" + "=" * 80)
     print("✅ PIPELINE EXECUTION COMPLETE!")
     print("=" * 80)

@@ -633,6 +633,7 @@ def main():
         a4 = dossier.get("agent_4", {})
         a5 = dossier.get("agent_5", {})
         a6 = dossier.get("agent_6", {})
+        a7 = dossier.get("agent_7", {})
 
         verdict_badge_class = "pill-green" if ("BUY" in verdict.upper() or "ACCUMULATE" in verdict.upper()) else ("pill-yellow" if "HOLD" in verdict.upper() else "pill-red")
 
@@ -817,6 +818,7 @@ def main():
             'agent4': agent4_pdf_text,
             'agent5': agent5_pdf_text,
             'agent6': agent6_pdf_text,
+            'agent7': a7,
         }
 
         # Generate presentation-grade institutional PDF
@@ -831,8 +833,8 @@ def main():
         pdf_filename = f"{clean_comp_name} - Equity Research Report.pdf"
 
         # Institutional Tabbed Breakdown (Retains all audit bullets and triggers)
-        tab0, tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-            "🏷️ Overview", "🛡️ Moat", "🔍 Forensics", "⚖️ Solvency", "🏛️ Governance", "📈 KPIs", "🎯 Valuation"
+        tab0, tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+            "🏷️ Overview", "🛡️ Moat", "🔍 Forensics", "⚖️ Solvency", "🏛️ Governance", "📈 KPIs", "🎯 Valuation", "🎙️ Concall"
         ])
 
         with tab0:
@@ -1119,6 +1121,88 @@ def main():
                 for trig in a6.get("invalidation_triggers", []):
                     st.markdown(f'<div class="bullet-card">❌ {trig}</div>', unsafe_allow_html=True)
             st.markdown("</div>", unsafe_allow_html=True)
+
+        with tab7:
+            st.markdown("<div class='glass-panel'>", unsafe_allow_html=True)
+            tone_dict = a7.get("tone_sentiment", {})
+            tone_val = tone_dict.get("overall_tone", "Pragmatic")
+            integrity_val = tone_dict.get("commitment_integrity", "High")
+            tone_color = "#10b981" if "Bullish" in tone_val else ("#f59e0b" if "Defensive" in tone_val else "#38bdf8")
+
+            # Header Banner
+            st.markdown(f"""
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+                <div>
+                    <h3 style="margin: 0; font-size: 1.25rem; color: #f8fafc;">🎙️ {a7.get('call_period', 'Latest Fiscal Earnings Conference Call')}</h3>
+                    <p style="margin: 2px 0 0 0; font-size: 0.82rem; color: #94a3b8;">Synthesized Institutional Notes, Management Disclosures & Analyst Pushback</p>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <span style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); padding: 4px 12px; border-radius: 8px; font-size: 0.82rem; color: {tone_color}; font-weight: 600;">
+                        Tone: {tone_val.upper()}
+                    </span>
+                    <span style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); padding: 4px 12px; border-radius: 8px; font-size: 0.82rem; color: #e2e8f0; font-weight: 600;">
+                        Integrity: {integrity_val.upper()}
+                    </span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            c_sub1, c_sub2, c_sub3, c_sub4 = st.tabs([
+                "🎯 Forward Guidance & Targets",
+                "⚙️ Sector Operational Disclosures",
+                "❓ Analyst Q&A Scrutiny",
+                "🎭 Management Tone & Integrity"
+            ])
+
+            with c_sub1:
+                guidance = a7.get("guidance_summary", {})
+                margin_out = a7.get("margin_outlook", {})
+                capex = a7.get("capex_plans", {})
+                
+                c_g1, c_g2 = st.columns(2)
+                with c_g1:
+                    st.markdown(f'<div class="q-box"><div class="q-title">REVENUE / VOLUME GROWTH TRAJECTORY</div><div class="q-ans">{guidance.get("revenue_growth_target", "N/A")}</div></div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="q-box"><div class="q-title">MARGIN CORRIDOR & SPREAD OUTLOOK</div><div class="q-ans">{margin_out.get("target_corridor", guidance.get("margin_outlook", "N/A"))}</div></div>', unsafe_allow_html=True)
+                with c_g2:
+                    st.markdown(f'<div class="q-box"><div class="q-title">COMMITTED CAPEX & EXPANSION OUTLAY</div><div class="q-ans">{capex.get("total_outlay_cr", guidance.get("capex_commitments", "N/A"))}</div></div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="q-box"><div class="q-title">MEDIUM-TERM STRATEGIC ASPIRATIONS</div><div class="q-ans">{guidance.get("medium_term_aspirations", "Targeting sustainable compounding and margin resilience across credit cycles.")}</div></div>', unsafe_allow_html=True)
+
+                st.markdown("##### 🏗️ CapEx & Commissioning Pipeline")
+                st.markdown(f'<div class="bullet-card"><b>Key Projects:</b> {capex.get("key_projects", "Modernization and technology upgrades")}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="bullet-card"><b>Timeline:</b> {capex.get("commissioning_timeline", "Phased over 18-24 months")} &bull; <b>Funding:</b> {capex.get("funding_mode", "Internal accruals")}</div>', unsafe_allow_html=True)
+
+            with c_sub2:
+                ops = a7.get("operational_disclosures", {})
+                st.markdown(f'<div class="q-box"><div class="q-title">SECTOR DISCLOSURE 1</div><div class="q-ans">{ops.get("sector_metric_1", "N/A")}</div></div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="q-box"><div class="q-title">SECTOR DISCLOSURE 2</div><div class="q-ans">{ops.get("sector_metric_2", "N/A")}</div></div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="q-box"><div class="q-title">SECTOR DISCLOSURE 3</div><div class="q-ans">{ops.get("sector_metric_3", "N/A")}</div></div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="bullet-card"><b>Institutional Commentary:</b> {ops.get("commentary", "Management reiterated operating focus and capacity headroom.")}</div>', unsafe_allow_html=True)
+
+            with c_sub3:
+                st.markdown("##### 🔍 Top Scrutinized Analyst Q&A Exchanges")
+                for idx, qa in enumerate(a7.get("qa_highlights", []), 1):
+                    posture = qa.get("posture", "Realistic")
+                    p_badge = "pill-green" if posture == "Confident" else ("pill-yellow" if posture == "Realistic" else "pill-red")
+                    st.markdown(f"""
+                    <div class="q-box" style="margin-bottom: 12px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                            <span style="font-weight: 700; color: #38bdf8; font-size: 0.85rem;">Q{idx}: {qa.get('analyst_institution', 'Institutional Analyst')}</span>
+                            <span class="pill-badge {p_badge}" style="font-size: 0.72rem; padding: 2px 8px;">{posture.upper()}</span>
+                        </div>
+                        <div style="color: #e2e8f0; font-weight: 600; margin-bottom: 6px;">"{qa.get('question')}"</div>
+                        <div style="color: #94a3b8; font-size: 0.82rem; margin-bottom: 6px;"><b>Scrutiny Focus:</b> {qa.get('scrutiny_focus')}</div>
+                        <div style="color: #cbd5e1; font-size: 0.88rem; background: rgba(255,255,255,0.03); padding: 8px 12px; border-radius: 8px; border-left: 3px solid #3b82f6;">
+                            <b>Management Response:</b> {qa.get('management_response')}
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+            with c_sub4:
+                st.markdown(f'<div class="q-box"><div class="q-title">TONE & SENTIMENT SUMMARY</div><div class="q-ans">{tone_dict.get("summary", "Management displayed balanced operational confidence.")}</div></div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="q-box"><div class="q-title">GUIDANCE REVISIONS & WALK-BACK WARNINGS</div><div class="q-ans">{tone_dict.get("walkbacks_or_revisions", "No material guidance walk-backs detected.")}</div></div>', unsafe_allow_html=True)
+
+            st.markdown("</div>", unsafe_allow_html=True)
+
 
         # Download PDF Button
         st.download_button(

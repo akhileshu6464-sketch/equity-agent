@@ -187,3 +187,21 @@ def is_metric_banned(archetype: dict, metric_name: str) -> bool:
     banned = [b.lower() for b in archetype.get("banned_metrics", [])]
     m_lower = metric_name.lower()
     return any(b in m_lower or m_lower in b for b in banned)
+
+
+def is_bfsi(sector_or_archetype: Any = "", industry: str = "") -> bool:
+    """Returns True if the entity belongs to Banking, NBFC, or Financial Services."""
+    if isinstance(sector_or_archetype, dict):
+        sector_key = sector_or_archetype.get("sector_key", "")
+        if sector_key in ["BFSI_BANKS", "BFSI_NBFC"]:
+            return True
+        identifiers = sector_or_archetype.get("identifiers", [])
+        combined = " ".join(identifiers).lower()
+        if any(k in combined for k in ["bank", "financial", "lending", "nbfc", "housing finance", "insurance"]):
+            return True
+        sector_or_archetype = sector_or_archetype.get("display_name", "")
+
+    s = str(sector_or_archetype or "").lower()
+    i = str(industry or "").lower()
+    return any(k in s or k in i for k in ["bank", "financial", "lending", "nbfc", "housing finance", "insurance", "bfsi"])
+
