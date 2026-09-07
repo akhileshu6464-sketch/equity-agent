@@ -145,10 +145,10 @@ from pdf_generator import build_institutional_pdf, build_presentation_pdf
 
 # Page configuration
 st.set_page_config(
-    page_title="Research Beast - Institutional Equity Intelligence",
-    page_icon="📈",
+    page_title="Research Beast",
+    page_icon="🏛️",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
 # 3D Glassmorphism & Ambient 3D Floating Orbs Styles
@@ -414,10 +414,8 @@ st.markdown("""
 header[data-testid="stHeader"] {
     background: transparent !important;
 }
-[data-testid="stSidebar"] {
-    background-color: rgba(13, 14, 21, 0.92) !important;
-    backdrop-filter: blur(20px) !important;
-    border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
+[data-testid="stSidebar"], [data-testid="collapsedControl"] {
+    display: none !important;
 }
 
 /* Metric Card Category Label (Small Header) */
@@ -487,26 +485,10 @@ def is_bfsi(sector: str = "", industry: str = "") -> bool:
 
 
 def main():
-    # Sidebar
-    st.sidebar.title("🏛️ Research Beast")
-    st.sidebar.caption("Unabridged 7-Agent Institutional Equity Pipeline")
-
-    st.sidebar.subheader("Valuation & DCF Assumptions")
-    wacc_input = st.sidebar.slider("Cost of Capital (WACC %)", min_value=9.0, max_value=16.0, value=11.5, step=0.5) / 100.0
-    terminal_g_input = st.sidebar.slider("Terminal FCF Growth (%)", min_value=3.0, max_value=7.0, value=5.5, step=0.5) / 100.0
-    base_g_input = st.sidebar.slider("Base 10Y FCF CAGR (%)", min_value=5.0, max_value=25.0, value=12.0, step=1.0) / 100.0
-
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("""
-    **Multi-Agent Checklist Architecture:**
-    - 🏷️ **Agent 0**: Classifier (`agent0_classifier.txt`)
-    - 🛡️ **Agent 1**: Qualitative & Moat (`agent1_qualitative.txt`)
-    - 🔍 **Agent 2**: Forensic Detective (`agent2_forensics.txt`)
-    - ⚖️ **Agent 3**: Solvency & Capital (`agent3_solvency.txt`)
-    - 🏛️ **Agent 4**: Governance & Master RPT (`agent4_governance_rpt.txt`)
-    - 📈 **Agent 5**: Industry KPI Specialist (`agent5_industry_kpi.txt`)
-    - 🎯 **Agent 6**: CIO Valuation & Reverse DCF (`agent6_valuation_cio.txt`)
-    """)
+    # Default Valuation & DCF Assumptions
+    wacc_input = 0.115
+    terminal_g_input = 0.055
+    base_g_input = 0.12
 
     # Session state initialization
     if "active_ticker" not in st.session_state:
