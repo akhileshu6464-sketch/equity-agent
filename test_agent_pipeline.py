@@ -93,20 +93,27 @@ def test_pipeline(ticker: str = "CROMPTON.NS"):
     print(f"  • Sub-Vertical: {a0.get('sub_vertical')}")
     print(f"  • Revenue Engine: {a0.get('revenue_engine_summary')}")
 
+    def _safe_str(node, limit=120):
+        if isinstance(node, dict):
+            s = str(node.get("title") or node.get("historical_trend_and_metrics") or node.get("target") or node)
+        else:
+            s = str(node or "")
+        return s[:limit]
+
     # Agent 1: Qualitative
     a1 = dossier["agent_1"]
     print("\n" + "-" * 80)
     print(f"🛡️  [AGENT 1: QUALITATIVE & MOAT AUDITOR] (Moat: {a1.get('moat_rating')}, Score: {a1.get('checklist_score')}/100)")
-    print("  • Part 1 (Business Model):", a1.get("part1_business_model", {}).get("1_core_product_service")[:120], "...")
-    print("  • Part 2 (Moat Source):", a1.get("part2_competitive_moat", {}).get("2_moat_source"))
-    print("  • Part 3 (TAM & Growth):", a1.get("part3_industry_growth", {}).get("2_tam_and_headroom")[:120], "...")
+    print("  • Part 1 (Business Model):", _safe_str(a1.get("part1_business_model", {}).get("1_core_product_service")), "...")
+    print("  • Part 2 (Moat Source):", _safe_str(a1.get("part2_competitive_moat", {}).get("2_moat_source")))
+    print("  • Part 3 (TAM & Growth):", _safe_str(a1.get("part3_industry_growth", {}).get("2_tam_and_headroom")), "...")
     print("  • Part 5 (Operations & Scalability):")
     p5 = a1.get("part5_operations_scalability", {})
-    print("      - Operating Leverage:", p5.get("1_operating_leverage"))
-    print("      - Sourcing / Supply Chain Risk:", p5.get("2_supply_chain_risks"))
-    print("      - Capital Intensity:", p5.get("3_capital_intensity"))
-    print("  • Part 6 (Scuttlebutt):", a1.get("part6_scuttlebutt", {}).get("1_customer_sentiment")[:120], "...")
-    print("  • Part 7 (Biggest Failure Point):", a1.get("part7_qualitative_risks", {}).get("4_single_biggest_failure_point"))
+    print("      - Operating Leverage:", _safe_str(p5.get("1_operating_leverage")))
+    print("      - Sourcing / Supply Chain Risk:", _safe_str(p5.get("2_supply_chain_risks")))
+    print("      - Capital Intensity:", _safe_str(p5.get("3_capital_intensity")))
+    print("  • Part 6 (Scuttlebutt):", _safe_str(a1.get("part6_scuttlebutt", {}).get("1_customer_sentiment")), "...")
+    print("  • Part 7 (Biggest Failure Point):", _safe_str(a1.get("part7_qualitative_risks", {}).get("4_single_biggest_failure_point")))
 
     # Validate BFSI Prohibition Guard if applicable
     if is_bfsi:
@@ -136,7 +143,7 @@ def test_pipeline(ticker: str = "CROMPTON.NS"):
             print("✅ BFSI PROHIBITION GUARD VERIFIED: Zero banned industrial words found in Agent 1!")
 
         # Verify Part 5 specific content for BFSI
-        p5_text = " ".join(p5.values()).lower()
+        p5_text = " ".join(str(x) for x in p5.values()).lower()
         assert "cost-to-income" in p5_text or "digital transaction" in p5_text, "Part 5 must evaluate Cost-to-Income / digital operating leverage for BFSI!"
         assert "casa" in p5_text or "liability" in p5_text or "deposit" in p5_text, "Part 5 must evaluate deposit/liability sourcing risks for BFSI!"
         assert "cet-1" in p5_text or "tier-1" in p5_text or "rwa" in p5_text or "crar" in p5_text, "Part 5 must evaluate Tier-1 CET-1 capital intensity for BFSI!"
@@ -146,8 +153,8 @@ def test_pipeline(ticker: str = "CROMPTON.NS"):
     a2 = dossier["agent_2"]
     print("\n" + "-" * 80)
     print(f"🔍 [AGENT 2: FORENSIC DETECTIVE] (Risk Pill: {a2.get('risk_pill')})")
-    print("  • Part 13 (Depreciation Check):", a2.get("part13_depreciation", {}).get("1_useful_lifespan_extension")[:100], "...")
-    print("  • Part 14 (SG&A Check):", a2.get("part14_sga_anomalies", {}).get("1_sga_growth_vs_revenue")[:100], "...")
+    print("  • Part 13 (Depreciation Check):", _safe_str(a2.get("part13_depreciation", {}).get("1_useful_lifespan_extension"), 100), "...")
+    print("  • Part 14 (SG&A Check):", _safe_str(a2.get("part14_sga_anomalies", {}).get("1_sga_growth_vs_revenue"), 100), "...")
     print("  • Part 15 (CFO Divergence):", a2.get("part15_revenue_quality", {}).get("3_cfo_pat_divergence"))
     print("  • Part 16 (Goodwill & RPT):", a2.get("part16_balance_sheet", {}).get("1_goodwill_percentage"))
 
@@ -155,7 +162,7 @@ def test_pipeline(ticker: str = "CROMPTON.NS"):
     a3 = dossier["agent_3"]
     print("\n" + "-" * 80)
     print(f"⚖️  [AGENT 3: SOLVENCY & CAPITAL ALLOCATION] (Risk Pill: {a3.get('risk_pill')})")
-    print("  • Part 8 (Profitability):", a3.get("part8_profitability", {}).get("1_revenue_growth_trajectory")[:100], "...")
+    print("  • Part 8 (Profitability):", _safe_str(a3.get("part8_profitability", {}).get("1_revenue_growth_trajectory"), 100), "...")
     print("  • Part 9 (ROIC vs WACC):", a3.get("part9_cash_flow_roic", {}).get("5_roic_vs_wacc"))
     print("  • Part 10 (Debt-to-Equity):", a3.get("part10_solvency", {}).get("2_debt_to_equity"))
     print("  • Part 11 (Cash Conversion Cycle):", a3.get("part11_working_capital", {}).get("1_cash_conversion_cycle"))
@@ -181,7 +188,7 @@ def test_pipeline(ticker: str = "CROMPTON.NS"):
     a6 = dossier["agent_6"]
     print("\n" + "-" * 80)
     print(f"🎯 [AGENT 6: CIO & VALUATION SPECIALIST] (Verdict: {a6.get('institutional_rating')})")
-    print("  • Section 1 (Walk-the-Talk):", a6.get("section1_management_walk_the_talk", {}).get("1_historical_delivery_1", {}).get("verdict"), "-", a6.get("section1_management_walk_the_talk", {}).get("1_historical_delivery_1", {}).get("target")[:80])
+    print("  • Section 1 (Walk-the-Talk):", a6.get("section1_management_walk_the_talk", {}).get("1_historical_delivery_1", {}).get("verdict"), "-", _safe_str(a6.get("section1_management_walk_the_talk", {}).get("1_historical_delivery_1", {}).get("target"), 80))
     print("  • Section 2 (Valuation Floors):")
     for k, v in a6.get("section2_asset_yield_valuation", {}).items():
         print(f"      - {k}: {v}")
@@ -196,15 +203,17 @@ def test_pipeline(ticker: str = "CROMPTON.NS"):
     # Agent 7: Concall & Guidance
     a7 = dossier.get("agent_7")
     assert a7, "Agent 7 concall analysis is missing from dossier!"
-    print("\n" + "-" * 80)
-    tone_dict = a7.get("tone_sentiment", {})
-    print(f"🎙️  [AGENT 7: CONCALL & GUIDANCE AUDITOR] (Tone: {tone_dict.get('overall_tone')}, Integrity: {tone_dict.get('commitment_integrity')})")
-    print(f"  • Call Period: {a7.get('call_period')}")
-    print(f"  • Revenue Target: {a7.get('guidance_summary', {}).get('revenue_growth_target')}")
-    print(f"  • Margin Corridor: {a7.get('margin_outlook', {}).get('target_corridor')}")
-    print(f"  • CapEx Outlay: {a7.get('capex_plans', {}).get('total_outlay_cr')}")
+    tone_val = a7.get("tone_sentiment", "")
+    overall_tone = tone_val.get("overall_tone") if isinstance(tone_val, dict) else str(tone_val)
+    integrity_val = a7.get("integrity_score") or (tone_val.get("commitment_integrity") if isinstance(tone_val, dict) else "HIGH")
+    tone_summary = tone_val.get("summary") if isinstance(tone_val, dict) else str(a7.get("strategic_aspirations", ""))
+    print(f"🎙️  [AGENT 7: CONCALL & GUIDANCE AUDITOR] (Tone: {overall_tone}, Integrity: {integrity_val})")
+    print(f"  • Call Period: {a7.get('call_period', 'Q4 / Annual')}")
+    print(f"  • Revenue Target: {a7.get('revenue_growth_guidance') or a7.get('guidance_summary', {}).get('revenue_growth_target')}")
+    print(f"  • Margin Corridor: {a7.get('margin_outlook') if isinstance(a7.get('margin_outlook'), str) else a7.get('margin_outlook', {}).get('target_corridor')}")
+    print(f"  • CapEx Outlay: {a7.get('committed_capex') or a7.get('capex_plans', {}).get('total_outlay_cr')}")
     print(f"  • Q&A Highlights Count: {len(a7.get('qa_highlights', []))} scrutinized exchanges")
-    print(f"  • Management Tone Summary: {tone_dict.get('summary')}")
+    print(f"  • Management Tone Summary: {tone_summary}")
 
     # =========================================================================
     # VERIFY 24-PAGE INSTITUTIONAL REPORTLAB PDF BUILDER
