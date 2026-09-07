@@ -317,6 +317,58 @@ def clean_markdown_for_pdf(text: Any) -> str:
     return clean.strip()
 
 
+def format_audit_item_for_pdf(item: Any, default_fallback: str = "", compact: bool = False) -> str:
+    """
+    Safely extracts and formats a 4-tier audit parameter node for ReportLab flowables.
+    - If compact=True (table cells or inline highlights): returns Level A or title cleaned.
+    - If compact=False (deep commentary): returns structured institutional prose combining
+      Levels A-D without ugly raw dict formatting or leaked markup.
+    """
+    if item is None:
+        return clean_markdown_for_pdf(default_fallback)
+    if isinstance(item, str):
+        return clean_markdown_for_pdf(item)
+    if isinstance(item, (int, float)):
+        return str(item)
+    if isinstance(item, dict):
+        if "historical_trend_and_metrics" in item:
+            a = item.get("historical_trend_and_metrics", "").strip()
+            b = item.get("operational_mechanics_and_drivers", "").strip()
+            c = item.get("competitive_context_and_benchmarks", "").strip()
+            d = item.get("thesis_implication_and_risks", "").strip()
+            title = item.get("title", "").strip()
+
+            if compact:
+                chosen = a if a else (title or default_fallback)
+                return clean_markdown_for_pdf(chosen)
+
+            parts = []
+            if a:
+                parts.append(f"<b>Trajectory &amp; Data:</b> {clean_markdown_for_pdf(a)}")
+            if b:
+                parts.append(f"<b>Operational Drivers:</b> {clean_markdown_for_pdf(b)}")
+            if c:
+                parts.append(f"<b>Peer Context:</b> {clean_markdown_for_pdf(c)}")
+            if d:
+                parts.append(f"<b>Thesis Implication:</b> {clean_markdown_for_pdf(d)}")
+            if parts:
+                return "<br/><br/>".join(parts)
+            return clean_markdown_for_pdf(title or default_fallback)
+
+        if "target" in item or "actual" in item:
+            t = item.get("target", "")
+            act = item.get("actual", "")
+            v = item.get("verdict", "")
+            res = f"[{v}] " if v else ""
+            res += f"{t} -> {act}" if act else t
+            return clean_markdown_for_pdf(res)
+
+        return clean_markdown_for_pdf(str(item.get("title") or item.get("summary") or item.get("verdict") or default_fallback))
+
+    return clean_markdown_for_pdf(str(item))
+
+
+
 def make_callout_box(
     content: Union[str, List[Any]],
     title: str = "AUDIT OBSERVATION & SENSITIVITY TRIGGER",
@@ -705,19 +757,19 @@ def build_institutional_pdf(
     story.append(Paragraph("1.3 Total Addressable Market (TAM) Headroom & Industry Compounding", st.section_heading))
     p3 = a1.get('part3_industry_growth', {})
     story.append(Paragraph(
-        f"<b>Secular Structural Expansion:</b> {p3.get('1_structural_growth', 'The industry experiences secular expansion compounding in line with nominal GDP growth.')} "
+        f"<b>Secular Structural Expansion:</b> {format_audit_item_for_pdf(p3.get('1_structural_growth'), 'The industry experiences secular expansion compounding in line with nominal GDP growth.', compact=True)} "
         f"Over the last 5 years, formalization and consolidation have concentrated market share among top-tier institutional incumbents, "
         f"creating structural pricing power and operating leverage.",
         st.body_text
     ))
     story.append(Paragraph(
-        f"<b>Total Addressable Market (TAM) Depth:</b> {p3.get('2_tam_and_headroom', 'Multi-trillion addressable opportunity across retail and enterprise customer bases.')} "
+        f"<b>Total Addressable Market (TAM) Depth:</b> {format_audit_item_for_pdf(p3.get('2_tam_and_headroom'), 'Multi-trillion addressable opportunity across retail and enterprise customer bases.', compact=True)} "
         f"The long-term runway for expansion remains significant, supported by rising per-capita income, financial digitization, "
         f"and supply chain integration across domestic and international corridors.",
         st.body_text
     ))
     story.append(Paragraph(
-        f"<b>Macroeconomic Resilience & Cyclicality:</b> {p3.get('3_cyclicality_recession', 'Moderately cyclical with high recession resilience supported by diversified revenue engines.')} "
+        f"<b>Macroeconomic Resilience & Cyclicality:</b> {format_audit_item_for_pdf(p3.get('3_cyclicality_recession'), 'Moderately cyclical with high recession resilience supported by diversified revenue engines.', compact=True)} "
         f"During contractionary periods, the company's established balance sheet buffers and non-discretionary product lines cushion profitability margins.",
         st.body_text
     ))
@@ -839,25 +891,25 @@ def build_institutional_pdf(
 
     story.append(Paragraph("2.1 Core Product Architecture & Customer Switching Dynamics", st.section_heading))
     story.append(Paragraph(
-        f"<b>Core Value Proposition:</b> {p1.get('1_core_product_service')} "
+        f"<b>Core Value Proposition:</b> {format_audit_item_for_pdf(p1.get('1_core_product_service'), compact=True)} "
         f"The company's offerings address mission-critical customer requirements, creating daily transactional integration "
         f"that insulates volume throughput from discretionary spending shocks.",
         st.body_text
     ))
     story.append(Paragraph(
-        f"<b>Revenue Mechanics:</b> {p1.get('2_revenue_model')} "
+        f"<b>Revenue Mechanics:</b> {format_audit_item_for_pdf(p1.get('2_revenue_model'), compact=True)} "
         f"The monetization model combines predictable base revenue spreads with recurring, high-margin ancillary fees, "
         f"delivering robust cash conversion across volatile interest rate cycles.",
         st.body_text
     ))
     story.append(Paragraph(
-        f"<b>Customer Granularity & Concentration Risk:</b> {p1.get('3_customer_concentration')} "
+        f"<b>Customer Granularity & Concentration Risk:</b> {format_audit_item_for_pdf(p1.get('3_customer_concentration'), compact=True)} "
         f"Risk is broadly diversified across retail consumer cohorts and institutional enterprise accounts, "
         f"with no single customer or counterparty representing a systemic solvency risk.",
         st.body_text
     ))
     story.append(Paragraph(
-        f"<b>Switching Friction & Lock-in Dynamics:</b> {p1.get('4_switching_costs')} "
+        f"<b>Switching Friction & Lock-in Dynamics:</b> {format_audit_item_for_pdf(p1.get('4_switching_costs'), compact=True)} "
         f"Switching friction remains substantial due to integrated payroll automation, embedded transaction workflows, "
         f"and multi-year service contracts, resulting in churn rates consistently below industry averages.",
         st.body_text
@@ -866,13 +918,13 @@ def build_institutional_pdf(
     story.append(Spacer(1, 4))
     story.append(Paragraph("2.2 Economic Moat Sources & Barriers to Entry", st.section_heading))
     story.append(Paragraph(
-        f"<b>Primary Moat Engine:</b> {p2.get('2_moat_source')} "
+        f"<b>Primary Moat Engine:</b> {format_audit_item_for_pdf(p2.get('2_moat_source'), compact=True)} "
         f"The franchise's competitive moat is underpinned by deep regulatory licensing protections, decades of brand trust, "
         f"and unmatched physical/digital distribution density that cannot be easily replicated by new market entrants.",
         st.body_text
     ))
     story.append(Paragraph(
-        f"<b>Moat Trajectory:</b> {p2.get('3_moat_trajectory')} "
+        f"<b>Moat Trajectory:</b> {format_audit_item_for_pdf(p2.get('3_moat_trajectory'), compact=True)} "
         f"Incremental market share gains across both deposits and credit origination demonstrate that the moat is widening "
         f"relative to tier-2 and regional competitors.",
         st.body_text
@@ -919,9 +971,9 @@ def build_institutional_pdf(
         st.body_text
     ))
 
-    story.append(Paragraph(f"<b>Operating Leverage Trajectory:</b> {p5.get('1_operating_leverage')}", st.body_text))
-    story.append(Paragraph(f"<b>Sourcing & Liability Stability:</b> {p5.get('2_supply_chain_risks')}", st.body_text))
-    story.append(Paragraph(f"<b>Regulatory Capital Consumption:</b> {p5.get('3_capital_intensity')}", st.body_text))
+    story.append(Paragraph(f"<b>Operating Leverage Trajectory:</b> {format_audit_item_for_pdf(p5.get('1_operating_leverage'), compact=True)}", st.body_text))
+    story.append(Paragraph(f"<b>Sourcing & Liability Stability:</b> {format_audit_item_for_pdf(p5.get('2_supply_chain_risks'), compact=True)}", st.body_text))
+    story.append(Paragraph(f"<b>Regulatory Capital Consumption:</b> {format_audit_item_for_pdf(p5.get('3_capital_intensity'), compact=True)}", st.body_text))
 
     # Scalability & Unit Economics Matrix Table
     story.append(Spacer(1, 4))
@@ -968,19 +1020,19 @@ def build_institutional_pdf(
 
     story.append(Paragraph("2.4 Ground-Level Scuttlebutt, Channel Feedback & Cultural Capital", st.section_heading))
     story.append(Paragraph(
-        f"<b>Customer Sentiment & Satisfaction:</b> {p6.get('1_customer_sentiment')} "
+        f"<b>Customer Sentiment & Satisfaction:</b> {format_audit_item_for_pdf(p6.get('1_customer_sentiment'), compact=True)} "
         f"Independent user satisfaction surveys and digital application reviews confirm high customer loyalty, "
         f"reinforcing customer retention and organic word-of-mouth acquisition.",
         st.body_text
     ))
     story.append(Paragraph(
-        f"<b>Corporate Culture & Employee Retention:</b> {p6.get('2_employee_culture')} "
+        f"<b>Corporate Culture & Employee Retention:</b> {format_audit_item_for_pdf(p6.get('2_employee_culture'), compact=True)} "
         f"A disciplined corporate governance structure, institutional underwriting checks, and structured talent development "
         f"insulate the operating franchise from key-person attrition risks.",
         st.body_text
     ))
     story.append(Paragraph(
-        f"<b>Competitor Standing & Industry Perception:</b> {p6.get('3_competitor_stance')} "
+        f"<b>Competitor Standing & Industry Perception:</b> {format_audit_item_for_pdf(p6.get('3_competitor_stance'), compact=True)} "
         f"Industry peers recognize the institution as a benchmark competitor with superior liability gathering resilience "
         f"and disciplined risk pricing.",
         st.body_text
@@ -989,17 +1041,17 @@ def build_institutional_pdf(
     story.append(Spacer(1, 4))
     story.append(Paragraph("2.5 Strategic Qualitative Vulnerabilities & Tail Risks", st.section_heading))
     story.append(Paragraph(
-        f"<b>Disruptive Technology Exposure:</b> {p7.get('1_disruptive_technologies')} "
+        f"<b>Disruptive Technology Exposure:</b> {format_audit_item_for_pdf(p7.get('1_disruptive_technologies'), compact=True)} "
         f"Emerging digital platforms and alternative transaction networks require sustained IT investments to defend market share.",
         st.body_text
     ))
     story.append(Paragraph(
-        f"<b>Regulatory Oversight & Policy Risk:</b> {p7.get('2_regulatory_exposure')} "
+        f"<b>Regulatory Oversight & Policy Risk:</b> {format_audit_item_for_pdf(p7.get('2_regulatory_exposure'), compact=True)} "
         f"Changes in statutory macroprudential risk weights, priority lending mandates, or liquidity ratios could alter operating spreads.",
         st.body_text
     ))
     story.append(Paragraph(
-        f"<b>Liability Repricing Lag & Input Squeeze:</b> {p7.get('3_input_cost_lag')} "
+        f"<b>Liability Repricing Lag & Input Squeeze:</b> {format_audit_item_for_pdf(p7.get('3_input_cost_lag'), compact=True)} "
         f"A cyclical rise in wholesale funding costs creates temporary spread compression before lending yields fully reprice.",
         st.body_text
     ))
@@ -1007,14 +1059,14 @@ def build_institutional_pdf(
     story.append(Spacer(1, 4))
     story.append(Paragraph("2.6 Single Biggest Operational Failure Point Analysis", st.section_heading))
     story.append(Paragraph(
-        f"<b>Primary Operational Failure Vulnerability:</b> {p7.get('4_single_biggest_failure_point')} "
+        f"<b>Primary Operational Failure Vulnerability:</b> {format_audit_item_for_pdf(p7.get('4_single_biggest_failure_point'), compact=True)} "
         f"In an extreme downside scenario, this is the primary structural mechanism capable of permanently impairing franchise capital.",
         st.body_text
     ))
 
     story.append(Spacer(1, 4))
     story.append(make_callout_box(
-        f"<b>Single Biggest Failure Point:</b> {p7.get('4_single_biggest_failure_point')} "
+        f"<b>Single Biggest Failure Point:</b> {format_audit_item_for_pdf(p7.get('4_single_biggest_failure_point'), compact=True)} "
         f"Investors must monitor early warnings including sudden spikes in slippages, wholesale funding reliance, or key regulatory sanctions.",
         title="CRITICAL QUALITATIVE FRAGILITY & DISRUPTION TRIGGER",
         tone="danger",
@@ -1046,7 +1098,7 @@ def build_institutional_pdf(
 
     story.append(Paragraph("3.1 Operating Cash Flow (CFO) vs Net Profit (PAT) Conversion Fidelity", st.section_heading))
     story.append(Paragraph(
-        f"<b>5-Year Cumulative Cash Flow Divergence Audit:</b> {p15.get('3_cfo_pat_divergence')} "
+        f"<b>5-Year Cumulative Cash Flow Divergence Audit:</b> {format_audit_item_for_pdf(p15.get('3_cfo_pat_divergence'), compact=True)} "
         f"A sustained divergence between operating cash generation and accrual net profit serves as the primary early-warning "
         f"indicator of financial statement manipulation. In this institution, cash generation confirms the economic substance of reported earnings.",
         st.body_text
@@ -1111,8 +1163,8 @@ def build_institutional_pdf(
     story.append(HRFlowable(width="100%", thickness=1.5, color=st.navy_blue, spaceBefore=2, spaceAfter=8))
 
     story.append(Paragraph("3.2 Revenue Recognition Quality, Receivables Trajectory & Channel Stuffing Analysis", st.section_heading))
-    story.append(Paragraph(f"<b>Receivables & DSO Trajectory:</b> {p15.get('2_dso_trajectory')}", st.body_text))
-    story.append(Paragraph(f"<b>Channel Stuffing Audit Check:</b> {p15.get('1_receivables_vs_revenue')}", st.body_text))
+    story.append(Paragraph(f"<b>Receivables & DSO Trajectory:</b> {format_audit_item_for_pdf(p15.get('2_dso_trajectory'), compact=True)}", st.body_text))
+    story.append(Paragraph(f"<b>Channel Stuffing Audit Check:</b> {format_audit_item_for_pdf(p15.get('1_receivables_vs_revenue'), compact=True)}", st.body_text))
     story.append(Paragraph(
         "Trade receivables growth has consistently tracked or trailed top-line revenue expansion. "
         "There is zero evidence of unbilled revenue inflation, circular invoicing, or end-of-quarter volume stuffing. "
@@ -1164,9 +1216,9 @@ def build_institutional_pdf(
     story.append(HRFlowable(width="100%", thickness=1.5, color=st.navy_blue, spaceBefore=2, spaceAfter=8))
 
     story.append(Paragraph("3.3 Depreciation Policy, Useful Asset Lifespans & CapEx vs D&A", st.section_heading))
-    story.append(Paragraph(f"<b>Asset Useful Lifespan Audit:</b> {p13.get('1_useful_lifespan_extension')}", st.body_text))
-    story.append(Paragraph(f"<b>Depreciation Accounting Method:</b> {p13.get('2_depreciation_method_change')}", st.body_text))
-    story.append(Paragraph(f"<b>CapEx vs D&A Relationship:</b> {p13.get('3_capex_vs_da_relationship')}", st.body_text))
+    story.append(Paragraph(f"<b>Asset Useful Lifespan Audit:</b> {format_audit_item_for_pdf(p13.get('1_useful_lifespan_extension'), compact=True)}", st.body_text))
+    story.append(Paragraph(f"<b>Depreciation Accounting Method:</b> {format_audit_item_for_pdf(p13.get('2_depreciation_method_change'), compact=True)}", st.body_text))
+    story.append(Paragraph(f"<b>CapEx vs D&A Relationship:</b> {format_audit_item_for_pdf(p13.get('3_capex_vs_da_relationship'), compact=True)}", st.body_text))
     story.append(Paragraph(
         "A common method of earnings smoothing involves extending asset useful lives or changing depreciation schedules "
         "to understate annual depreciation expense. Our audit confirms consistent straight-line depreciation accounting "
@@ -1218,9 +1270,9 @@ def build_institutional_pdf(
     story.append(HRFlowable(width="100%", thickness=1.5, color=st.navy_blue, spaceBefore=2, spaceAfter=8))
 
     story.append(Paragraph("3.4 SG&A Anomalies, Goodwill Load & Statutory Auditor Pedigree", st.section_heading))
-    story.append(Paragraph(f"<b>SG&A Overhead Growth vs Revenue:</b> {p14.get('1_sga_growth_vs_revenue')}", st.body_text))
-    story.append(Paragraph(f"<b>Goodwill & Intangibles Exposure:</b> {p16.get('1_goodwill_percentage')}", st.body_text))
-    story.append(Paragraph(f"<b>Statutory Auditor Quality & Independence:</b> {p16.get('3_auditor_management_turnover')}", st.body_text))
+    story.append(Paragraph(f"<b>SG&A Overhead Growth vs Revenue:</b> {format_audit_item_for_pdf(p14.get('1_sga_growth_vs_revenue'), compact=True)}", st.body_text))
+    story.append(Paragraph(f"<b>Goodwill & Intangibles Exposure:</b> {format_audit_item_for_pdf(p16.get('1_goodwill_percentage'), compact=True)}", st.body_text))
+    story.append(Paragraph(f"<b>Statutory Auditor Quality & Independence:</b> {format_audit_item_for_pdf(p16.get('3_auditor_management_turnover'), compact=True)}", st.body_text))
 
     # Forensic Red Flag Checklist Matrix Table
     story.append(Spacer(1, 4))
@@ -1277,13 +1329,13 @@ def build_institutional_pdf(
 
     story.append(Paragraph("4.1 Capital Structure, Leverage Profile & Solvency Buffers", st.section_heading))
     story.append(Paragraph(
-        f"<b>Balance Sheet Leverage Assessment:</b> {p10.get('2_debt_to_equity')} "
+        f"<b>Balance Sheet Leverage Assessment:</b> {format_audit_item_for_pdf(p10.get('2_debt_to_equity'), compact=True)} "
         f"The capital structure is optimized to support growth while insulating the equity base from refinancing risks. "
         f"Conservative leverage buffers provide substantial headroom against systemic liquidity contractions.",
         st.body_text
     ))
     story.append(Paragraph(
-        f"<b>Debt Service Cushion & Coverage:</b> {p10.get('1_debt_repayment_capacity')} "
+        f"<b>Debt Service Cushion & Coverage:</b> {format_audit_item_for_pdf(p10.get('1_debt_repayment_capacity'), compact=True)} "
         f"Operating cash generation covers debt service mandates with wide safety margins, ensuring total solvency security.",
         st.body_text
     ))
@@ -1333,7 +1385,7 @@ def build_institutional_pdf(
 
     story.append(Paragraph("4.2 DuPont Return on Equity (RoE) Decomposition & Value Creation Spread", st.section_heading))
     story.append(Paragraph(
-        f"<b>Economic Return on Capital (ROIC vs WACC):</b> {p9.get('5_roic_vs_wacc')} "
+        f"<b>Economic Return on Capital (ROIC vs WACC):</b> {format_audit_item_for_pdf(p9.get('5_roic_vs_wacc'), compact=True)} "
         f"Sustainable compounding occurs when Return on Invested Capital sustainably exceeds the Weighted Average Cost of Capital (WACC: 11.5%). "
         f"The company's economic spread confirms value accretion rather than capital destruction.",
         st.body_text
@@ -1383,8 +1435,8 @@ def build_institutional_pdf(
     story.append(HRFlowable(width="100%", thickness=1.5, color=st.navy_blue, spaceBefore=2, spaceAfter=8))
 
     story.append(Paragraph("4.3 Free Cash Flow Generation & Dividend Sustainability", st.section_heading))
-    story.append(Paragraph(f"<b>Free Cash Flow Trajectory:</b> {p9.get('2_fcf_trajectory')}", st.body_text))
-    story.append(Paragraph(f"<b>Dividend Coverage & Capital Reinvestment:</b> {p12.get('4_dividend_fcf_sustainability')}", st.body_text))
+    story.append(Paragraph(f"<b>Free Cash Flow Trajectory:</b> {format_audit_item_for_pdf(p9.get('2_fcf_trajectory'), compact=True)}", st.body_text))
+    story.append(Paragraph(f"<b>Dividend Coverage & Capital Reinvestment:</b> {format_audit_item_for_pdf(p12.get('4_dividend_fcf_sustainability'), compact=True)}", st.body_text))
     story.append(Paragraph(
         "Free cash flow generation comfortably covers annual dividend disbursements, with remaining operating cash flows "
         "reinvested into digital infrastructure and core franchise expansion, eliminating dependency on dilutive external equity capital.",
@@ -1451,9 +1503,10 @@ def build_institutional_pdf(
         [Paragraph("<b>Operational KPI</b>", st.tbl_header), Paragraph("<b>Reported Metric</b>", st.tbl_header), Paragraph("<b>Institutional Benchmark</b>", st.tbl_header), Paragraph("<b>Operational Health Status</b>", st.tbl_header)]
     ]
     for k, v in list(kpi_results.items())[:8]:
+        clean_v = format_audit_item_for_pdf(v, compact=True)
         kpi_rows.append([
             Paragraph(k, st.tbl_cell_bold),
-            Paragraph(str(v), st.tbl_cell),
+            Paragraph(clean_v, st.tbl_cell),
             Paragraph("Institutional Tier-1 Standard", st.tbl_cell),
             Paragraph("HEALTHY / OUTPERFORMING", st.tbl_cell_center)
         ])
@@ -1498,13 +1551,26 @@ def build_institutional_pdf(
         st.body_text
     ))
 
-    for idx, (kpi_name, kpi_val) in enumerate(list(kpi_results.items())[:5], start=1):
-        story.append(Paragraph(f"<b>5.2.{idx} {kpi_name}: {kpi_val}</b>", st.sub_heading))
+    for idx, (kpi_name, kpi_val) in enumerate(list(kpi_results.items())[:4], start=1):
+        if isinstance(kpi_val, dict) and "historical_trend_and_metrics" in kpi_val:
+            kpi_title = kpi_val.get("title") or kpi_name
+            traj = kpi_val.get("historical_trend_and_metrics", "")
+            driver = kpi_val.get("operational_mechanics_and_drivers", "")
+            peer = kpi_val.get("competitive_context_and_benchmarks", "")
+            impl = kpi_val.get("thesis_implication_and_risks", "")
+        else:
+            kpi_title = kpi_name
+            traj = str(kpi_val) if kpi_val else "Maintained consistent stability across economic cycles."
+            driver = "Driven by disciplined risk underwriting, digital adoption, and operating efficiencies."
+            peer = f"Ranks in top quartile of listed peers across {primary_sector}."
+            impl = "Sustained performance provides strong compounding visibility and defends RoE."
+
+        story.append(Paragraph(f"<b>5.2.{idx} {kpi_name} — {clean_markdown_for_pdf(kpi_title)}</b>", st.sub_heading))
         story.append(Paragraph(
-            f"&bull; <b>Historical 3-to-5-Year Trajectory:</b> Maintained consistent stability across economic cycles, expanding sustainably in tandem with core operational throughput.<br/>"
-            f"&bull; <b>Structural Underlying Driver:</b> Driven by disciplined risk underwriting, digital platform adoption, and operating overhead efficiencies across distribution touchpoints.<br/>"
-            f"&bull; <b>Comparison to Industry Peers:</b> Ranks in the top quartile of listed peers across {primary_sector}, delivering superior margin retention and lower asset volatility.<br/>"
-            f"&bull; <b>Implication for Future Shareholder Returns:</b> Sustained performance on this metric provides compounding visibility, protecting underlying return on equity (RoE) spreads.",
+            f"• <b>Trajectory &amp; Data:</b> {clean_markdown_for_pdf(traj)}<br/>"
+            f"• <b>Operational Drivers:</b> {clean_markdown_for_pdf(driver)}<br/>"
+            f"• <b>Peer Context:</b> {clean_markdown_for_pdf(peer)}<br/>"
+            f"• <b>Thesis Implication:</b> {clean_markdown_for_pdf(impl)}",
             st.body_text
         ))
         story.append(Spacer(1, 2))
@@ -1658,9 +1724,10 @@ def build_institutional_pdf(
     ]
     for k, v in sec2_flr.items():
         clean_k = clean_markdown_for_pdf(k.replace('_', ' ').title())
+        clean_v = format_audit_item_for_pdf(v, compact=True)
         flr_rows.append([
             Paragraph(clean_k, st.tbl_cell_bold),
-            Paragraph(clean_markdown_for_pdf(str(v)), st.tbl_cell),
+            Paragraph(clean_v, st.tbl_cell),
             Paragraph("Provides downside asset floor support", st.tbl_cell)
         ])
     t_flr = Table(flr_rows, colWidths=[printable_width * 0.36, printable_width * 0.40, printable_width * 0.24])

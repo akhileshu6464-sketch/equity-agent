@@ -42,3 +42,21 @@ class BaseAgent(ABC):
         - flags: List[str]
         """
         pass
+
+
+def make_audit_node(title: str, level_a: str, level_b: str, level_c: str, level_d: str) -> Dict[str, str]:
+    """
+    Constructs an institutional 4-tier audit parameter node.
+    - Level A (historical_trend_and_metrics): Historical 3-to-5-year trajectory, specific figures, bps shifts.
+    - Level B (operational_mechanics_and_drivers): Operational mechanics, business drivers, mix shifts, pass-through.
+    - Level C (competitive_context_and_benchmarks): Peer group benchmarking, industry standards, relative moat.
+    - Level D (thesis_implication_and_risks): Long-term compounding, RoA/RoE impact, multiples, downside risks.
+    """
+    return {
+        "title": title.strip(),
+        "historical_trend_and_metrics": level_a.strip(),
+        "operational_mechanics_and_drivers": level_b.strip(),
+        "competitive_context_and_benchmarks": level_c.strip(),
+        "thesis_implication_and_risks": level_d.strip()
+    }
+

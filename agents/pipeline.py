@@ -332,6 +332,7 @@ class EquityAgentPipeline:
                 "dividend_yield_pct": dividend_yield_pct
             },
             "history_5y": history,
+            "shareholding": company_data.get("shareholding", {}),
             "web_intel": context.get("web_intel", [])
         }
 

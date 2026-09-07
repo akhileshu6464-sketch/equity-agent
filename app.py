@@ -484,6 +484,81 @@ def is_bfsi(sector: str = "", industry: str = "") -> bool:
     return any(k in s or k in i for k in ["bank", "financial", "lending", "nbfc", "housing finance", "insurance"])
 
 
+def render_audit_card(key_or_title: str, item: Any):
+    """
+    Renders an institutional 4-tier parameter card with distinct visual badges for:
+    - Level A (cyan): Historical Trajectory & Data
+    - Level B (indigo): Operational & Strategic Drivers
+    - Level C (emerald): Peer & Benchmark Context
+    - Level D (amber): Capital Allocation & Return Impact
+    Falls back cleanly to standard q-box for flat strings or legacy dicts.
+    """
+    if isinstance(item, dict) and "historical_trend_and_metrics" in item:
+        title = item.get("title") or key_or_title.replace("_", " ").upper()
+        level_a = item.get("historical_trend_and_metrics", "").strip()
+        level_b = item.get("operational_mechanics_and_drivers", "").strip()
+        level_c = item.get("competitive_context_and_benchmarks", "").strip()
+        level_d = item.get("thesis_implication_and_risks", "").strip()
+
+        card_html = f"""
+        <div class="q-box" style="margin-bottom: 16px; padding: 16px; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; background: rgba(15, 23, 42, 0.5);">
+            <div class="q-title" style="font-size: 0.92rem; font-weight: 700; color: #f8fafc; letter-spacing: 0.03em; margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 6px;">
+                {title}
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+                <div style="background: rgba(56, 189, 248, 0.06); border-left: 3px solid #38bdf8; padding: 8px 12px; border-radius: 0 8px 8px 0;">
+                    <span style="font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #38bdf8; display: block; margin-bottom: 3px;">
+                        Level A: Historical Trajectory &amp; Data
+                    </span>
+                    <div style="color: #cbd5e1; font-size: 0.85rem; line-height: 1.55;">{level_a}</div>
+                </div>
+                <div style="background: rgba(129, 140, 248, 0.06); border-left: 3px solid #818cf8; padding: 8px 12px; border-radius: 0 8px 8px 0;">
+                    <span style="font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #818cf8; display: block; margin-bottom: 3px;">
+                        Level B: Operational &amp; Strategic Drivers
+                    </span>
+                    <div style="color: #cbd5e1; font-size: 0.85rem; line-height: 1.55;">{level_b}</div>
+                </div>
+                <div style="background: rgba(52, 211, 153, 0.06); border-left: 3px solid #34d399; padding: 8px 12px; border-radius: 0 8px 8px 0;">
+                    <span style="font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #34d399; display: block; margin-bottom: 3px;">
+                        Level C: Peer &amp; Benchmark Context
+                    </span>
+                    <div style="color: #cbd5e1; font-size: 0.85rem; line-height: 1.55;">{level_c}</div>
+                </div>
+                <div style="background: rgba(251, 191, 36, 0.06); border-left: 3px solid #fbbf24; padding: 8px 12px; border-radius: 0 8px 8px 0;">
+                    <span style="font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #fbbf24; display: block; margin-bottom: 3px;">
+                        Level D: Capital Allocation &amp; Return Impact
+                    </span>
+                    <div style="color: #cbd5e1; font-size: 0.85rem; line-height: 1.55;">{level_d}</div>
+                </div>
+            </div>
+        </div>
+        """
+        st.markdown(card_html, unsafe_allow_html=True)
+    elif isinstance(item, dict) and ("target" in item or "actual" in item):
+        title = item.get("title") or key_or_title.replace("_", " ").upper()
+        target = item.get("target", "N/A")
+        actual = item.get("actual", "N/A")
+        verdict = item.get("verdict", "[REVIEW]")
+        st.markdown(
+            f'<div class="q-box" style="margin-bottom: 12px;">'
+            f'<div class="q-title">{title}</div>'
+            f'<div style="display: flex; gap: 8px; align-items: center; margin-bottom: 6px;">'
+            f'<span style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); padding: 2px 8px; border-radius: 6px; font-size: 0.78rem; font-weight: 600; color: #34d399;">{verdict}</span>'
+            f'</div>'
+            f'<div class="q-ans"><strong>Target:</strong> {target}<br/><strong>Delivered Outcome:</strong> {actual}</div>'
+            f'</div>',
+            unsafe_allow_html=True
+        )
+    else:
+        title = key_or_title.replace("_", " ").upper()
+        val_str = str(item)
+        st.markdown(
+            f'<div class="q-box"><div class="q-title">{title}</div><div class="q-ans">{val_str}</div></div>',
+            unsafe_allow_html=True
+        )
+
+
+
 def main():
     # Default Valuation & DCF Assumptions
     wacc_input = 0.115
@@ -742,32 +817,37 @@ def main():
 • Ground-Level Scuttlebutt: {a1.get('part6_scuttlebutt', {}).get('1_customer_sentiment')} | Workplace Culture: {a1.get('part6_scuttlebutt', {}).get('2_employee_culture')}
 • Single Biggest Operational Failure Point: {a1.get('part7_qualitative_risks', {}).get('4_single_biggest_failure_point')}"""
 
-        agent2_pdf_text = f"""• 5-Year Cumulative CFO vs PAT Conversion: {a2.get('part15_revenue_quality', {}).get('3_cfo_pat_divergence')}
-• Receivables & DSO Trajectory: {a2.get('part15_revenue_quality', {}).get('2_dso_trajectory')} (Channel Stuffing Check: {a2.get('part15_revenue_quality', {}).get('1_receivables_vs_revenue')})
-• Depreciation & Asset Useful Lifespans: {a2.get('part13_depreciation', {}).get('1_useful_lifespan_extension')} | Method: {a2.get('part13_depreciation', {}).get('2_depreciation_method_change')}
-• CapEx vs D&A Relationship: {a2.get('part13_depreciation', {}).get('3_capex_vs_da_relationship')}
-• SG&A Growth vs Top-Line Revenue: {a2.get('part14_sga_anomalies', {}).get('1_sga_growth_vs_revenue')}
-• Stock-Based Compensation & Overhead: {a2.get('part14_sga_anomalies', {}).get('4_stock_based_compensation')} | Miscellany: {a2.get('part14_sga_anomalies', {}).get('5_unexplained_miscellaneous_spikes')}
-• Goodwill & Intangible Assets Load: {a2.get('part16_balance_sheet', {}).get('1_goodwill_percentage')}
-• Auditor Independence & Pedigree: {a2.get('part16_balance_sheet', {}).get('3_auditor_management_turnover')}"""
+        def _get_audit_text(node):
+            if isinstance(node, dict):
+                return node.get("historical_trend_and_metrics") or node.get("target") or node.get("title") or str(node)
+            return str(node) if node is not None else ""
+
+        agent2_pdf_text = f"""• 5-Year Cumulative CFO vs PAT Conversion: {_get_audit_text(a2.get('part15_revenue_quality', {}).get('3_cfo_pat_divergence'))}
+• Receivables & DSO Trajectory: {_get_audit_text(a2.get('part15_revenue_quality', {}).get('2_dso_trajectory'))} (Channel Stuffing Check: {_get_audit_text(a2.get('part15_revenue_quality', {}).get('1_receivables_vs_revenue'))})
+• Depreciation & Asset Useful Lifespans: {_get_audit_text(a2.get('part13_depreciation', {}).get('1_useful_lifespan_extension'))} | Method: {_get_audit_text(a2.get('part13_depreciation', {}).get('2_depreciation_method_change'))}
+• CapEx vs D&A Relationship: {_get_audit_text(a2.get('part13_depreciation', {}).get('3_capex_vs_da_relationship'))}
+• SG&A Growth vs Top-Line Revenue: {_get_audit_text(a2.get('part14_sga_anomalies', {}).get('1_sga_growth_vs_revenue'))}
+• Stock-Based Compensation & Overhead: {_get_audit_text(a2.get('part14_sga_anomalies', {}).get('4_stock_based_compensation'))} | Miscellany: {_get_audit_text(a2.get('part14_sga_anomalies', {}).get('5_unexplained_miscellaneous_spikes'))}
+• Goodwill & Intangible Assets Load: {_get_audit_text(a2.get('part16_balance_sheet', {}).get('1_goodwill_percentage'))}
+• Auditor Independence & Pedigree: {_get_audit_text(a2.get('part16_balance_sheet', {}).get('3_auditor_management_turnover'))}"""
 
         agent3_pdf_text = f"""• Balance Sheet Leverage: Total Debt: Rs. {a3.get('audit_metrics', {}).get('Total Debt')}, Net Debt: Rs. {a3.get('audit_metrics', {}).get('Net Debt')} (Net Debt/Equity: {a3.get('audit_metrics', {}).get('Net Debt / Equity')}, Total Debt/Equity: {a3.get('audit_metrics', {}).get('Total Debt / Equity')})
 • Liquid Cash Buffer: Rs. {a3.get('audit_metrics', {}).get('Cash & Equivalents')} in cash and short-term equivalents
 • Debt Service Headroom: Normalized Interest Coverage: {a3.get('audit_metrics', {}).get('Normalized Interest Coverage')}
-• Working Capital Cycle (Cash Conversion Cycle): {a3.get('audit_metrics', {}).get('Cash Conversion Cycle')} ({a3.get('part11_working_capital', {}).get('1_cash_conversion_cycle')})
-• Return on Invested Capital (ROIC): {a3.get('part9_cash_flow_roic', {}).get('5_roic_vs_wacc')}
-• Free Cash Flow & Margin: FCF Margin: {a3.get('audit_metrics', {}).get('FCF Margin')} ({a3.get('part9_cash_flow_roic', {}).get('2_fcf_trajectory')})
-• FCF Dividend Sustainability: {a3.get('part12_capital_allocation', {}).get('4_dividend_fcf_sustainability')} (Coverage: {a3.get('audit_metrics', {}).get('FCF Dividend Coverage')})"""
+• Working Capital Cycle (Cash Conversion Cycle): {a3.get('audit_metrics', {}).get('Cash Conversion Cycle')} ({_get_audit_text(a3.get('part11_working_capital', {}).get('1_cash_conversion_cycle'))})
+• Return on Invested Capital (ROIC): {_get_audit_text(a3.get('part9_cash_flow_roic', {}).get('5_roic_vs_wacc'))}
+• Free Cash Flow & Margin: FCF Margin: {a3.get('audit_metrics', {}).get('FCF Margin')} ({_get_audit_text(a3.get('part9_cash_flow_roic', {}).get('2_fcf_trajectory'))})
+• FCF Dividend Sustainability: {_get_audit_text(a3.get('part12_capital_allocation', {}).get('4_dividend_fcf_sustainability'))} (Coverage: {a3.get('audit_metrics', {}).get('FCF Dividend Coverage')})"""
 
-        agent4_pdf_text = f"""• Promoter Alignment & Encumbrance: {a4.get('section1_promoter_integrity', {}).get('2_promoter_pledge_percentage')}
-• Executive Remuneration vs PAT: {a4.get('section2_executive_remuneration', {}).get('1_ceo_remuneration_vs_pat')} (CEO-to-Median-Employee Ratio: {a4.get('audit_metrics', {}).get('CEO / Median Pay')})
-• Incentive Hurdle Alignment: {a4.get('section2_executive_remuneration', {}).get('3_incentive_hurdle_alignment')}
-• Politically Exposed Persons (PEP) & Rent-Seeking: {a4.get('section3_pep_rent_seeking', {}).get('1_pep_presence')} | Dependency: {a4.get('section3_pep_rent_seeking', {}).get('2_government_concession_dependency')}
-• Master RPT Pricing & Arm's Length Validation: {a4.get('section4_master_rpt', {}).get('pricing_validation', {}).get('pricing_arms_length')}
-• Capital Siphoning & Corporate Guarantees: {a4.get('section4_master_rpt', {}).get('capital_siphoning', {}).get('unsecured_loans_to_insiders')} | Guarantees: {a4.get('section4_master_rpt', {}).get('capital_siphoning', {}).get('corporate_guarantees')}
-• RPT Revenue & Disclosure Governance: RPT % of Revenue: {a4.get('audit_metrics', {}).get('RPT % of Revenue')} | Audit Committee Sign-Off: {a4.get('section4_master_rpt', {}).get('governance_disclosures', {}).get('audit_committee_preapproval')}"""
+        agent4_pdf_text = f"""• Promoter Alignment & Encumbrance: {_get_audit_text(a4.get('section1_promoter_integrity', {}).get('2_promoter_pledge_percentage'))}
+• Executive Remuneration vs PAT: {_get_audit_text(a4.get('section2_executive_remuneration', {}).get('1_ceo_remuneration_vs_pat'))} (CEO-to-Median-Employee Ratio: {a4.get('audit_metrics', {}).get('CEO / Median Pay')})
+• Incentive Hurdle Alignment: {_get_audit_text(a4.get('section2_executive_remuneration', {}).get('3_incentive_hurdle_alignment'))}
+• Politically Exposed Persons (PEP) & Rent-Seeking: {_get_audit_text(a4.get('section3_pep_rent_seeking', {}).get('1_pep_presence'))} | Dependency: {_get_audit_text(a4.get('section3_pep_rent_seeking', {}).get('2_government_concession_dependency'))}
+• Master RPT Pricing & Arm's Length Validation: {_get_audit_text(a4.get('section4_master_rpt', {}).get('pricing_validation', {}).get('pricing_arms_length'))}
+• Capital Siphoning & Corporate Guarantees: {_get_audit_text(a4.get('section4_master_rpt', {}).get('capital_siphoning', {}).get('unsecured_loans_to_insiders'))} | Guarantees: {_get_audit_text(a4.get('section4_master_rpt', {}).get('capital_siphoning', {}).get('corporate_guarantees'))}
+• RPT Revenue & Disclosure Governance: RPT % of Revenue: {a4.get('audit_metrics', {}).get('RPT % of Revenue')} | Audit Committee Sign-Off: {_get_audit_text(a4.get('section4_master_rpt', {}).get('governance_disclosures', {}).get('audit_committee_preapproval'))}"""
 
-        a5_pdf_lines = [f"• {k}: {v}" for k, v in a5.get("kpi_results", {}).items()]
+        a5_pdf_lines = [f"• {k}: {_get_audit_text(v)}" for k, v in a5.get("kpi_results", {}).items()]
         agent5_pdf_text = f"Sector Checklist Activated: {a5.get('activated_checklist_section')}\n" + "\n".join(a5_pdf_lines)
 
         inval_pdf_lines = [f"  - {trig}" for trig in a6.get("invalidation_triggers", [])]
@@ -778,11 +858,11 @@ def main():
 • Independent Asset & Yield Valuation Floors:
 """
         for fl_k, fl_v in a6.get("section2_asset_yield_valuation", {}).items():
-            agent6_pdf_text += f"  - {fl_k.replace('_', ' ').title()}: {fl_v}\n"
+            agent6_pdf_text += f"  - {fl_k.replace('_', ' ').title()}: {_get_audit_text(fl_v)}\n"
 
         agent6_pdf_text += f"• Primary Valuation Architecture: {a6.get('primary_valuation', 'Sector Architecture')}\n"
         for r_k, r_v in a6.get("section3_reverse_dcf", {}).items():
-            agent6_pdf_text += f"  - {r_k.replace('_', ' ').title()}: {r_v}\n"
+            agent6_pdf_text += f"  - {r_k.replace('_', ' ').title()}: {_get_audit_text(r_v)}\n"
 
         agent6_pdf_text += f"""• 3-Scenario Valuation Matrix:
   - Bear Case: Target {a6.get('section4_scenario_matrix', {}).get('bear_case', {}).get('fair_target_price')} ({a6.get('section4_scenario_matrix', {}).get('bear_case', {}).get('expected_return')}) | {a6.get('section4_scenario_matrix', {}).get('bear_case', {}).get('growth_assumed')}
@@ -867,68 +947,22 @@ def main():
             ])
             with t1:
                 for k, v in a1.get("part1_business_model", {}).items():
-                    st.markdown(f'<div class="q-box"><div class="q-title">{k.replace("_", " ").upper()}</div><div class="q-ans">{v}</div></div>', unsafe_allow_html=True)
+                    render_audit_card(k, v)
             with t2:
                 for k, v in a1.get("part2_competitive_moat", {}).items():
-                    st.markdown(f'<div class="q-box"><div class="q-title">{k.replace("_", " ").upper()}</div><div class="q-ans">{v}</div></div>', unsafe_allow_html=True)
+                    render_audit_card(k, v)
             with t3:
                 for k, v in a1.get("part3_industry_growth", {}).items():
-                    st.markdown(f'<div class="q-box"><div class="q-title">{k.replace("_", " ").upper()}</div><div class="q-ans">{v}</div></div>', unsafe_allow_html=True)
+                    render_audit_card(k, v)
             with t4:
-                p5_items = a1.get("part5_operations_scalability", {})
-                if is_bfsi(sector, industry):
-                    op_lev_label = "1. OPERATING LEVERAGE & BRANCH EFFICIENCY"
-                    sourcing_label = "2. LIABILITY & DEPOSIT SOURCING RISKS"
-                    cap_label = "3. REGULATORY CAPITAL CONSUMPTION (CET-1 / RWA)"
-                else:
-                    op_lev_label = "1. OPERATING LEVERAGE & CAPACITY UTILIZATION"
-                    sourcing_label = "2. SUPPLY CHAIN & RAW MATERIAL SOURCING RISKS"
-                    cap_label = "3. CAPITAL INTENSITY & REINVESTMENT"
-
-                op_val = p5_items.get("1_operating_leverage") or (
-                    "Branch vintage maturation, digital transaction penetration (>90%), and Cost-to-Income trajectory optimization without fixed asset constraints."
-                    if is_bfsi(sector, industry) else
-                    "Plant capacity utilization, fixed-cost overhead absorption, and incremental volume leverage."
-                )
-                src_val = p5_items.get("2_supply_chain_risks") or (
-                    "Granular retail CASA deposit franchise and wholesale liability diversification with balanced ALM duration matching."
-                    if is_bfsi(sector, industry) else
-                    "Input cost inflation pass-through capability, vendor diversification, and strategic buffer inventory management."
-                )
-                cap_val = p5_items.get("3_capital_intensity") or (
-                    "CET-1 Tier-1 capital conservation and regulatory capital buffers maintained comfortably above RBI minimums."
-                    if is_bfsi(sector, industry) else
-                    "Maintenance vs growth CapEx-to-depreciation ratio and internal operating cash flow reinvestment."
-                )
-
-                if is_bfsi(sector, industry):
-                    for bw, rw in [
-                        (r"\braw\s+materials\b", "capital inputs"),
-                        (r"\braw\s+material\b", "capital input"),
-                        (r"\binventories\b", "liquid assets"),
-                        (r"\binventory\b", "liquid assets"),
-                        (r"\bfactories\b", "operating facilities"),
-                        (r"\bfactory\b", "operating facility"),
-                        (r"\bmachineries\b", "operating infrastructure"),
-                        (r"\bmachinery\b", "operating infrastructure"),
-                        (r"\bsupplier\s+base\b", "liability deposit base"),
-                        (r"\bsuppliers\b", "depositors and funding partners"),
-                        (r"\bsupplier\b", "funding source"),
-                        (r"\bsupply\s+chain\b", "funding and liability sourcing"),
-                    ]:
-                        op_val = re.sub(bw, rw, str(op_val), flags=re.IGNORECASE)
-                        src_val = re.sub(bw, rw, str(src_val), flags=re.IGNORECASE)
-                        cap_val = re.sub(bw, rw, str(cap_val), flags=re.IGNORECASE)
-
-                st.markdown(f'<div class="q-box"><div class="q-title">{op_lev_label}</div><div class="q-ans">{op_val}</div></div>', unsafe_allow_html=True)
-                st.markdown(f'<div class="q-box"><div class="q-title">{sourcing_label}</div><div class="q-ans">{src_val}</div></div>', unsafe_allow_html=True)
-                st.markdown(f'<div class="q-box"><div class="q-title">{cap_label}</div><div class="q-ans">{cap_val}</div></div>', unsafe_allow_html=True)
+                for k, v in a1.get("part5_operations_scalability", {}).items():
+                    render_audit_card(k, v)
             with t5:
                 for k, v in a1.get("part6_scuttlebutt", {}).items():
-                    st.markdown(f'<div class="q-box"><div class="q-title">{k.replace("_", " ").upper()}</div><div class="q-ans">{v}</div></div>', unsafe_allow_html=True)
+                    render_audit_card(k, v)
             with t6:
                 for k, v in a1.get("part7_qualitative_risks", {}).items():
-                    st.markdown(f'<div class="q-box"><div class="q-title">{k.replace("_", " ").upper()}</div><div class="q-ans">{v}</div></div>', unsafe_allow_html=True)
+                    render_audit_card(k, v)
             st.markdown("</div>", unsafe_allow_html=True)
 
         with tab2:
@@ -972,16 +1006,16 @@ def main():
             f_tabs = st.tabs(["Part 13: D&A Manipulation", "Part 14: SG&A Anomalies", "Part 15: Revenue Quality (CFO/PAT)", "Part 16: Goodwill & Governance"])
             with f_tabs[0]:
                 for k, v in a2.get("part13_depreciation", {}).items():
-                    st.markdown(f'<div class="q-box"><div class="q-title">{k.replace("_", " ").upper()}</div><div class="q-ans">{v}</div></div>', unsafe_allow_html=True)
+                    render_audit_card(k, v)
             with f_tabs[1]:
                 for k, v in a2.get("part14_sga_anomalies", {}).items():
-                    st.markdown(f'<div class="q-box"><div class="q-title">{k.replace("_", " ").upper()}</div><div class="q-ans">{v}</div></div>', unsafe_allow_html=True)
+                    render_audit_card(k, v)
             with f_tabs[2]:
                 for k, v in a2.get("part15_revenue_quality", {}).items():
-                    st.markdown(f'<div class="q-box"><div class="q-title">{k.replace("_", " ").upper()}</div><div class="q-ans">{v}</div></div>', unsafe_allow_html=True)
+                    render_audit_card(k, v)
             with f_tabs[3]:
                 for k, v in a2.get("part16_balance_sheet", {}).items():
-                    st.markdown(f'<div class="q-box"><div class="q-title">{k.replace("_", " ").upper()}</div><div class="q-ans">{v}</div></div>', unsafe_allow_html=True)
+                    render_audit_card(k, v)
             st.markdown("</div>", unsafe_allow_html=True)
 
         with tab3:
@@ -996,19 +1030,19 @@ def main():
             s_tabs = st.tabs(["Part 8: Profitability", "Part 9: Cash Flow & ROIC vs WACC", "Part 10: Solvency", "Part 11: Working Capital (CCC)", "Part 12: Capital Allocation"])
             with s_tabs[0]:
                 for k, v in a3.get("part8_profitability", {}).items():
-                    st.markdown(f'<div class="q-box"><div class="q-title">{k.replace("_", " ").upper()}</div><div class="q-ans">{v}</div></div>', unsafe_allow_html=True)
+                    render_audit_card(k, v)
             with s_tabs[1]:
                 for k, v in a3.get("part9_cash_flow_roic", {}).items():
-                    st.markdown(f'<div class="q-box"><div class="q-title">{k.replace("_", " ").upper()}</div><div class="q-ans">{v}</div></div>', unsafe_allow_html=True)
+                    render_audit_card(k, v)
             with s_tabs[2]:
                 for k, v in a3.get("part10_solvency", {}).items():
-                    st.markdown(f'<div class="q-box"><div class="q-title">{k.replace("_", " ").upper()}</div><div class="q-ans">{v}</div></div>', unsafe_allow_html=True)
+                    render_audit_card(k, v)
             with s_tabs[3]:
                 for k, v in a3.get("part11_working_capital", {}).items():
-                    st.markdown(f'<div class="q-box"><div class="q-title">{k.replace("_", " ").upper()}</div><div class="q-ans">{v}</div></div>', unsafe_allow_html=True)
+                    render_audit_card(k, v)
             with s_tabs[4]:
                 for k, v in a3.get("part12_capital_allocation", {}).items():
-                    st.markdown(f'<div class="q-box"><div class="q-title">{k.replace("_", " ").upper()}</div><div class="q-ans">{v}</div></div>', unsafe_allow_html=True)
+                    render_audit_card(k, v)
             st.markdown("</div>", unsafe_allow_html=True)
 
         with tab4:
@@ -1023,30 +1057,41 @@ def main():
             g_tabs = st.tabs(["Section 1: Promoter Integrity & Pledge", "Section 2: Executive Remuneration", "Section 3: PEP & Political Risk", "Section 4: Master RPT Audit"])
             with g_tabs[0]:
                 for k, v in a4.get("section1_promoter_integrity", {}).items():
-                    st.markdown(f'<div class="q-box"><div class="q-title">{k.replace("_", " ").upper()}</div><div class="q-ans">{v}</div></div>', unsafe_allow_html=True)
+                    render_audit_card(k, v)
             with g_tabs[1]:
                 for k, v in a4.get("section2_executive_remuneration", {}).items():
-                    st.markdown(f'<div class="q-box"><div class="q-title">{k.replace("_", " ").upper()}</div><div class="q-ans">{v}</div></div>', unsafe_allow_html=True)
+                    render_audit_card(k, v)
             with g_tabs[2]:
                 for k, v in a4.get("section3_pep_rent_seeking", {}).items():
-                    st.markdown(f'<div class="q-box"><div class="q-title">{k.replace("_", " ").upper()}</div><div class="q-ans">{v}</div></div>', unsafe_allow_html=True)
+                    render_audit_card(k, v)
             with g_tabs[3]:
                 st.markdown("##### 🔍 Master Related Party Transactions (RPT) Matrix")
                 rpt = a4.get("section4_master_rpt", {})
                 for sub_name, sub_dict in rpt.items():
                     st.markdown(f"**{sub_name.replace('_', ' ').title()}**")
                     for sub_k, sub_v in sub_dict.items():
-                        st.markdown(f'<div class="q-box"><div class="q-title">{sub_k.replace("_", " ").upper()}</div><div class="q-ans">{sub_v}</div></div>', unsafe_allow_html=True)
+                        render_audit_card(sub_k, sub_v)
             st.markdown("</div>", unsafe_allow_html=True)
 
         with tab5:
             st.markdown("<div class='glass-panel'>", unsafe_allow_html=True)
             st.markdown(f"**Activated Sector Checklist**: `{a5.get('activated_checklist_section')}`")
             st.markdown(f"**Summary**: {a5.get('summary')}")
-            kpi_items = list(a5.get("kpi_results", {}).items())
-            kpi_cols = st.columns(2)
-            for idx, (k, v) in enumerate(kpi_items):
-                kpi_cols[idx % 2].metric(k, str(v))
+            
+            # 1. Executive Metric Cards
+            metrics_5 = a5.get("audit_metrics", {})
+            if metrics_5:
+                st.markdown("##### 📊 Operational KPI Metric Cards")
+                m5_cols = st.columns(3)
+                for idx, (mk, mv) in enumerate(metrics_5.items()):
+                    m5_cols[idx % 3].metric(mk, str(mv))
+                st.markdown("<div style='margin-top: 16px;'></div>", unsafe_allow_html=True)
+
+            # 2. Granular 4-Tier Operational Deep Dives
+            st.markdown("##### 🔬 Granular Operational Throughput & Benchmark Commentary")
+            kpi_items = a5.get("kpi_results", {})
+            for k, v in kpi_items.items():
+                render_audit_card(k, v)
             st.markdown("</div>", unsafe_allow_html=True)
 
         with tab6:
@@ -1058,23 +1103,17 @@ def main():
                 st.markdown("##### 📜 Historical Promise vs Delivery Audit")
                 wtt = a6.get("section1_management_walk_the_talk", {})
                 for k, v in wtt.items():
-                    if isinstance(v, dict):
-                        st.markdown(f"**Target**: {v.get('target')}")
-                        st.markdown(f"**Actual**: {v.get('actual')}")
-                        st.markdown(f"**Delivery Rating**: `{v.get('verdict')}`")
-                        st.markdown("---")
-                    else:
-                        st.markdown(f"**Forward Guidance Realism**: {v}")
+                    render_audit_card(k, v)
             with cio_tabs[1]:
                 st.markdown("##### 🛡️ Independent Valuation Floors")
                 floors = a6.get("section2_asset_yield_valuation", {})
                 for k, v in floors.items():
-                    st.markdown(f'<div class="q-box"><div class="q-title">{k.replace("_", " ").upper()}</div><div class="q-ans">{v}</div></div>', unsafe_allow_html=True)
+                    render_audit_card(k, v)
             with cio_tabs[2]:
                 st.markdown(f"##### 🧮 {a6.get('primary_valuation', 'Valuation Architecture & Hurdle Test')}")
                 rdcf = a6.get("section3_reverse_dcf", {})
                 for k, v in rdcf.items():
-                    st.markdown(f'<div class="q-box"><div class="q-title">{k.replace("_", " ").upper()}</div><div class="q-ans">{v}</div></div>', unsafe_allow_html=True)
+                    render_audit_card(k, v)
                 dcf_data = a6.get("dcf_model", {})
                 sens = dcf_data.get("sensitivity_matrix", {})
                 if sens and "matrix" in sens:
