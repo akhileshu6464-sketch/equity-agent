@@ -837,7 +837,6 @@ def main():
 
         with tab0:
             st.markdown("<div class='glass-panel'>", unsafe_allow_html=True)
-            st.caption("System Prompt dynamically loaded from: `agent0_classifier.txt`")
             col_left, col_right = st.columns(2)
             with col_left:
                 st.markdown(
@@ -873,7 +872,6 @@ def main():
 
         with tab1:
             st.markdown("<div class='glass-panel'>", unsafe_allow_html=True)
-            st.caption("System Prompt dynamically loaded from: `agent1_qualitative.txt`")
             st.markdown(f"**Moat Classification**: `{a1.get('moat_rating')}` (Checklist Score: **{a1.get('checklist_score')}/100**)")
             t1, t2, t3, t4, t5, t6 = st.tabs([
                 "Part 1: Business Model", 
@@ -951,7 +949,6 @@ def main():
 
         with tab2:
             st.markdown("<div class='glass-panel'>", unsafe_allow_html=True)
-            st.caption("System Prompt dynamically loaded from: `agent2_forensics.txt`")
             st.markdown(f"**Forensic Status**: {render_risk_pill('Forensics', forensic_status)}", unsafe_allow_html=True)
             st.markdown(f"**Detective Summary**: {a2.get('summary')}")
             m2_items = list(a2.get("audit_metrics", {}).items())
@@ -1005,7 +1002,6 @@ def main():
 
         with tab3:
             st.markdown("<div class='glass-panel'>", unsafe_allow_html=True)
-            st.caption("System Prompt dynamically loaded from: `agent3_solvency.txt`")
             st.markdown(f"**Solvency Status**: {render_risk_pill('Solvency', solvency_status)}", unsafe_allow_html=True)
             st.markdown(f"**Assessment**: {a3.get('summary')}")
             m3_items = list(a3.get("audit_metrics", {}).items())
@@ -1033,7 +1029,6 @@ def main():
 
         with tab4:
             st.markdown("<div class='glass-panel'>", unsafe_allow_html=True)
-            st.caption("System Prompt dynamically loaded from: `agent4_governance_rpt.txt`")
             st.markdown(f"**Governance Status**: {render_risk_pill('Governance', gov_status)}", unsafe_allow_html=True)
             st.markdown(f"**Audit Findings**: {a4.get('summary')}")
             m4_items = list(a4.get("audit_metrics", {}).items())
@@ -1062,7 +1057,6 @@ def main():
 
         with tab5:
             st.markdown("<div class='glass-panel'>", unsafe_allow_html=True)
-            st.caption("System Prompt dynamically loaded from: `agent5_industry_kpi.txt`")
             st.markdown(f"**Activated Sector Checklist**: `{a5.get('activated_checklist_section')}`")
             st.markdown(f"**Summary**: {a5.get('summary')}")
             kpi_items = list(a5.get("kpi_results", {}).items())
@@ -1073,7 +1067,6 @@ def main():
 
         with tab6:
             st.markdown("<div class='glass-panel'>", unsafe_allow_html=True)
-            st.caption("System Prompt dynamically loaded from: `agent6_valuation_cio.txt`")
             st.markdown(f"**CIO Final Rating Badge**: `{a6.get('institutional_rating')}`")
             st.markdown(f"**CIO Synthesis**: {a6.get('summary')}")
             cio_tabs = st.tabs(["Section 1: Walk-the-Talk", "Section 2: Asset & Yield Floors", "Section 3: Valuation Architecture", "Section 4: Scenario Matrix", "Invalidation Triggers"])
