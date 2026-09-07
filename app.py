@@ -154,7 +154,7 @@ st.set_page_config(
 # 3D Glassmorphism & Ambient 3D Floating Orbs Styles
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&family=Fira+Code:wght@400;600&display=swap');
 
 /* Base Dark Canvas */
 .stApp {
@@ -234,18 +234,20 @@ st.markdown("""
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
 }
 .stat-tag {
-    font-size: 0.72rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: #94a3b8;
+    font-size: 0.72rem !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.05em !important;
+    text-transform: uppercase !important;
+    color: #94a3b8 !important;
+    margin-bottom: 4px !important;
 }
 .stat-num {
-    font-size: 1.35rem;
-    font-family: 'JetBrains Mono', monospace;
-    font-weight: 700;
-    color: #ffffff;
-    margin-top: 4px;
+    font-size: 1.15rem !important;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace !important;
+    font-weight: 600 !important;
+    line-height: 1.4 !important;
+    color: #f8fafc !important;
+    margin-top: 4px !important;
 }
 
 /* Glass Risk Pills */
@@ -380,16 +382,30 @@ header[data-testid="stHeader"] {
     border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
 }
 
-[data-testid="stMetricValue"] {
-    font-family: 'JetBrains Mono', monospace !important;
-    color: #ffffff !important;
-}
-[data-testid="stMetricLabel"] {
-    color: #94a3b8 !important;
+/* Metric Card Category Label (Small Header) */
+.metric-label, .kpi-label, [data-testid="stMetricLabel"], [data-testid="stMetricLabel"] > div, [data-testid="stMetricLabel"] label, [data-testid="stMetricLabel"] p {
+    font-size: 0.72rem !important;
     font-weight: 600 !important;
-    text-transform: uppercase !important;
     letter-spacing: 0.05em !important;
-    font-size: 0.75rem !important;
+    text-transform: uppercase !important;
+    color: #94a3b8 !important; /* Muted slate */
+    margin-bottom: 4px !important;
+}
+
+/* Metric Primary Value (The oversized text to shrink) */
+.metric-value, .kpi-value, .stMetricValue, [data-testid="stMetricValue"], [data-testid="stMetricValue"] > div {
+    font-size: 1.15rem !important; /* Scaled down from oversized 1.8rem+ */
+    font-weight: 600 !important;
+    line-height: 1.4 !important;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace !important;
+    color: #f8fafc !important; /* Bright crisp white */
+}
+
+/* Metric Subtext / Benchmark Benchmark annotation */
+.metric-benchmark, .kpi-benchmark, [data-testid="stMetricDelta"], [data-testid="stMetricDelta"] > div {
+    font-size: 0.85rem !important;
+    font-weight: 400 !important;
+    color: #cbd5e1 !important;
 }
 </style>
 <div class="orb-purple"></div>
