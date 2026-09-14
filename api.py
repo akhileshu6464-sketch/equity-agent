@@ -22,7 +22,9 @@ CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 if CURRENT_DIR not in sys.path:
     sys.path.insert(0, CURRENT_DIR)
 
+import json
 from agents.pipeline import run_deep_institutional_pipeline
+from services.financial_data import FinancialDataService
 
 # Configure logging
 logging.basicConfig(
@@ -95,6 +97,40 @@ def _sanitize_for_json(obj: Any) -> Any:
 
 
 # -------------------------------------------------------------------------
+# Exchange Tickers In-Memory Cache & Search
+# -------------------------------------------------------------------------
+
+_CACHED_TICKERS: Optional[List[Dict[str, str]]] = None
+
+
+def _get_cached_tickers() -> List[Dict[str, str]]:
+    """Loads and caches the master list of NSE/BSE listed companies in memory."""
+    global _CACHED_TICKERS
+    if _CACHED_TICKERS is None:
+        json_path = os.path.join(CURRENT_DIR, "data", "listed_companies.json")
+        if os.path.exists(json_path):
+            try:
+                with open(json_path, "r", encoding="utf-8") as f:
+                    _CACHED_TICKERS = json.load(f)
+                logger.info(f"Loaded {len(_CACHED_TICKERS)} tickers into memory cache.")
+            except Exception as e:
+                logger.error(f"Error reading {json_path}: {e}")
+        if not _CACHED_TICKERS:
+            _CACHED_TICKERS = [
+                {"symbol": "CROMPTON.NS", "name": "Crompton Greaves Consumer Electricals Limited", "exchange": "NSE"},
+                {"symbol": "RELIANCE.NS", "name": "Reliance Industries Limited", "exchange": "NSE"},
+                {"symbol": "HDFCBANK.NS", "name": "HDFC Bank Limited", "exchange": "NSE"},
+                {"symbol": "TCS.NS", "name": "Tata Consultancy Services Limited", "exchange": "NSE"},
+                {"symbol": "INFY.NS", "name": "Infosys Limited", "exchange": "NSE"},
+                {"symbol": "TATACONSUM.NS", "name": "Tata Consumer Products Limited", "exchange": "NSE"},
+                {"symbol": "ICICIBANK.NS", "name": "ICICI Bank Limited", "exchange": "NSE"},
+                {"symbol": "500209.BO", "name": "Infosys Ltd", "exchange": "BSE"},
+                {"symbol": "500800.BO", "name": "Tata Consumer Products Limited", "exchange": "BSE"},
+            ]
+    return _CACHED_TICKERS
+
+
+# -------------------------------------------------------------------------
 # API Endpoints
 # -------------------------------------------------------------------------
 
@@ -107,6 +143,47 @@ async def health_check():
         "version": "2.0.0",
         "timestamp": datetime.utcnow().isoformat() + "Z"
     }
+
+
+@app.get("/api/tickers")
+async def get_tickers(q: Optional[str] = "", limit: int = 15):
+    """
+    Search endpoint for NSE & BSE listed equity tickers.
+    Supports instant prefix, substring, and company name matching.
+    """
+    query = (q or "").strip().lower()
+    tickers = _get_cached_tickers()
+    if not query:
+        popular_symbols = [
+            "RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFY.NS", "CROMPTON.NS",
+            "TATACONSUM.NS", "ICICIBANK.NS", "500209.BO", "500800.BO"
+        ]
+        popular = [t for t in tickers if t.get("symbol") in popular_symbols]
+        return popular[:limit]
+
+    exact_sym = []
+    prefix_sym = []
+    prefix_name = []
+    sub_match = []
+
+    for c in tickers:
+        sym = c.get("symbol", "").lower()
+        name = c.get("name", "").lower()
+
+        if sym == query or sym.split(".")[0] == query:
+            exact_sym.append(c)
+        elif sym.startswith(query):
+            prefix_sym.append(c)
+        elif any(w.startswith(query) for w in name.split()):
+            prefix_name.append(c)
+        elif query in sym or query in name:
+            sub_match.append(c)
+
+        if len(exact_sym) + len(prefix_sym) + len(prefix_name) >= limit * 2:
+            break
+
+    results = (exact_sym + prefix_sym + prefix_name + sub_match)[:limit]
+    return results
 
 
 @app.post("/api/analyze")
@@ -123,10 +200,8 @@ async def analyze_equity(request: AnalyzeRequest):
             detail="Stock ticker symbol cannot be empty."
         )
 
-    # Normalize ticker (NSE default)
-    clean_ticker = raw_ticker.upper()
-    if not (clean_ticker.endswith(".NS") or clean_ticker.endswith(".BO")):
-        clean_ticker += ".NS"
+    # Normalize ticker using institutional standard normalizer (handles NSE, BSE, scrip codes)
+    clean_ticker = FinancialDataService.normalize_ticker(raw_ticker)
 
     logger.info(f"Incoming audit request for ticker: '{raw_ticker}' -> resolved as '{clean_ticker}'")
 

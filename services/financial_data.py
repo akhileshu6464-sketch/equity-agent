@@ -31,13 +31,40 @@ class FinancialDataService:
     @staticmethod
     def normalize_ticker(ticker: str) -> str:
         """
-        Normalizes Indian stock tickers.
-        E.g., 'CROMPTON' -> 'CROMPTON.NS', 'RELIANCE' -> 'RELIANCE.NS'
+        Normalizes Indian stock tickers for NSE and BSE.
+        Handles plain symbols, exchange-suffixed tickers (.NS, .BO), numeric BSE scrip codes,
+        and composite dropdown labels (e.g. 'TATACONSUM.NS — Tata Consumer Products Limited (NSE)').
         """
-        clean = ticker.strip().upper()
-        if not clean.endswith(".NS") and not clean.endswith(".BO"):
-            clean = f"{clean}.NS"
-        return clean
+        if not ticker:
+            return ""
+
+        clean = ticker.strip()
+
+        # Handle composite dropdown strings (e.g., 'SYMBOL — Company Name (NSE)')
+        if " — " in clean:
+            clean = clean.split(" — ")[0].strip()
+        elif " - " in clean:
+            parts = clean.split(" - ")
+            if len(parts[0].split()) == 1:
+                clean = parts[0].strip()
+        elif " | " in clean:
+            clean = clean.split(" | ")[0].strip()
+
+        clean = clean.upper()
+
+        # Strip any extraneous parentheses or exchange tags
+        clean = clean.replace("(NSE)", "").replace("(BSE)", "").strip()
+
+        # If already suffixed with .NS or .BO
+        if clean.endswith(".NS") or clean.endswith(".BO"):
+            return clean
+
+        # Check if pure 6-digit numeric string (BSE scrip code, e.g. 500209)
+        if clean.isdigit() and len(clean) == 6:
+            return f"{clean}.BO"
+
+        # Default Indian equity exchange suffix: NSE (.NS)
+        return f"{clean}.NS"
 
     def get_company_data(self, ticker: str, force_refresh: bool = False) -> Dict[str, Any]:
         """

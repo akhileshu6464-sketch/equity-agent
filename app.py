@@ -4,12 +4,13 @@ Multi-Agent Analysis Platform (Agents 0 through 6)
 3D Glassmorphic UI with 2-State Flow (Minimal Search Landing -> Full Dossier Display)
 """
 
+import os
 import json
 import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-from typing import Dict, Any
+from typing import Dict, Any, List
 import io
 import re
 
@@ -21,6 +22,30 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.pdfgen import canvas
 
 from agents.pipeline import run_deep_institutional_pipeline, EquityAgentPipeline, parse_dimension_data
+from services.financial_data import FinancialDataService
+
+
+@st.cache_data(show_spinner=False)
+def load_listed_companies() -> List[Dict[str, str]]:
+    """Loads and caches the master NSE/BSE listed equities dataset in memory."""
+    json_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "listed_companies.json")
+    if os.path.exists(json_path):
+        try:
+            with open(json_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return [
+        {"symbol": "CROMPTON.NS", "name": "Crompton Greaves Consumer Electricals Limited", "exchange": "NSE"},
+        {"symbol": "RELIANCE.NS", "name": "Reliance Industries Limited", "exchange": "NSE"},
+        {"symbol": "HDFCBANK.NS", "name": "HDFC Bank Limited", "exchange": "NSE"},
+        {"symbol": "TCS.NS", "name": "Tata Consultancy Services Limited", "exchange": "NSE"},
+        {"symbol": "INFY.NS", "name": "Infosys Limited", "exchange": "NSE"},
+        {"symbol": "TATACONSUM.NS", "name": "Tata Consumer Products Limited", "exchange": "NSE"},
+        {"symbol": "ICICIBANK.NS", "name": "ICICI Bank Limited", "exchange": "NSE"},
+        {"symbol": "500209.BO", "name": "Infosys Ltd", "exchange": "BSE"},
+        {"symbol": "500800.BO", "name": "Tata Consumer Products Limited", "exchange": "BSE"},
+    ]
 
 
 class NumberedCanvas(canvas.Canvas):
@@ -647,8 +672,19 @@ def main():
         # Centered Search Input
         col_l, col_center, col_r = st.columns([1, 2.5, 1])
         with col_center:
-            ticker_input = st.text_input("Enter NSE/BSE Stock Ticker", placeholder="e.g. CROMPTON, RELIANCE, HDFCBANK, TCS", label_visibility="collapsed")
-            
+            companies = load_listed_companies()
+            company_options = [
+                f"{c['symbol']} — {c['name']} ({c['exchange']})"
+                for c in companies
+            ]
+            selected_company = st.selectbox(
+                "Search NSE/BSE Equities",
+                options=company_options,
+                index=None,
+                placeholder="Search by company name or ticker (e.g. Tata Consumer, RELIANCE, 500209)...",
+                label_visibility="collapsed"
+            )
+
             # Sample Quick-Select Buttons
             st.markdown("<p style='text-align:center; color:#64748b; font-size:0.75rem; margin-top:12px;'>POPULAR INSTITUTIONAL TICKERS</p>", unsafe_allow_html=True)
             q1, q2, q3, q4 = st.columns(4)
@@ -657,12 +693,10 @@ def main():
             if q2.button("RELIANCE", use_container_width=True): ticker_search = "RELIANCE.NS"
             if q3.button("HDFCBANK", use_container_width=True): ticker_search = "HDFCBANK.NS"
             if q4.button("TCS", use_container_width=True): ticker_search = "TCS.NS"
-            if ticker_input: ticker_search = ticker_input
+            if selected_company: ticker_search = selected_company
 
             if ticker_search:
-                clean_ticker = ticker_search.strip().upper()
-                if not (clean_ticker.endswith(".NS") or clean_ticker.endswith(".BO")):
-                    clean_ticker += ".NS"
+                clean_ticker = FinancialDataService.normalize_ticker(ticker_search)
 
                 # WIPE PREVIOUS STATE COMPLETELY TO PREVENT DATA CONTAMINATION
                 keys_to_clear = ["dossier", "dossier_data", "raw_financials", "active_ticker", "company_info", "dossier_cache", "company_data"]
