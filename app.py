@@ -22,7 +22,7 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.pdfgen import canvas
 
 from agents.pipeline import run_deep_institutional_pipeline, EquityAgentPipeline, parse_dimension_data
-from services.financial_data import FinancialDataService
+from services.financial_data import FinancialDataService, extract_pure_symbol
 
 
 @st.cache_data(show_spinner=False)

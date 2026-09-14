@@ -272,50 +272,53 @@ class FinancialDataService:
         logger.info("Cleared FinancialDataService in-memory cache.")
 
     @staticmethod
+    def extract_pure_symbol(raw_input: str) -> str:
+        """
+        Extracts pure scrip symbol from composite input (e.g. 'BAJAJ-AUTO — BAJAJ AUTO LIMITED.NS').
+        Splits by em-dash (\u2014), en-dash (\u2013), bullet (•), pipe (|), or space-dash-space,
+        cleans out existing suffixes (.NS, .BO), and appends .NS.
+        """
+        if not raw_input:
+            return ""
+        # Split by em-dash, en-dash, bullet, pipe, or space-dash-space
+        token = re.split(r'[\u2014\u2013•|]| - ', str(raw_input))[0].strip()
+        # Clean out existing suffixes and exchange tags
+        token = token.upper().replace(".NS", "").replace(".BO", "").strip()
+        token = re.sub(r'\(.*?\)', '', token).strip()
+        return f"{token}.NS"
+
+    @staticmethod
     def normalize_ticker(ticker: str) -> str:
         """
         Normalizes any input ticker to its verified backend exchange ticker symbol.
         Handles clean symbols (e.g. CROMPTON -> CROMPTON.NS), exchange-suffixed tickers (.NS, .BO),
-        numeric BSE scrip codes, and composite dropdown labels (e.g. 'RELIANCE — Reliance Industries Limited').
+        numeric BSE scrip codes, and composite dropdown labels (e.g. 'BAJAJ-AUTO — BAJAJ AUTO LIMITED.NS').
         """
         if not ticker:
             return ""
 
-        clean = ticker.strip()
+        # Step 1: Isolate pure symbol token before any separator (—, –, •, |, or " - ")
+        raw_symbol = re.split(r'[\u2014\u2013•|]| - ', str(ticker).strip())[0].strip()
+        clean = raw_symbol.upper().replace(".NS", "").replace(".BO", "").strip()
+        clean = re.sub(r'\(.*?\)', '', clean).strip()
 
-        # Handle composite dropdown strings (e.g., 'RELIANCE — Reliance Industries Limited')
-        if " — " in clean:
-            clean = clean.split(" — ")[0].strip()
-        elif " - " in clean:
-            parts = clean.split(" - ")
-            if len(parts[0].split()) == 1:
-                clean = parts[0].strip()
-        elif " | " in clean:
-            clean = clean.split(" | ")[0].strip()
+        if not clean:
+            return ""
 
-        clean = clean.upper()
-
-        # Strip any extraneous parentheses or exchange tags
-        clean = clean.replace("(NSE)", "").replace("(BSE)", "").strip()
-
-        # Legacy alias mapping
+        # Step 2: Legacy alias mapping
         if clean in ["TATAMOTORS", "TATAMOTORS.NS"]:
             return "TMCV.NS"
 
-        # If already suffixed with .NS or .BO
-        if clean.endswith(".NS") or clean.endswith(".BO"):
-            return clean
-
-        # Check internal lookup dictionary
+        # Step 3: Check internal lookup dictionary
         _load_master_dictionaries()
         if _TICKER_LOOKUP_MAP and clean in _TICKER_LOOKUP_MAP:
             return _TICKER_LOOKUP_MAP[clean]
 
-        # Check if pure 6-digit numeric string (legacy BSE scrip code, e.g. 500209)
-        if clean.isdigit() and len(clean) == 6:
+        # Step 4: Check if original ticker explicitly had .BO or if pure 6-digit numeric BSE code
+        if (str(ticker).strip().upper().endswith(".BO") and not any(sep in str(ticker) for sep in ["—", "–", " - ", "•", "|"])) or (clean.isdigit() and len(clean) == 6):
             return f"{clean}.BO"
 
-        # Default Indian equity exchange suffix: NSE (.NS)
+        # Step 5: Default Indian equity exchange suffix: NSE (.NS)
         return f"{clean}.NS"
 
     def get_company_data(self, ticker: str, force_refresh: bool = False) -> Dict[str, Any]:
@@ -1002,3 +1005,7 @@ class FinancialDataService:
             "public_holding_pct": round(public_pct, 2),
             "promoter_pledge_pct": round(pledge_pct, 2)
         }
+
+
+# Module-level convenience export
+extract_pure_symbol = FinancialDataService.extract_pure_symbol

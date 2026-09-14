@@ -20,13 +20,12 @@ if sys.platform == "win32":
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
 from agents.pipeline import EquityAgentPipeline
+from services.financial_data import FinancialDataService
 
 
 def main():
     raw_ticker = sys.argv[1] if len(sys.argv) > 1 else "CROMPTON.NS"
-    ticker = raw_ticker.strip().upper()
-    if not (ticker.endswith(".NS") or ticker.endswith(".BO")):
-        ticker += ".NS"
+    ticker = FinancialDataService.normalize_ticker(raw_ticker)
 
     print("=" * 80)
     print(f"🚀 RUNNING 7-AGENT INSTITUTIONAL EQUITY AUDIT ON: {ticker}")

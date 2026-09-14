@@ -542,10 +542,17 @@
 
     async function runAudit() {
       const input = document.getElementById('ticker-input');
-      const ticker = input.value.trim().toUpperCase();
-      if (!ticker) {
+      const rawTicker = (input ? input.value : '').trim().toUpperCase();
+      if (!rawTicker) {
         showError('Please enter a valid stock ticker symbol (e.g. CROMPTON, RELIANCE, HDFCBANK).');
         return;
+      }
+
+      // Isolate pure ticker symbol if composite string is pasted or entered (e.g. 'BAJAJ-AUTO — BAJAJ AUTO LIMITED.NS')
+      const token = rawTicker.split(/[\u2014\u2013•|]| - /)[0].trim().replace('.NS', '').replace('.BO', '');
+      const ticker = token || rawTicker;
+      if (input && input.value !== ticker) {
+        input.value = ticker;
       }
 
       hideError();
@@ -1214,7 +1221,8 @@
       const urlParams = new URLSearchParams(window.location.search);
       const deepTicker = urlParams.get('ticker');
       if (deepTicker && deepTicker.trim()) {
-        const cleanT = deepTicker.trim().toUpperCase();
+        const token = deepTicker.trim().toUpperCase().split(/[\u2014\u2013•|]| - /)[0].trim().replace('.NS', '').replace('.BO', '');
+        const cleanT = token || deepTicker.trim().toUpperCase();
         if (tickerInput) tickerInput.value = cleanT;
         runAudit();
       }
@@ -1225,7 +1233,8 @@
       const urlParams = new URLSearchParams(window.location.search);
       const deepTicker = urlParams.get('ticker');
       if (deepTicker && deepTicker.trim()) {
-        const cleanT = deepTicker.trim().toUpperCase();
+        const token = deepTicker.trim().toUpperCase().split(/[\u2014\u2013•|]| - /)[0].trim().replace('.NS', '').replace('.BO', '');
+        const cleanT = token || deepTicker.trim().toUpperCase();
         if (tickerInput) tickerInput.value = cleanT;
         runAudit();
       }
