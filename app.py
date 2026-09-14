@@ -656,6 +656,12 @@ def main():
     if "active_ticker" not in st.session_state:
         st.session_state.active_ticker = ""
 
+    # URL Query parameter support (?ticker=TATAMOTORS.NS)
+    query_ticker = st.query_params.get("ticker", "")
+    if query_ticker and not st.session_state.active_ticker:
+        clean_query_ticker = FinancialDataService.normalize_ticker(query_ticker)
+        st.session_state["active_ticker"] = clean_query_ticker
+
     # STATE 1: Hero Landing (Shows when no search has been initiated)
     if not st.session_state.active_ticker:
         st.markdown("""
@@ -705,6 +711,7 @@ def main():
                         del st.session_state[k]
 
                 st.session_state["active_ticker"] = clean_ticker
+                st.query_params["ticker"] = clean_ticker
 
                 with st.spinner(f"Running isolated institutional audit for {clean_ticker}..."):
                     # Ensure a completely fresh dictionary is returned
@@ -714,6 +721,8 @@ def main():
     # STATE 2: Full Institutional Dossier (Shows after ticker selection)
     else:
         ticker = st.session_state.active_ticker
+        if st.query_params.get("ticker") != ticker:
+            st.query_params["ticker"] = ticker
 
         # Minimal Top Navigation / Re-search Bar
         top_col1, top_col2 = st.columns([4.2, 1.8])
@@ -727,6 +736,7 @@ def main():
                     if k in st.session_state:
                         del st.session_state[k]
                 st.session_state["active_ticker"] = ""
+                st.query_params.clear()
                 st.rerun()
 
         # Isolated Pipeline Execution

@@ -189,12 +189,22 @@
             <p id="res-industry" class="text-sm text-slate-400">Industry • Furnishings, Fixtures & Appliances</p>
           </div>
 
-          <!-- Verdict Badge -->
-          <div class="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-            <div class="text-right">
+          <!-- Verdict Badge & One-Click PDF Export -->
+          <div class="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+            <div class="text-left sm:text-right">
               <div class="text-xs text-slate-400 uppercase tracking-wider font-semibold">Institutional Verdict</div>
               <div id="res-verdict" class="text-xl sm:text-2xl font-black font-mono text-emerald-400">[BUY / ACCUMULATE]</div>
             </div>
+            <button
+              id="btn-export-pdf"
+              onclick="downloadPdfReport()"
+              class="px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500/20 to-blue-600/20 hover:from-cyan-500/30 hover:to-blue-600/30 border border-cyan-500/50 hover:border-cyan-400 text-cyan-300 font-semibold text-xs transition-all flex items-center gap-2 shadow-lg shadow-cyan-950/40 active:scale-95"
+            >
+              <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+              </svg>
+              <span id="export-pdf-label">Export PDF Dossier</span>
+            </button>
           </div>
         </div>
 
@@ -542,6 +552,17 @@
 
       hideError();
       showLoading(ticker);
+
+      // Deep-linking: Synchronize URL query parameter (?ticker=...)
+      try {
+        const currentUrlTicker = new URLSearchParams(window.location.search).get('ticker');
+        if (currentUrlTicker !== ticker) {
+          const newUrl = `${window.location.pathname}?ticker=${encodeURIComponent(ticker)}`;
+          window.history.pushState({ ticker: ticker }, '', newUrl);
+        }
+      } catch (e) {
+        console.warn('URL state push error:', e);
+      }
 
       // Multi-step progress animation
       let stepIdx = 0;
@@ -1125,6 +1146,90 @@
         grid.appendChild(div);
       }
     }
+
+    // One-Click PDF Report Export
+    async function downloadPdfReport() {
+      const btn = document.getElementById('btn-export-pdf');
+      const label = document.getElementById('export-pdf-label');
+      if (!activeData || !activeData.ticker) {
+        showError('No completed audit dossier available to export.');
+        return;
+      }
+      const ticker = activeData.ticker;
+      const originalText = label ? label.innerText : 'Export PDF Dossier';
+      if (label) label.innerText = 'Compiling 22-Page PDF...';
+      if (btn) {
+        btn.disabled = true;
+        btn.classList.add('opacity-70', 'cursor-wait');
+      }
+
+      try {
+        const res = await fetch('/api/export-pdf', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            ticker: ticker,
+            dossier: activeData
+          })
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || `Export failed with HTTP ${res.status}`);
+        }
+
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        const compName = (activeData.company_name || activeData.short_name || ticker).replace(/[^a-zA-Z0-9 _-]/g, '').trim();
+        a.download = `${compName || ticker} - Institutional Equity Research Report.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        a.remove();
+        if (label) {
+          label.innerText = 'PDF Exported ✓';
+          setTimeout(() => {
+            label.innerText = originalText;
+          }, 3000);
+        }
+      } catch (err) {
+        console.error('PDF export error:', err);
+        showError('Failed to export institutional PDF: ' + err.message);
+        if (label) label.innerText = originalText;
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.classList.remove('opacity-70', 'cursor-wait');
+        }
+      }
+    }
+
+    // URL Query Parameter Deep-Linking Support (?ticker=TATAMOTORS.NS)
+    window.addEventListener('DOMContentLoaded', () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const deepTicker = urlParams.get('ticker');
+      if (deepTicker && deepTicker.trim()) {
+        const cleanT = deepTicker.trim().toUpperCase();
+        if (tickerInput) tickerInput.value = cleanT;
+        runAudit();
+      }
+    });
+
+    // Handle browser back/forward navigation
+    window.addEventListener('popstate', (e) => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const deepTicker = urlParams.get('ticker');
+      if (deepTicker && deepTicker.trim()) {
+        const cleanT = deepTicker.trim().toUpperCase();
+        if (tickerInput) tickerInput.value = cleanT;
+        runAudit();
+      }
+    });
   </script>
 </body>
 </html>

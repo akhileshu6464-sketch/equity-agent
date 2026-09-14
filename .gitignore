@@ -44,3 +44,5 @@ $RECYCLE.BIN/
 # Local Scratch & Artifacts
 scratch/
 *.pdf
+*.db
+

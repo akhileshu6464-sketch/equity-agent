@@ -4,6 +4,10 @@ Fetches and standardizes balance sheet, cash flows, income statements,
 shareholding, and price history for Indian equities (NSE/BSE) using yfinance.
 """
 
+import os
+import json
+import sqlite3
+import time
 import logging
 from typing import Dict, Any, Optional, List
 import pandas as pd
@@ -16,17 +20,193 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
+DEFAULT_DB_PATH = os.path.join(DEFAULT_CACHE_DIR, "financial_cache.db")
+CACHE_TTL_SECONDS = 24 * 3600  # 24 hours TTL
+
+# Sector median benchmarks for mid-cap / sparse data fallbacks
+SECTOR_MEDIANS: Dict[str, Dict[str, Any]] = {
+    "Financial Services": {
+        "trailing_pe": 16.5,
+        "forward_pe": 14.0,
+        "price_to_book": 2.2,
+        "ev_to_ebitda": 0.0,
+        "dividend_yield_pct": 1.2,
+        "operating_margin_pct": 24.0,
+    },
+    "Technology": {
+        "trailing_pe": 28.5,
+        "forward_pe": 24.0,
+        "price_to_book": 6.8,
+        "ev_to_ebitda": 18.5,
+        "dividend_yield_pct": 1.8,
+        "operating_margin_pct": 21.0,
+    },
+    "Consumer Defensive": {
+        "trailing_pe": 42.0,
+        "forward_pe": 35.0,
+        "price_to_book": 8.5,
+        "ev_to_ebitda": 26.0,
+        "dividend_yield_pct": 1.5,
+        "operating_margin_pct": 16.5,
+    },
+    "Consumer Cyclical": {
+        "trailing_pe": 32.0,
+        "forward_pe": 26.0,
+        "price_to_book": 4.5,
+        "ev_to_ebitda": 18.0,
+        "dividend_yield_pct": 1.0,
+        "operating_margin_pct": 11.0,
+    },
+    "Healthcare": {
+        "trailing_pe": 34.0,
+        "forward_pe": 28.0,
+        "price_to_book": 5.0,
+        "ev_to_ebitda": 20.0,
+        "dividend_yield_pct": 0.8,
+        "operating_margin_pct": 19.0,
+    },
+    "Industrials": {
+        "trailing_pe": 26.0,
+        "forward_pe": 21.0,
+        "price_to_book": 3.8,
+        "ev_to_ebitda": 15.5,
+        "dividend_yield_pct": 1.1,
+        "operating_margin_pct": 12.0,
+    },
+    "Energy": {
+        "trailing_pe": 15.0,
+        "forward_pe": 13.0,
+        "price_to_book": 1.8,
+        "ev_to_ebitda": 9.5,
+        "dividend_yield_pct": 2.5,
+        "operating_margin_pct": 14.0,
+    },
+    "Basic Materials": {
+        "trailing_pe": 18.0,
+        "forward_pe": 15.0,
+        "price_to_book": 2.2,
+        "ev_to_ebitda": 10.0,
+        "dividend_yield_pct": 1.8,
+        "operating_margin_pct": 13.0,
+    },
+    "Default": {
+        "trailing_pe": 25.0,
+        "forward_pe": 20.0,
+        "price_to_book": 3.5,
+        "ev_to_ebitda": 15.0,
+        "dividend_yield_pct": 1.2,
+        "operating_margin_pct": 14.0,
+    }
+}
+
+
+def _sanitize_for_storage(obj: Any) -> Any:
+    """Recursively converts objects to JSON-serializable primitives for SQLite storage."""
+    if obj is None or isinstance(obj, (int, str, bool)):
+        return obj
+    if isinstance(obj, float):
+        if np.isnan(obj) or np.isinf(obj):
+            return 0.0
+        return obj
+    if hasattr(obj, "item"):
+        return obj.item()
+    if isinstance(obj, dict):
+        return {str(k): _sanitize_for_storage(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple, set)):
+        return [_sanitize_for_storage(x) for x in obj]
+    return str(obj)
+
 
 class FinancialDataService:
     """Service to retrieve and parse institutional financial statements and market metrics."""
 
-    def __init__(self):
+    def __init__(self, db_path: Optional[str] = None, ttl_seconds: int = CACHE_TTL_SECONDS):
         self._cache: Dict[str, Dict[str, Any]] = {}
+        self._db_path = db_path or DEFAULT_DB_PATH
+        self._ttl_seconds = ttl_seconds
+        self._init_db()
+
+    def _init_db(self) -> None:
+        """Initializes the SQLite cache table if not already present."""
+        conn = None
+        try:
+            os.makedirs(os.path.dirname(self._db_path), exist_ok=True)
+            conn = sqlite3.connect(self._db_path)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS financial_cache (
+                    symbol TEXT PRIMARY KEY,
+                    data_json TEXT NOT NULL,
+                    cached_at REAL NOT NULL
+                )
+            """)
+            conn.commit()
+        except Exception as e:
+            logger.warning(f"Could not initialize SQLite financial cache: {e}")
+        finally:
+            if conn:
+                conn.close()
+
+    def _get_from_sqlite(self, symbol: str) -> Optional[Dict[str, Any]]:
+        """Retrieves cached company data from SQLite if within the 24-hour TTL."""
+        conn = None
+        try:
+            conn = sqlite3.connect(self._db_path)
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT data_json, cached_at FROM financial_cache WHERE symbol = ?",
+                (symbol,)
+            )
+            row = cursor.fetchone()
+            if row:
+                data_json, cached_at = row
+                age_seconds = time.time() - cached_at
+                if age_seconds < self._ttl_seconds:
+                    logger.info(f"SQLite financial cache HIT for {symbol} (age: {age_seconds / 3600:.1f}h)")
+                    return json.loads(data_json)
+                else:
+                    logger.info(f"SQLite financial cache EXPIRED for {symbol} (age: {age_seconds / 3600:.1f}h > {self._ttl_seconds / 3600:.1f}h)")
+        except Exception as e:
+            logger.warning(f"Error reading SQLite financial cache for {symbol}: {e}")
+        finally:
+            if conn:
+                conn.close()
+        return None
+
+    def _save_to_sqlite(self, symbol: str, data: Dict[str, Any]) -> None:
+        """Stores company data into SQLite with current timestamp."""
+        conn = None
+        try:
+            sanitized = _sanitize_for_storage(data)
+            data_json = json.dumps(sanitized)
+            conn = sqlite3.connect(self._db_path)
+            conn.execute(
+                "INSERT OR REPLACE INTO financial_cache (symbol, data_json, cached_at) VALUES (?, ?, ?)",
+                (symbol, data_json, time.time())
+            )
+            conn.commit()
+            logger.info(f"Saved financial data for {symbol} to SQLite cache (TTL: {self._ttl_seconds / 3600:.0f}h).")
+        except Exception as e:
+            logger.warning(f"Error writing to SQLite financial cache for {symbol}: {e}")
+        finally:
+            if conn:
+                conn.close()
 
     def clear_cache(self) -> None:
-        """Clears all cached financial statements and market metrics."""
+        """Clears both in-memory and SQLite cached financial statements."""
         self._cache.clear()
-        logger.info("Cleared FinancialDataService cache.")
+        conn = None
+        try:
+            conn = sqlite3.connect(self._db_path)
+            conn.execute("DELETE FROM financial_cache")
+            conn.commit()
+            logger.info("Cleared FinancialDataService SQLite cache.")
+        except Exception as e:
+            logger.warning(f"Error clearing SQLite cache: {e}")
+        finally:
+            if conn:
+                conn.close()
+        logger.info("Cleared FinancialDataService in-memory cache.")
 
     @staticmethod
     def normalize_ticker(ticker: str) -> str:
@@ -69,11 +249,18 @@ class FinancialDataService:
     def get_company_data(self, ticker: str, force_refresh: bool = False) -> Dict[str, Any]:
         """
         Fetches comprehensive company data, historical financial statements,
-        and current market metrics.
+        and current market metrics with 24-hour SQLite caching and mid-cap sector fallbacks.
         """
         symbol = self.normalize_ticker(ticker)
         if not force_refresh and symbol in self._cache:
             return self._cache[symbol]
+
+        # SQLite persistent cache check (24h TTL)
+        if not force_refresh:
+            cached_data = self._get_from_sqlite(symbol)
+            if cached_data is not None:
+                self._cache[symbol] = cached_data
+                return cached_data
 
         if yf is None:
             raise RuntimeError("yfinance is not installed. Please install dependencies.")
@@ -121,10 +308,14 @@ class FinancialDataService:
 
             if current_price == 0.0 and market_cap == 0.0 and not info.get("shortName") and (income_stmt is None or income_stmt.empty):
                 logger.warning(f"yfinance returned empty data for {symbol}. Activating grounded fallback.")
-                return self._get_fallback_company_data(symbol)
+                fallback_data = self._get_fallback_company_data(symbol)
+                self._save_to_sqlite(symbol, fallback_data)
+                return fallback_data
         except Exception as e:
             logger.warning(f"yfinance encountered error/rate-limit for {symbol}: {e}. Activating grounded fallback.")
-            return self._get_fallback_company_data(symbol)
+            fallback_data = self._get_fallback_company_data(symbol)
+            self._save_to_sqlite(symbol, fallback_data)
+            return fallback_data
 
         # Quarterly statements
         try:
@@ -184,6 +375,68 @@ class FinancialDataService:
                 if not industry:
                     industry = "Diversified Industrials"
 
+        # Sector median benchmarks for missing ratios in mid-cap / BSE-only equities
+        benchmarks = SECTOR_MEDIANS.get(sector, SECTOR_MEDIANS["Default"])
+        ratio_provenance = {
+            "trailing_pe": "Reported" if info.get("trailingPE") else "Estimated",
+            "forward_pe": "Reported" if info.get("forwardPE") else "Estimated",
+            "price_to_book": "Reported" if info.get("priceToBook") else "Estimated",
+            "ev_to_ebitda": "Reported" if info.get("enterpriseToEbitda") else "Estimated",
+            "dividend_yield": "Reported" if info.get("dividendYield") else "No Active Dividend"
+        }
+
+        # Trailing P/E resolution & fallback
+        trailing_pe = float(info.get("trailingPE") or 0.0)
+        if trailing_pe <= 0.0:
+            if history_years and shares_outstanding > 0:
+                latest_ni = history_years[-1].get("net_income", 0.0)
+                if latest_ni > 0:
+                    eps = latest_ni / shares_outstanding
+                    if eps > 0:
+                        trailing_pe = round(float(current_price / eps), 2)
+                        ratio_provenance["trailing_pe"] = "Computed from Financials"
+            if trailing_pe <= 0.0:
+                trailing_pe = benchmarks["trailing_pe"]
+                ratio_provenance["trailing_pe"] = f"Sector Median Estimate ({sector})"
+
+        # Forward P/E resolution & fallback
+        forward_pe = float(info.get("forwardPE") or 0.0)
+        if forward_pe <= 0.0:
+            if trailing_pe > 0.0:
+                forward_pe = round(trailing_pe * 0.9, 2)
+                ratio_provenance["forward_pe"] = "Estimated (0.9x Trailing)"
+            else:
+                forward_pe = benchmarks["forward_pe"]
+                ratio_provenance["forward_pe"] = f"Sector Median Estimate ({sector})"
+
+        # Price to Book resolution & fallback
+        price_to_book = float(info.get("priceToBook") or 0.0)
+        if price_to_book <= 0.0:
+            if history_years and shares_outstanding > 0:
+                bv = history_years[-1].get("total_stockholders_equity", 0.0)
+                if bv > 0:
+                    bvps = bv / shares_outstanding
+                    if bvps > 0:
+                        price_to_book = round(float(current_price / bvps), 2)
+                        ratio_provenance["price_to_book"] = "Computed from Balance Sheet"
+            if price_to_book <= 0.0:
+                price_to_book = benchmarks["price_to_book"]
+                ratio_provenance["price_to_book"] = f"Sector Median Estimate ({sector})"
+
+        # EV to EBITDA resolution & fallback
+        ev_val = float(info.get("enterpriseValue") or 0.0)
+        ev_to_ebitda = float(info.get("enterpriseToEbitda") or 0.0)
+        if ev_to_ebitda <= 0.0 and sector != "Financial Services":
+            if history_years and (ev_val or market_cap):
+                ev = ev_val if ev_val > 0 else (market_cap + net_debt)
+                ebitda = history_years[-1].get("ebitda", 0.0)
+                if ebitda > 0:
+                    ev_to_ebitda = round(float(ev / ebitda), 2)
+                    ratio_provenance["ev_to_ebitda"] = "Computed from Statements"
+            if ev_to_ebitda <= 0.0:
+                ev_to_ebitda = benchmarks["ev_to_ebitda"]
+                ratio_provenance["ev_to_ebitda"] = f"Sector Median Estimate ({sector})"
+
         data = {
             "symbol": symbol,
             "short_name": info.get("shortName") or info.get("longName") or symbol,
@@ -198,19 +451,21 @@ class FinancialDataService:
             "shares_outstanding": float(shares_outstanding),
             "fifty_two_week_high": float(info.get("fiftyTwoWeekHigh") or 0.0),
             "fifty_two_week_low": float(info.get("fiftyTwoWeekLow") or 0.0),
-            "trailing_pe": float(info.get("trailingPE") or 0.0),
-            "forward_pe": float(info.get("forwardPE") or 0.0),
-            "price_to_book": float(info.get("priceToBook") or 0.0),
-            "enterprise_value": float(info.get("enterpriseValue") or 0.0),
-            "ev_to_ebitda": float(info.get("enterpriseToEbitda") or 0.0),
+            "trailing_pe": float(trailing_pe),
+            "forward_pe": float(forward_pe),
+            "price_to_book": float(price_to_book),
+            "enterprise_value": float(ev_val),
+            "ev_to_ebitda": float(ev_to_ebitda),
             "dividend_yield_pct": float(info.get("dividendYield") or 0.0) * 100 if info.get("dividendYield") else 0.0,
             "latest_net_debt": float(net_debt),
             "latest_fcf": float(latest_fcf),
             "history_years": history_years,
             "shareholding": shareholding_summary,
+            "ratio_provenance": ratio_provenance,
             "raw_info": info
         }
 
+        self._save_to_sqlite(symbol, data)
         self._cache[symbol] = data
         return data
 
@@ -401,6 +656,13 @@ class FinancialDataService:
                     "public_holding_pct": 27.5,
                     "promoter_pledge_pct": 0.0
                 },
+                "ratio_provenance": {
+                    "trailing_pe": "Reported",
+                    "forward_pe": "Reported",
+                    "price_to_book": "Reported",
+                    "ev_to_ebitda": "Not Applicable (BFSI)",
+                    "dividend_yield": "Reported"
+                },
                 "raw_info": {"shortName": "HDFC Bank Limited", "currentPrice": 1645.0, "marketCap": 12502000000000.0}
             }
         elif "CROMPTON" in clean_sym:
@@ -439,6 +701,13 @@ class FinancialDataService:
                     "institutional_holding_pct": 58.2,
                     "public_holding_pct": 41.8,
                     "promoter_pledge_pct": 0.0
+                },
+                "ratio_provenance": {
+                    "trailing_pe": "Reported",
+                    "forward_pe": "Reported",
+                    "price_to_book": "Reported",
+                    "ev_to_ebitda": "Reported",
+                    "dividend_yield": "Reported"
                 },
                 "raw_info": {"shortName": "Crompton Greaves Consumer Electricals Limited", "currentPrice": 412.50, "marketCap": 264000000000.0}
             }
@@ -479,7 +748,15 @@ class FinancialDataService:
                     "public_holding_pct": 16.0,
                     "promoter_pledge_pct": 0.0
                 },
+                "ratio_provenance": {
+                    "trailing_pe": "Sector Median Estimate (Industrial Goods)",
+                    "forward_pe": "Sector Median Estimate (Industrial Goods)",
+                    "price_to_book": "Sector Median Estimate (Industrial Goods)",
+                    "ev_to_ebitda": "Sector Median Estimate (Industrial Goods)",
+                    "dividend_yield": "Sector Median Estimate"
+                },
                 "raw_info": {"shortName": clean_sym, "currentPrice": 500.0, "marketCap": 50000000000.0}
             }
+        self._save_to_sqlite(symbol, data)
         self._cache[symbol] = data
         return data
