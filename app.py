@@ -574,6 +574,61 @@ def render_audit_card(key_or_title: str, item: Any):
         )
 
 
+def render_dimension_card(dimension_raw):
+    # Step 1: Parse if it's a string
+    data = dimension_raw
+    if isinstance(data, str):
+        cleaned = data.strip()
+        if cleaned.startswith("```json"):
+            cleaned = cleaned[7:]
+        elif cleaned.startswith("```"):
+            cleaned = cleaned[3:]
+        if cleaned.endswith("```"):
+            cleaned = cleaned[:-3]
+        try:
+            data = json.loads(cleaned.strip())
+        except Exception:
+            # Fallback if raw markdown or unparseable
+            st.markdown(dimension_raw)
+            return
+
+    # Step 2: Render styled components if dictionary
+    if isinstance(data, dict):
+        # Support chapter-level dict containing dimension keys
+        if any(k in data for k in ["dimension1_leadership_pedigree", "dimension2_crisis_playbook", "dimension3_credibility_audit", "dimension4_competitor_matrix"]):
+            if "summary" in data:
+                st.markdown(f"**Governance & Integrity Summary:** {data['summary']}")
+            for dim_k in ["dimension1_leadership_pedigree", "dimension2_crisis_playbook", "dimension3_credibility_audit", "dimension4_competitor_matrix"]:
+                if dim_k in data:
+                    render_dimension_card(data[dim_k])
+            return
+
+        # Metrics & Core Narrative
+        if "historical_trend_and_metrics" in data:
+            st.markdown(f"**Historical Trend & Metrics:** {data['historical_trend_and_metrics']}")
+        if "operational_mechanics_and_drivers" in data:
+            st.markdown(f"**Operational Drivers:** {data['operational_mechanics_and_drivers']}")
+        if "competitive_context_and_benchmarks" in data:
+            st.markdown(f"**Peer Benchmarks:** {data['competitive_context_and_benchmarks']}")
+
+        # Invalidation Risk Box
+        if "thesis_implication_and_risks" in data:
+            st.warning(f"⚠️ **Thesis Invalidation Risk:** {data['thesis_implication_and_risks']}")
+
+        # Key Executives Profile Cards
+        if "key_executives" in data and isinstance(data["key_executives"], list):
+            st.markdown("#### Key Leadership Bench")
+            cols = st.columns(len(data["key_executives"]))
+            for idx, exec_info in enumerate(data["key_executives"]):
+                with cols[idx]:
+                    st.markdown(f"### {exec_info.get('name', 'Executive')}")
+                    st.caption(f"**{exec_info.get('role', '')}** • Tenure: {exec_info.get('tenure', 'N/A')}")
+                    st.markdown(f"- **Background:** {exec_info.get('background', '')}")
+                    st.markdown(f"- **Alignment:** {exec_info.get('incentive_alignment', '')}")
+    else:
+        st.write(data)
+
+
 
 def main():
     # Default Valuation & DCF Assumptions
@@ -1093,7 +1148,8 @@ def main():
 
         with tab_gov:
             st.markdown("<div class='glass-panel'>", unsafe_allow_html=True)
-            st.markdown(dossier.get("gov") or dossier.get("leadership"))
+            dimension_data = dossier.get("gov") or dossier.get("leadership")
+            render_dimension_card(dimension_data)
             with st.expander("🔍 Explore Granular Executive Profiles, Crisis History & RPT Audit", expanded=False):
                 dim1 = parse_dimension_data(a4.get("dimension1_leadership_pedigree", {}))
                 if not isinstance(dim1, dict): dim1 = {}
@@ -1132,32 +1188,8 @@ def main():
             ])
 
             with g_tabs[0]:
-                st.markdown("##### 👑 Executive Leadership Pedigree & Incentive Alignment")
-                execs = dim1.get("key_executives", [])
-                if execs:
-                    for ex in execs:
-                        st.markdown(f"""
-                        <div class="q-box" style="margin-bottom: 14px; padding: 16px; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; background: rgba(15, 23, 42, 0.5);">
-                            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 6px;">
-                                <div>
-                                    <span style="font-size: 1.05rem; font-weight: 700; color: #f8fafc;">{ex.get('name', 'Executive')}</span>
-                                    <span style="color: #94a3b8; font-size: 0.85rem; margin-left: 8px;">— {ex.get('role', 'Executive Role')}</span>
-                                </div>
-                                <div>
-                                    <span class="pill-badge pill-cyan" style="font-size: 0.72rem;">{ex.get('tenure', 'Tenure N/A')}</span>
-                                </div>
-                            </div>
-                            <div style="font-size: 0.84rem; color: #cbd5e1; line-height: 1.5; margin-bottom: 6px;">
-                                <strong>Background:</strong> {ex.get('background', 'N/A')}
-                            </div>
-                            <div style="font-size: 0.84rem; color: #94a3b8; line-height: 1.5; margin-bottom: 6px;">
-                                <strong>Past Institutional Affiliation:</strong> {ex.get('past_affiliation', 'N/A')}
-                            </div>
-                            <div style="font-size: 0.84rem; color: #34d399; line-height: 1.5;">
-                                <strong>Incentive Alignment:</strong> {ex.get('incentive_alignment', 'N/A')}
-                            </div>
-                        </div>
-                        """, unsafe_allow_html=True)
+                st.markdown("##### 👑 Dimension 1: Leadership Pedigree & Skin-in-the-Game")
+                render_dimension_card(dim1)
 
                 if dim1.get("skin_in_the_game"):
                     render_audit_card("Executive Skin-in-the-Game", dim1.get("skin_in_the_game"))
