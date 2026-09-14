@@ -5,16 +5,16 @@ Enforces 4-level analytical depth and strict sector boundaries.
 """
 
 SYSTEM_INSTITUTIONAL_FRAMEWORK = """
-You are an Executive Director of Institutional Equity Research preparing a buy-side initiation dossier.
+You are an Executive Director of Institutional Equity Research preparing an unabridged buy-side initiation dossier.
 
-MANDATORY RULES:
-1. STRICT PROHIBITION: Never write one-line bullet points or generic summaries.
-2. 4-LEVEL DEPTH FOR EVERY PARAMETER:
-   - [Trajectory & Metrics]: Detail multi-year trends citing specific figures, percentages, or basis points.
-   - [Operational Drivers]: Explain the exact mechanics (capacity utilization, distribution throughput, pricing realization, product mix).
-   - [Peer Comparison]: Contrast performance directly against top 2 domestic listed peers.
-   - [Thesis Invalidation]: State the exact numerical red flag that mandates cutting losses.
-3. SECTOR DISCIPLINE & ZERO CROSS-SECTOR CONTAMINATION:
+MANDATORY WRITING & FORMATTING RULES:
+1. CONTINUOUS FLOWING PARAGRAPHS ONLY: All output must consist purely of coherent, multi-sentence continuous paragraphs (9–10 sentences each).
+2. STRICT PROHIBITIONS:
+   - Strictly NEVER generate markdown headers ('#', '##', '###', '####').
+   - Strictly NEVER use standalone bold labels (e.g., 'Pillar 1:', 'Level A:', 'Trajectory & Metrics:', 'Domain 1:', 'Risk Verdict:').
+   - Strictly NEVER generate bullet points ('*', '-', '•', '1.', '2.').
+3. NATURAL PROSE WEAVING: You must weave all quantitative metrics (CAGR, margins, spreads, working capital days), operational drivers, competitive benchmarking against top listed peers, and downside thesis invalidation thresholds directly into natural, flowing prose transitions within each paragraph.
+4. SECTOR DISCIPLINE & ZERO CROSS-SECTOR CONTAMINATION:
    - For Banks/BFSI: Focus strictly on NIM, CASA ratio, Gross/Net NPAs, PCR, Cost of Funds, C/D ratio, and Tier-1 CET-1 capital. Strictly NEVER mention factories, plant capex, raw material inflation, or inventory.
    - For Non-Financials (Consumer / Manufacturing / Industrials / FMCG / Tech): Focus strictly on Gross Margins, Raw Material Pass-through, Brand Equity, Distribution Reach, Cash Conversion Cycle (DIO/DSO/DPO), ROCE, and ROIC vs WACC. Strictly NEVER mention 'CASA', 'NIM', 'CET-1', 'CRAR', 'deposits', 'loan book', 'branches', 'slippages', 'PCR', or banking peers (e.g. HDFC Bank, ICICI Bank, Axis Bank, Kotak, SBI).
 """
@@ -26,20 +26,20 @@ def get_moat_prompt(ticker: str, company_name: str, sector: str, is_bank: bool, 
             "MANDATORY FOCUS: CASA deposit durability, branch vintage productivity, net interest spreads, asset quality (GNPA/NNPA/PCR), and Tier-1 CET-1 capital absorption.\n"
             "STRICT PROHIBITION: Strictly prohibit mentions of factories, raw materials, or inventories."
         )
-        p1_title = "1. Pillar 1: Core Revenue Engine & NIM / Liability Defensibility (CASA ratio, cost of funds, retail deposit granularity)"
-        p2_title = "2. Pillar 2: Operating Efficiency & Branch / Digital Underwriting Throughput (Cost-to-Income, turnaround times)"
-        p3_title = "3. Pillar 3: Asset Quality & Credit Cost Trajectory (GNPA, NNPA, PCR, slippage ratio)"
-        p4_title = "4. Pillar 4: Regulatory Capital & Balance Sheet Strength (CET-1, CRAR, LCR, RBI stress-testing buffers)"
+        p1_focus = "Core Revenue Engine & NIM / Liability Defensibility (CASA ratio, cost of funds, retail deposit granularity)"
+        p2_focus = "Operating Efficiency & Branch / Digital Underwriting Throughput (Cost-to-Income, turnaround times)"
+        p3_focus = "Asset Quality & Credit Cost Trajectory (GNPA, NNPA, PCR, slippage ratio)"
+        p4_focus = "Regulatory Capital & Balance Sheet Strength (CET-1, CRAR, LCR, RBI stress-testing buffers)"
     else:
         sector_rules = (
             "SECTOR: INDUSTRIAL / CONSUMER / MANUFACTURING / FMCG.\n"
             "MANDATORY FOCUS: Brand equity, gross margins, pricing power against raw materials (e.g. copper, aluminum, crude derivatives), dealer/distributor network velocity, working capital Cash Conversion Cycle (CCC, DIO, DSO, DPO), and ROIC/ROCE vs WACC spreads.\n"
             "STRICT PROHIBITION: Strictly NEVER mention 'CASA', 'NIM', 'net interest margin', 'deposits', 'loan book', 'branches', 'CET-1', 'CRAR', 'NPAs', 'slippages', 'PCR', or banking peers (e.g. HDFC Bank, ICICI Bank, Axis Bank, Kotak, SBI)."
         )
-        p1_title = "1. Pillar 1: Brand Moat, Pricing Power & Margin Defensibility (Gross margins, pricing power against raw materials like copper/aluminum, product mix)"
-        p2_title = "2. Pillar 2: Distribution Network, Channel Throughput & Operating Leverage (Dealer/distributor touchpoints, secondary sales velocity, capacity utilization, operating EBITDA margins)"
-        p3_title = "3. Pillar 3: Working Capital Dynamics & Cash Conversion Cycle (DIO, DSO, DPO, inventory turnover, operating cash flow conversion)"
-        p4_title = "4. Pillar 4: Capital Allocation & Balance Sheet Durability (ROCE, ROIC, debt-to-equity, free cash flow generation, capex/M&A reinvestment)"
+        p1_focus = "Brand Moat, Pricing Power & Margin Defensibility (Gross margins, pricing power against raw materials like copper/aluminum, product mix)"
+        p2_focus = "Distribution Network, Channel Throughput & Operating Leverage (Dealer/distributor touchpoints, secondary sales velocity, capacity utilization, operating EBITDA margins)"
+        p3_focus = "Working Capital Dynamics & Cash Conversion Cycle (DIO, DSO, DPO, inventory turnover, operating cash flow conversion)"
+        p4_focus = "Capital Allocation & Balance Sheet Durability (ROCE, ROIC, debt-to-equity, free cash flow generation, capex/M&A reinvestment)"
     
     return f"""
     COMPANY: {company_name} ({ticker})
@@ -49,28 +49,34 @@ def get_moat_prompt(ticker: str, company_name: str, sector: str, is_bank: bool, 
     {data_summary}
 
     Generate CHAPTER 1: ECONOMIC MOAT & STRUCTURAL SCALABILITY.
-    Provide an exhaustive, multi-paragraph analysis for each of these 4 pillars:
-    {p1_title}
-    {p2_title}
-    {p3_title}
-    {p4_title}
+    You must construct an exhaustive, continuous narrative for each of the 4 pillars below.
+    For each pillar, write exactly one continuous, flowing paragraph of 9 to 10 complete sentences.
+    Seamlessly weave the historical trajectory and verified numbers, the operational mechanics and drivers, the peer contrast against domestic competitors, and the explicit numerical thesis invalidation threshold into each paragraph.
+    STRICT PROHIBITION: Do NOT use markdown headers, bold sub-labels, or bullet points. Output pure flowing paragraphs.
 
-    Format with bold section titles and deep, institutional paragraphs (minimum 120 words per pillar).
+    Pillar 1 Focus: {p1_focus}
+    Pillar 2 Focus: {p2_focus}
+    Pillar 3 Focus: {p3_focus}
+    Pillar 4 Focus: {p4_focus}
     """
 
 def get_forensic_prompt(ticker: str, company_name: str, is_bank: bool, data_summary: str) -> str:
-    p1_desc = "1. NII Realization, Provision Coverage Adequacy & Credit Cost Integrity" if is_bank else "1. Cash Flow vs Operating Profit Divergence (5-Year Cumulative CFO/PAT Conversion Quality)"
+    p1_desc = "NII Realization, Provision Coverage Adequacy & Credit Cost Integrity" if is_bank else "Cash Flow vs Operating Profit Divergence (5-Year Cumulative CFO/PAT Conversion Quality)"
     return f"""
     COMPANY: {company_name} ({ticker})
     FINANCIAL BASELINE:
     {data_summary}
 
     Generate CHAPTER 2: FORENSIC AUDIT & EARNINGS QUALITY.
-    Provide detailed multi-paragraph evaluations for:
-    {p1_desc}
+    Provide detailed narrative evaluations for each of the 4 forensic domains:
+    1. {p1_desc}
     2. Revenue Recognition, Asset Aging, and Contingent Liabilities
     3. Capital Allocation Integrity & Auditor Track Record
-    4. Forensic Risk Verdict: Rate as LOW, MODERATE, or ELEVATED with evidence-backed justification.
+    4. Forensic Risk Verdict and Overall Accounting Integrity
+    
+    For each domain, write exactly one continuous, flowing paragraph of 9 to 10 complete sentences.
+    Weave forensic ratios, accounting mechanics, peer audit conservatism, and warning triggers directly into natural prose transitions.
+    STRICT PROHIBITION: Do NOT use markdown headers, bold sub-labels, or bullet points. Output pure flowing paragraphs.
     """
 
 def get_leadership_prompt(ticker: str, company_name: str, is_bank: bool, peers: list) -> str:
@@ -79,11 +85,15 @@ def get_leadership_prompt(ticker: str, company_name: str, is_bank: bool, peers: 
     PRIMARY COMPETITORS: {', '.join(peers)}
 
     Generate CHAPTER 3: LEADERSHIP PEDIGREE, CRISIS PLAYBOOK & COMPETITOR BENCHMARK.
-    Provide detailed multi-paragraph evaluations for:
+    Provide detailed narrative evaluations for each of the 4 leadership dimensions:
     1. Executive Leadership Profile & Promoter Skin-in-the-Game (tenure, capital allocation track record, alignment)
-    2. Historical Crisis Playbook: Analyze specifically how this management team navigated past stress periods (2008 GFC, 2018 IL&FS, 2020 lockdowns, or severe inflation)
-    3. Promise vs Delivery Audit: 3-year audit of management's forward guidance against actual reported results
-    4. Head-to-Head Peer Comparison Matrix: Directly compare {ticker} against {', '.join(peers)} on return spreads ({'RoA/RoE' if is_bank else 'ROIC/ROCE'}), cost efficiency, and market share migration.
+    2. Historical Crisis Playbook (navigation through 2008 GFC, 2018 liquidity freeze, 2020 lockdowns, or commodity inflation cycles)
+    3. Promise vs Delivery Audit (3-year guidance tracking against reported delivery)
+    4. Head-to-Head Peer Comparison Matrix (direct benchmark against {', '.join(peers)})
+    
+    For each dimension, write exactly one continuous, flowing paragraph of 9 to 10 complete sentences.
+    Weave executive credentials, counter-cyclical crisis moves, guidance veracity, and competitor return spreads into natural prose transitions.
+    STRICT PROHIBITION: Do NOT use markdown headers, bold sub-labels, or bullet points. Output pure flowing paragraphs.
     """
 
 def get_valuation_prompt(ticker: str, company_name: str, is_bank: bool, data_summary: str) -> str:
@@ -94,8 +104,12 @@ def get_valuation_prompt(ticker: str, company_name: str, is_bank: bool, data_sum
     {data_summary}
 
     Generate CHAPTER 4: VALUATION HURDLE RATES & THESIS INVALIDATION.
-    Provide detailed evaluations for:
+    Provide detailed narrative evaluations for:
     1. Intrinsic Valuation Multiple Audit ({ 'P/ABV & DuPont RoA Tree' if is_bank else 'Reverse DCF & EV/EBITDA' })
-    2. 3-Scenario Return Matrix (Bear / Base / Bull) with explicit catalysts
-    3. Three Quantifiable Thesis Invalidation Triggers: {triggers_desc} that break the investment case.
+    2. 3-Scenario Return Framework (Bear, Base, and Bull operational trajectories and fair value outcomes)
+    3. Three Quantifiable Thesis Invalidation Triggers: {triggers_desc}
+    
+    For each section, write a detailed, continuous, flowing paragraph of 9 to 10 complete sentences.
+    Weave discount rates, implied growth hurdles, scenario assumptions, and exact invalidation metrics into natural prose transitions.
+    STRICT PROHIBITION: Do NOT use markdown headers, bold sub-labels, or bullet points. Output pure flowing paragraphs.
     """

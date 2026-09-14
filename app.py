@@ -496,56 +496,34 @@ def is_bfsi(sector: str = "", industry: str = "") -> bool:
 
 def render_audit_card(key_or_title: str, item: Any):
     """
-    Renders an institutional 4-tier parameter card with distinct visual badges for:
-    - Level A (cyan): Historical Trajectory & Data
-    - Level B (indigo): Operational & Strategic Drivers
-    - Level C (emerald): Peer & Benchmark Context
-    - Level D (amber): Capital Allocation & Return Impact
-    Falls back cleanly to standard q-box for flat strings or legacy dicts.
+    Renders institutional analysis as a clean, continuous flowing body paragraph
+    with comfortable line-height and dark-theme aesthetic, eliminating fragmented labeled sub-boxes.
     """
     has_4tier = isinstance(item, dict) and any(
         k in item for k in [
-            "historical_trend_and_metrics", "trajectory_and_metrics", "level_a",
+            "narrative_prose", "historical_trend_and_metrics", "trajectory_and_metrics", "level_a",
             "operational_mechanics_and_drivers", "operational_drivers", "level_b"
         ]
     )
     if has_4tier:
         title = item.get("title") or key_or_title.replace("_", " ").upper()
-        level_a = (item.get("historical_trend_and_metrics") or item.get("trajectory_and_metrics") or item.get("level_a") or "").strip()
-        level_b = (item.get("operational_mechanics_and_drivers") or item.get("operational_drivers") or item.get("level_b") or "").strip()
-        level_c = (item.get("competitive_context_and_benchmarks") or item.get("peer_comparison") or item.get("level_c") or "").strip()
-        level_d = (item.get("thesis_implication_and_risks") or item.get("thesis_invalidation") or item.get("level_d") or "").strip()
+        prose = item.get("narrative_prose")
+        if not prose:
+            parts = [
+                (item.get("historical_trend_and_metrics") or item.get("trajectory_and_metrics") or item.get("level_a") or "").strip(),
+                (item.get("operational_mechanics_and_drivers") or item.get("operational_drivers") or item.get("level_b") or "").strip(),
+                (item.get("competitive_context_and_benchmarks") or item.get("peer_comparison") or item.get("level_c") or "").strip(),
+                (item.get("thesis_implication_and_risks") or item.get("thesis_invalidation") or item.get("level_d") or "").strip()
+            ]
+            prose = " ".join(p for p in parts if p)
 
         card_html = f"""
-        <div class="q-box" style="margin-bottom: 16px; padding: 16px; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; background: rgba(15, 23, 42, 0.5);">
-            <div class="q-title" style="font-size: 0.92rem; font-weight: 700; color: #f8fafc; letter-spacing: 0.03em; margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 6px;">
+        <div class="q-box" style="margin-bottom: 16px; padding: 18px 20px; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 14px; background: rgba(15, 23, 42, 0.5);">
+            <div class="q-title" style="font-size: 0.92rem; font-weight: 700; color: #f8fafc; letter-spacing: 0.03em; margin-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 6px;">
                 {title}
             </div>
-            <div style="display: flex; flex-direction: column; gap: 10px;">
-                <div style="background: rgba(56, 189, 248, 0.06); border-left: 3px solid #38bdf8; padding: 8px 12px; border-radius: 0 8px 8px 0;">
-                    <span style="font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #38bdf8; display: block; margin-bottom: 3px;">
-                        Level A: Historical Trajectory &amp; Data
-                    </span>
-                    <div style="color: #cbd5e1; font-size: 0.85rem; line-height: 1.55;">{level_a}</div>
-                </div>
-                <div style="background: rgba(129, 140, 248, 0.06); border-left: 3px solid #818cf8; padding: 8px 12px; border-radius: 0 8px 8px 0;">
-                    <span style="font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #818cf8; display: block; margin-bottom: 3px;">
-                        Level B: Operational &amp; Strategic Drivers
-                    </span>
-                    <div style="color: #cbd5e1; font-size: 0.85rem; line-height: 1.55;">{level_b}</div>
-                </div>
-                <div style="background: rgba(52, 211, 153, 0.06); border-left: 3px solid #34d399; padding: 8px 12px; border-radius: 0 8px 8px 0;">
-                    <span style="font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #34d399; display: block; margin-bottom: 3px;">
-                        Level C: Peer &amp; Benchmark Context
-                    </span>
-                    <div style="color: #cbd5e1; font-size: 0.85rem; line-height: 1.55;">{level_c}</div>
-                </div>
-                <div style="background: rgba(251, 191, 36, 0.06); border-left: 3px solid #fbbf24; padding: 8px 12px; border-radius: 0 8px 8px 0;">
-                    <span style="font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #fbbf24; display: block; margin-bottom: 3px;">
-                        Level D: Capital Allocation &amp; Return Impact
-                    </span>
-                    <div style="color: #cbd5e1; font-size: 0.85rem; line-height: 1.55;">{level_d}</div>
-                </div>
+            <div style="color: #cbd5e1; font-size: 0.92rem; line-height: 1.7; font-weight: 400;">
+                {prose}
             </div>
         </div>
         """
@@ -597,23 +575,36 @@ def render_dimension_card(dimension_raw):
         # Support chapter-level dict containing dimension keys
         if any(k in data for k in ["dimension1_leadership_pedigree", "dimension2_crisis_playbook", "dimension3_credibility_audit", "dimension4_competitor_matrix"]):
             if "summary" in data:
-                st.markdown(f"**Governance & Integrity Summary:** {data['summary']}")
+                st.markdown(f"""
+                <div class="q-box" style="margin-bottom: 14px; padding: 16px; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; background: rgba(15,23,42,0.5);">
+                    <div style="color: #e2e8f0; font-size: 0.92rem; line-height: 1.7;">{data['summary']}</div>
+                </div>
+                """, unsafe_allow_html=True)
             for dim_k in ["dimension1_leadership_pedigree", "dimension2_crisis_playbook", "dimension3_credibility_audit", "dimension4_competitor_matrix"]:
                 if dim_k in data:
                     render_dimension_card(data[dim_k])
             return
 
-        # Metrics & Core Narrative
-        if "historical_trend_and_metrics" in data:
-            st.markdown(f"**Historical Trend & Metrics:** {data['historical_trend_and_metrics']}")
-        if "operational_mechanics_and_drivers" in data:
-            st.markdown(f"**Operational Drivers:** {data['operational_mechanics_and_drivers']}")
-        if "competitive_context_and_benchmarks" in data:
-            st.markdown(f"**Peer Benchmarks:** {data['competitive_context_and_benchmarks']}")
+        # Continuous flowing narrative prose
+        title = data.get("title", "")
+        prose = data.get("narrative_prose")
+        if not prose:
+            parts = [
+                data.get("historical_trend_and_metrics", ""),
+                data.get("operational_mechanics_and_drivers", ""),
+                data.get("competitive_context_and_benchmarks", ""),
+                data.get("thesis_implication_and_risks", "")
+            ]
+            prose = " ".join(p.strip() for p in parts if p and isinstance(p, str))
 
-        # Invalidation Risk Box
-        if "thesis_implication_and_risks" in data:
-            st.warning(f"⚠️ **Thesis Invalidation Risk:** {data['thesis_implication_and_risks']}")
+        if prose:
+            title_html = f'<div class="q-title" style="font-size: 0.92rem; font-weight: 700; color: #f8fafc; letter-spacing: 0.03em; margin-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 6px;">{title}</div>' if title else ""
+            st.markdown(f"""
+            <div class="q-box" style="margin-bottom: 16px; padding: 18px 20px; border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; background: rgba(15,23,42,0.5);">
+                {title_html}
+                <div style="color: #cbd5e1; font-size: 0.92rem; line-height: 1.7; font-weight: 400;">{prose}</div>
+            </div>
+            """, unsafe_allow_html=True)
 
         # Key Executives Profile Cards
         if "key_executives" in data and isinstance(data["key_executives"], list):
@@ -1364,9 +1355,11 @@ def main():
                     st.caption(f"Thesis: {sc_data.get('bull_case', {}).get('thesis')}")
             with cio_tabs[4]:
                 st.markdown("##### 🚨 Thesis Invalidation Triggers")
-                for trig in a6.get("invalidation_triggers", []):
-                    st.markdown(f'<div class="bullet-card">❌ {trig}</div>', unsafe_allow_html=True)
-                pass
+                trigs = a6.get("invalidation_triggers", [])
+                if trigs:
+                    clean_trigs = [str(t).rstrip(".") for t in trigs]
+                    trig_prose = f"Key operational and structural thesis invalidation thresholds that mandate an immediate capital reallocation include: {'; '.join(clean_trigs)}. Any persistent violation of these operational and margin corridors immediately negates the fundamental compounding rationale and requires loss-cutting."
+                    st.markdown(f'<div class="q-box" style="padding: 18px 20px; color: #fca5a5; line-height: 1.7; font-size: 0.92rem; border-left: 4px solid #ef4444;">{trig_prose}</div>', unsafe_allow_html=True)
             st.markdown("</div>", unsafe_allow_html=True)
 
         with tab_concall:

@@ -340,7 +340,7 @@
             <h4 class="text-base font-bold text-rose-400 mb-3 flex items-center space-x-2">
               <span>⚠️ Thesis Invalidation Triggers (Cut-Loss Criteria)</span>
             </h4>
-            <ul id="val-triggers" class="space-y-2 text-sm text-slate-300"></ul>
+            <div id="val-triggers" class="text-sm sm:text-base text-slate-300 leading-relaxed"></div>
           </div>
         </div>
       </div>
@@ -562,47 +562,64 @@
       switchTab('tab-moat');
     }
 
+    function cleanProseText(text) {
+      if (!text) return '';
+      let t = String(text);
+      t = t.replace(/```[a-zA-Z]*\n?/g, '').replace(/```/g, '');
+      t = t.replace(/^#+\s*/gm, '');
+      t = t.replace(/^[\-*•]\s+/gm, '');
+      t = t.replace(/^\d+\.\s+/gm, '');
+      t = t.replace(/\*\*(?:Level [A-D]|Pillar \d+|Domain \d+|Trajectory & [^:]+|Operational [^:]+|Peer [^:]+|Thesis [^:]+|Guidance [^:]+|Historical [^:]+):?\*\*\s*:?/gi, '');
+      t = t.replace(/\[(?:WALKED THE TALK|REVIEW)\]/gi, '');
+      t = t.replace(/\s+/g, ' ').trim();
+      return t;
+    }
+
+    function extractFlowingParagraph(item) {
+      if (!item) return '';
+      if (typeof item === 'string') return cleanProseText(item);
+      if (item.narrative_prose) return cleanProseText(item.narrative_prose);
+      const parts = [
+        item.historical_trend_and_metrics || item.trajectory_and_metrics || '',
+        item.operational_mechanics_and_drivers || item.operational_drivers || '',
+        item.competitive_context_and_benchmarks || item.peer_comparison || '',
+        item.thesis_implication_and_risks || item.thesis_invalidation || ''
+      ].filter(Boolean);
+      return cleanProseText(parts.join(' '));
+    }
+
     function renderMoatChapter(moat) {
-      document.getElementById('moat-summary').innerText = moat.summary || 'Strong defensible economic moat verified across historical cycles.';
+      document.getElementById('moat-summary').innerText = cleanProseText(moat.summary) || 'Strong defensible economic moat verified across historical cycles.';
       document.getElementById('moat-rating-tag').innerText = `${moat.moat_rating || 'WIDE'} MOAT`;
       document.getElementById('moat-risk-tag').innerText = `RISK: ${moat.risk_pill || 'GREEN'}`;
 
       const pillarsContainer = document.getElementById('pillars-container');
       pillarsContainer.innerHTML = '';
 
-      // Check both pillar_X and dimension_X keys
       for (let i = 1; i <= 4; i++) {
         const pillar = moat[`pillar_${i}`] || moat[`dimension_${i}`] || {};
         const title = pillar.title || `Pillar ${i}`;
-        const hist = pillar.historical_trend_and_metrics || pillar.trajectory_and_metrics || '';
-        const ops = pillar.operational_mechanics_and_drivers || pillar.operational_drivers || '';
-        const peer = pillar.competitive_context_and_benchmarks || pillar.peer_comparison || '';
-        const thesis = pillar.thesis_implication_and_risks || pillar.thesis_invalidation || '';
+        const prose = extractFlowingParagraph(pillar);
 
         const card = document.createElement('div');
-        card.className = 'glass-panel p-6 rounded-xl border border-borderDark flex flex-col justify-between hover:border-cyan-500/40 transition-colors shadow-lg';
+        card.className = 'glass-panel p-6 sm:p-7 rounded-2xl border border-borderDark flex flex-col justify-between hover:border-cyan-500/40 transition-colors shadow-lg';
         card.innerHTML = `
           <div>
-            <div class="flex items-start justify-between gap-2 mb-3">
-              <div class="flex items-center space-x-2">
-                <span class="w-6 h-6 rounded-full bg-cyan-500/10 text-cyan-400 font-mono text-xs flex items-center justify-center font-bold border border-cyan-500/30">P${i}</span>
-                <h5 class="font-bold text-white text-base">${title}</h5>
-              </div>
+            <div class="flex items-center space-x-2.5 mb-4">
+              <span class="w-7 h-7 rounded-lg bg-cyan-500/10 text-cyan-400 font-mono text-xs flex items-center justify-center font-bold border border-cyan-500/30">P${i}</span>
+              <h5 class="font-bold text-white text-base">${title}</h5>
             </div>
-            <div class="space-y-3 text-xs leading-relaxed">
-              ${hist ? `<div class="p-3 rounded-lg bg-cardDark border border-borderDark"><span class="font-bold text-cyan-400 block mb-1">Level A (Trajectory & Metrics):</span><p class="text-slate-300">${hist}</p></div>` : ''}
-              ${ops ? `<div class="p-3 rounded-lg bg-cardDark border border-borderDark"><span class="font-bold text-emerald-400 block mb-1">Level B (Operational Drivers):</span><p class="text-slate-300">${ops}</p></div>` : ''}
-              ${peer ? `<div class="p-3 rounded-lg bg-cardDark border border-borderDark"><span class="font-bold text-purple-400 block mb-1">Level C (Peer Benchmarks):</span><p class="text-slate-300">${peer}</p></div>` : ''}
-            </div>
+            <p class="text-slate-300 text-sm sm:text-base leading-relaxed tracking-normal font-normal">
+              ${prose}
+            </p>
           </div>
-          ${thesis ? `<div class="mt-4 pt-3 border-t border-borderDark/70"><div class="p-2.5 rounded-lg bg-rose-950/30 border border-rose-900/60 text-xs text-rose-300"><span class="font-bold text-rose-400">Thesis Invalidation:</span> ${thesis}</div></div>` : ''}
         `;
         pillarsContainer.appendChild(card);
       }
     }
 
     function renderForensicsChapter(forensics) {
-      document.getElementById('forensic-summary').innerText = forensics.summary || 'Accounting forensic audit completed with clean integrity score.';
+      document.getElementById('forensic-summary').innerText = cleanProseText(forensics.summary) || 'Accounting forensic audit completed with clean integrity score.';
       const badge = document.getElementById('forensic-score-badge');
       badge.innerText = `INTEGRITY: ${forensics.forensic_score || 'CLEAN'}`;
 
@@ -611,12 +628,17 @@
       for (let i = 1; i <= 4; i++) {
         const d = forensics[`domain_${i}`] || {};
         if (!d.title) continue;
+        const prose = extractFlowingParagraph(d);
         const div = document.createElement('div');
-        div.className = 'bg-cardDark p-4 rounded-xl border border-borderDark';
+        div.className = 'glass-panel p-6 rounded-2xl border border-borderDark shadow-lg';
         div.innerHTML = `
-          <h5 class="font-bold text-white text-sm mb-2">${d.title}</h5>
-          <p class="text-xs text-slate-300 mb-2">${d.historical_trend_and_metrics || ''}</p>
-          <div class="text-xs text-slate-400 border-t border-slate-800 pt-2">${d.operational_mechanics_and_drivers || ''}</div>
+          <div class="flex items-center space-x-2.5 mb-3">
+            <span class="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-400 font-mono text-xs flex items-center justify-center font-bold border border-emerald-500/30">D${i}</span>
+            <h5 class="font-bold text-white text-base">${d.title}</h5>
+          </div>
+          <p class="text-slate-300 text-sm sm:text-base leading-relaxed tracking-normal font-normal">
+            ${prose}
+          </p>
         `;
         container.appendChild(div);
       }
@@ -649,7 +671,7 @@
     }
 
     function renderGovChapter(gov) {
-      document.getElementById('gov-summary').innerText = gov.summary || 'Leadership audit and governance credibility confirmed.';
+      document.getElementById('gov-summary').innerText = cleanProseText(gov.summary) || 'Leadership audit and governance credibility confirmed.';
       const badge = document.getElementById('gov-verdict-badge');
       const verd = gov.credibility_verdict || 'HIGH INTEGRITY';
       badge.innerText = verd;
@@ -669,20 +691,14 @@
       const dim3 = parseDimensionData(gov.dimension3_credibility_audit);
       const dim4 = parseDimensionData(gov.dimension4_competitor_matrix);
 
-      // Helper for 4-tier parameter blocks
+      // Helper for 4-tier parameter blocks - Continuous flowing narrative prose
       const render4Tier = (d) => {
-        const hist = d.historical_trend_and_metrics || d.trajectory_and_metrics || '';
-        const ops = d.operational_mechanics_and_drivers || d.operational_drivers || '';
-        const peer = d.competitive_context_and_benchmarks || d.peer_comparison || '';
-        const thesis = d.thesis_implication_and_risks || d.thesis_invalidation || '';
-        if (!hist && !ops && !peer && !thesis) return '';
+        const prose = extractFlowingParagraph(d);
+        if (!prose) return '';
         return `
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4 text-xs">
-            ${hist ? `<div class="p-3 rounded-lg bg-cardDark/90 border border-borderDark"><span class="font-bold text-cyan-400 block mb-1">Level A (Trajectory & Alignment):</span><p class="text-slate-300 leading-relaxed">${hist}</p></div>` : ''}
-            ${ops ? `<div class="p-3 rounded-lg bg-cardDark/90 border border-borderDark"><span class="font-bold text-emerald-400 block mb-1">Level B (Operational Levers):</span><p class="text-slate-300 leading-relaxed">${ops}</p></div>` : ''}
-            ${peer ? `<div class="p-3 rounded-lg bg-cardDark/90 border border-borderDark"><span class="font-bold text-purple-400 block mb-1">Level C (Stewardship & Peers):</span><p class="text-slate-300 leading-relaxed">${peer}</p></div>` : ''}
-            ${thesis ? `<div class="p-3 rounded-lg bg-rose-950/30 border border-rose-900/60"><span class="font-bold text-rose-400 block mb-1">Level D (Thesis Invalidation):</span><p class="text-rose-200 leading-relaxed">${thesis}</p></div>` : ''}
-          </div>
+          <p class="text-slate-300 text-sm sm:text-base leading-relaxed tracking-normal mb-4">
+            ${prose}
+          </p>
         `;
       };
 
@@ -690,12 +706,12 @@
       // DIMENSION 1: LEADERSHIP PEDIGREE & SKIN-IN-THE-GAME
       // -----------------------------------------------------------------------
       const card1 = document.createElement('div');
-      card1.className = 'glass-panel p-6 rounded-xl border border-borderDark shadow-lg';
+      card1.className = 'glass-panel p-6 sm:p-7 rounded-2xl border border-borderDark shadow-lg';
       let execsHtml = '';
       const execs = Array.isArray(dim1.key_executives) ? dim1.key_executives : [];
       if (execs.length > 0) {
         execsHtml = `
-          <div class="mt-4 pt-4 border-t border-borderDark">
+          <div class="mt-5 pt-4 border-t border-borderDark">
             <h6 class="text-xs font-mono font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center space-x-2">
               <span>Executive Leadership Profiles & Incentive Hurdle Alignment</span>
             </h6>
@@ -728,7 +744,7 @@
             <h5 class="font-bold text-white text-base">${dim1.title || 'Executive Leadership Profile & Promoter Skin-in-the-Game'}</h5>
           </div>
         </div>
-        ${dim1.description ? `<p class="text-xs text-slate-300 mb-3">${dim1.description}</p>` : ''}
+        ${dim1.description ? `<p class="text-xs text-slate-400 mb-3">${cleanProseText(dim1.description)}</p>` : ''}
         ${render4Tier(dim1)}
         ${execsHtml}
       `;
@@ -738,12 +754,12 @@
       // DIMENSION 2: HISTORICAL CRISIS PLAYBOOK
       // -----------------------------------------------------------------------
       const card2 = document.createElement('div');
-      card2.className = 'glass-panel p-6 rounded-xl border border-borderDark shadow-lg';
+      card2.className = 'glass-panel p-6 sm:p-7 rounded-2xl border border-borderDark shadow-lg';
       let crisisHtml = '';
       const crises = Array.isArray(dim2.crisis_history) ? dim2.crisis_history : [];
       if (crises.length > 0) {
         crisisHtml = `
-          <div class="mt-4 pt-4 border-t border-borderDark">
+          <div class="mt-5 pt-4 border-t border-borderDark">
             <h6 class="text-xs font-mono font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center space-x-2">
               <span>Historical Dislocation Stress-Test (Empirical Crisis Navigation)</span>
             </h6>
@@ -774,8 +790,8 @@
           </div>
         </div>
         ${dim2.downturn_resilience_summary ? `
-          <div class="p-3.5 rounded-xl bg-amber-950/20 border border-amber-800/40 text-xs text-amber-200 leading-relaxed mb-4">
-            <span class="font-bold text-amber-400 mr-1">Resilience Playbook:</span> ${dim2.downturn_resilience_summary}
+          <div class="p-4 rounded-xl bg-amber-950/20 border border-amber-800/40 text-xs sm:text-sm text-amber-200 leading-relaxed mb-4">
+            <span class="font-bold text-amber-400 mr-1">Resilience Synthesis:</span> ${cleanProseText(dim2.downturn_resilience_summary)}
           </div>
         ` : ''}
         ${render4Tier(dim2)}
@@ -787,12 +803,12 @@
       // DIMENSION 3: PROMISE VS DELIVERY AUDIT
       // -----------------------------------------------------------------------
       const card3 = document.createElement('div');
-      card3.className = 'glass-panel p-6 rounded-xl border border-borderDark shadow-lg';
+      card3.className = 'glass-panel p-6 sm:p-7 rounded-2xl border border-borderDark shadow-lg';
       let guidanceHtml = '';
       const guidanceList = Array.isArray(dim3.guidance_vs_delivery) ? dim3.guidance_vs_delivery : [];
       if (guidanceList.length > 0) {
         guidanceHtml = `
-          <div class="mt-4 pt-4 border-t border-borderDark">
+          <div class="mt-5 pt-4 border-t border-borderDark">
             <h6 class="text-xs font-mono font-bold text-slate-400 uppercase tracking-wider mb-3">
               Multi-Year Guidance vs Actual Reported Delivery
             </h6>
@@ -826,7 +842,7 @@
             ${dim3.credibility_verdict || 'HIGH INTEGRITY'}
           </span>
         </div>
-        ${dim3.verdict_justification ? `<p class="text-xs text-slate-300 leading-relaxed mb-3">${dim3.verdict_justification}</p>` : ''}
+        ${dim3.verdict_justification ? `<p class="text-xs sm:text-sm text-slate-300 leading-relaxed mb-3">${cleanProseText(dim3.verdict_justification)}</p>` : ''}
         ${render4Tier(dim3)}
         ${guidanceHtml}
       `;
@@ -836,13 +852,13 @@
       // DIMENSION 4: COMPETITOR MATRIX
       // -----------------------------------------------------------------------
       const card4 = document.createElement('div');
-      card4.className = 'glass-panel p-6 rounded-xl border border-borderDark shadow-lg';
+      card4.className = 'glass-panel p-6 sm:p-7 rounded-2xl border border-borderDark shadow-lg';
       let tableHtml = '';
       const bTable = Array.isArray(dim4.benchmark_table) ? dim4.benchmark_table : [];
       if (bTable.length > 0) {
         const peersList = Array.isArray(dim4.primary_peers) ? dim4.primary_peers : ['Peer 1', 'Peer 2'];
         tableHtml = `
-          <div class="mt-4 pt-4 border-t border-borderDark overflow-x-auto">
+          <div class="mt-5 pt-4 border-t border-borderDark overflow-x-auto">
             <h6 class="text-xs font-mono font-bold text-slate-400 uppercase tracking-wider mb-3">
               Head-to-Head Listed Competitor Comparison Table
             </h6>
@@ -886,8 +902,8 @@
           ` : ''}
         </div>
         ${dim4.valuation_differential_rationale ? `
-          <div class="p-3.5 rounded-xl bg-purple-950/20 border border-purple-800/40 text-xs text-purple-200 leading-relaxed mb-4">
-            <span class="font-bold text-purple-400 mr-1">Valuation Differential:</span> ${dim4.valuation_differential_rationale}
+          <div class="p-4 rounded-xl bg-purple-950/20 border border-purple-800/40 text-xs sm:text-sm text-purple-200 leading-relaxed mb-4">
+            <span class="font-bold text-purple-400 mr-1">Valuation Differential:</span> ${cleanProseText(dim4.valuation_differential_rationale)}
           </div>
         ` : ''}
         ${render4Tier(dim4)}
@@ -897,7 +913,8 @@
     }
 
     function renderValuationChapter(val) {
-      document.getElementById('val-summary').innerText = val.summary || 'Intrinsic valuation hurdle rates modeled under multi-scenario frameworks.';
+      const summaryText = val.narrative_prose ? cleanProseText(val.narrative_prose) : (cleanProseText(val.summary) || 'Intrinsic valuation hurdle rates modeled under multi-scenario frameworks.');
+      document.getElementById('val-summary').innerText = summaryText;
       
       const sContainer = document.getElementById('val-scenarios');
       sContainer.innerHTML = '';
@@ -915,7 +932,7 @@
           <div>
             <div class="text-xs font-bold text-${s.color}-400 mb-1 uppercase">${s.label}</div>
             <div class="text-xl font-bold font-mono text-white mb-2">${sc.fair_target_price || sc.target_price || '₹0.00'}</div>
-            <p class="text-xs text-slate-400">${sc.growth_assumptions || sc.catalyst || ''}</p>
+            <p class="text-xs text-slate-300 leading-relaxed">${sc.thesis || sc.growth_assumptions || ''}</p>
           </div>
           <div class="mt-3 text-xs font-mono text-slate-500">${sc.multiple_used || ''}</div>
         `;
@@ -925,12 +942,11 @@
       const tContainer = document.getElementById('val-triggers');
       tContainer.innerHTML = '';
       const triggers = val.invalidation_triggers || [];
-      triggers.forEach(t => {
-        const li = document.createElement('li');
-        li.className = 'flex items-start space-x-2';
-        li.innerHTML = `<span class="text-rose-400 font-bold">•</span><span>${t}</span>`;
-        tContainer.appendChild(li);
-      });
+      if (triggers.length > 0) {
+        const cleanTrigs = triggers.map(t => cleanProseText(t).replace(/\.$/, ''));
+        const trigProse = `Structural investment thesis invalidation thresholds that mandate an immediate capital reallocation include: ${cleanTrigs.join('; ')}. Any violation of these operational and credit corridors immediately negates the fundamental compounding rationale.`;
+        tContainer.innerHTML = `<p class="text-rose-200/90 text-sm sm:text-base leading-relaxed">${trigProse}</p>`;
+      }
     }
 
     function renderConcallChapter(concall) {

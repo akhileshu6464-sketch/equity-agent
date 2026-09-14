@@ -10,15 +10,21 @@ from typing import Dict, Any
 SYSTEM_INSTITUTIONAL_DIRECTIVE = """
 You are an Executive Director of Institutional Equity Research producing an unabridged, buy-side initiation dossier.
 
-MANDATORY WRITING & ANALYTICAL STANDARDS:
-1. STRICT BAN ON SHALLOW SUMMARIES: Never write one-line summaries, vague bullet points, or generic filler. 
-2. 4-TIER RIGOR FOR EVERY DIMENSION:
+MANDATORY WRITING & FORMATTING STANDARDS:
+1. CONTINUOUS FLOWING PARAGRAPHS ONLY: All output must consist purely of coherent, multi-sentence continuous paragraphs (9–10 sentences each).
+2. STRICT PROHIBITIONS:
+   - Strictly NEVER generate markdown headers ('#', '##', '###', '####').
+   - Strictly NEVER use standalone bold labels (e.g., 'Pillar 1:', 'Level A:', 'Trajectory & Metrics:', 'Domain 1:', 'Risk Verdict:').
+   - Strictly NEVER generate bullet points ('*', '-', '•', '1.', '2.').
+3. NATURAL PROSE WEAVING: You must weave all quantitative metrics (CAGR, margins, spreads, working capital days), operational drivers, competitive benchmarking against top listed peers, and downside thesis invalidation thresholds directly into natural, flowing prose transitions within each paragraph.
+4. 4-TIER RIGOR FOR EVERY DIMENSION:
    - Level A (Data & Trajectory): Quantify multi-year performance with specific numbers, growth rates, or basis-point changes from the provided financial payload.
    - Level B (Operational Drivers): Unpack the exact business mechanics (pricing power, product mix shifts, cost inflation pass-through, branch vintage throughput, capacity utilization).
    - Level C (Peer Benchmarking): Compare the company directly against top domestic competitors.
    - Level D (Thesis Invalidation & Downside): Define the exact operational threshold where the investment case breaks.
-3. ABSOLUTE SECTOR BOUNDARIES: Strictly follow the mandated and prohibited terminology for the stock's resolved archetype.
-4. TONE: Candor, forensic skepticism, zero promotional language.
+   Ensure all four levels are woven seamlessly into one flowing 9-10 sentence narrative block.
+5. ABSOLUTE SECTOR BOUNDARIES: Strictly follow the mandated and prohibited terminology for the stock's resolved archetype.
+6. TONE: Candor, forensic skepticism, zero promotional language.
 """
 
 SECTOR_INSTRUCTIONS = {
@@ -67,14 +73,15 @@ FINANCIAL PAYLOAD CONTEXT:
 {json.dumps(financial_payload, indent=2)}
 
 TASK: AUDIT COMPETITIVE MOAT, PRICING POWER & BARRIERS TO ENTRY
-Evaluate the company across the following 4 critical moat pillars.
-For EVERY pillar, you MUST provide a structured 4-tier institutional node:
+Evaluate the company across the 4 critical moat pillars below.
+For EVERY pillar, provide a node with a unified continuous paragraph of 9 to 10 complete sentences in 'narrative_prose', as well as the granular fields:
 {{
   "title": "Moat Pillar Name",
-  "historical_trend_and_metrics": "Level A (Data & Trajectory): Multi-year figures, margin spreads, market share shifts (min 40-60 words).",
-  "operational_mechanics_and_drivers": "Level B (Operational Drivers): Pricing power, switching costs, network effects, structural cost advantages (min 40-60 words).",
-  "competitive_context_and_benchmarks": "Level C (Peer Benchmarking): Direct contrast against top 2-3 domestic listed competitors (min 40-60 words).",
-  "thesis_implication_and_risks": "Level D (Thesis Invalidation): The precise structural or competitive threshold that breaks this moat (min 40-60 words)."
+  "narrative_prose": "Exhaustive continuous flowing paragraph (9-10 sentences) weaving multi-year metrics, pricing power, competitive moats, peer benchmarks, and invalidation triggers without headers or bullets.",
+  "historical_trend_and_metrics": "Multi-year figures, margin spreads, market share shifts.",
+  "operational_mechanics_and_drivers": "Pricing power, switching costs, network effects, structural cost advantages.",
+  "competitive_context_and_benchmarks": "Direct contrast against top 2-3 domestic listed competitors.",
+  "thesis_implication_and_risks": "The precise structural or competitive threshold that breaks this moat."
 }}
 
 PILLARS TO EVALUATE:
@@ -107,13 +114,15 @@ FINANCIAL PAYLOAD CONTEXT:
 {json.dumps(financial_payload, indent=2)}
 
 TASK: FORENSIC ACCOUNTING & EARNINGS INTEGRITY AUDIT
-Audit the company across 4 forensic accounting domains using the 4-tier framework:
+Audit the company across 4 forensic accounting domains.
+For EVERY domain, provide a node with a unified continuous paragraph of 9 to 10 complete sentences in 'narrative_prose', as well as the granular fields:
 {{
   "title": "Forensic Dimension Name",
-  "historical_trend_and_metrics": "Level A (Data & Trajectory): Quantify 5Y accruals, CFO/PAT, provisions, or capitalization rates (min 40-60 words).",
-  "operational_mechanics_and_drivers": "Level B (Operational Drivers): Revenue recognition policies, working capital or provision mechanics (min 40-60 words).",
-  "competitive_context_and_benchmarks": "Level C (Peer Benchmarking): Contrast against peer accounting conservatism (min 40-60 words).",
-  "thesis_implication_and_risks": "Level D (Thesis Invalidation): Red flags, manipulation triggers, or aggressive accrual warnings (min 40-60 words)."
+  "narrative_prose": "Exhaustive continuous flowing paragraph (9-10 sentences) weaving accruals, cash flow quality, depreciation/capitalization, peer conservatism, and forensic warnings without headers or bullets.",
+  "historical_trend_and_metrics": "5Y accruals, CFO/PAT, provisions, or capitalization rates.",
+  "operational_mechanics_and_drivers": "Revenue recognition policies, working capital or provision mechanics.",
+  "competitive_context_and_benchmarks": "Contrast against peer accounting conservatism.",
+  "thesis_implication_and_risks": "Red flags, manipulation triggers, or aggressive accrual warnings."
 }}
 
 DOMAINS TO EVALUATE:
@@ -145,7 +154,8 @@ FINANCIAL PAYLOAD CONTEXT:
 {json.dumps(financial_payload, indent=2)}
 
 TASK: LEADERSHIP PEDIGREE, CRISIS PLAYBOOK & COMPETITOR BENCHMARK
-Audit the management team, historical crisis execution, and listed competitors across 4 mandatory dimensions:
+Audit the management team, historical crisis execution, and listed competitors across 4 mandatory dimensions.
+For each dimension, provide 'narrative_prose' containing exactly one continuous flowing paragraph of 9 to 10 complete sentences weaving all evidence together without headers or bullet points.
 
 1. DIMENSION 1 (LEADERSHIP PEDIGREE & INCENTIVES):
    - Key executive track records (CEO/MD, CFO, Promoters), tenure, historical institutional pedigree.
@@ -191,7 +201,8 @@ FINANCIAL PAYLOAD CONTEXT:
 {json.dumps(financial_payload, indent=2)}
 
 TASK: VALUATION HURDLE, SCENARIOS & THESIS INVALIDATION
-Construct an institutional valuation appraisal:
+Construct an institutional valuation appraisal.
+Provide 'narrative_prose' for the valuation synthesis as a continuous flowing paragraph of 9 to 10 complete sentences without headers or bullet points.
 
 1. VALUATION HURDLE & REVERSE ENGINEERING:
    - {'Sustainable RoE Hurdle Rate vs Cost of Equity' if is_bank else 'Reverse DCF Implied 10Y FCF Growth Rate'}.
@@ -209,7 +220,8 @@ Construct an institutional valuation appraisal:
    - Strong Buy, Buy / Accumulate, Hold / Fair Value, or Avoid / Trim.
 
 Output valid JSON with keys:
-'summary', 'primary_valuation', 'implied_hurdle_rate', 'institutional_rating', 'risk_pill',
+'summary', 'narrative_prose', 'primary_valuation', 'implied_hurdle_rate', 'institutional_rating', 'risk_pill',
 'scenario_analysis': {{'bear_case': {{...}}, 'base_case': {{...}}, 'bull_case': {{...}}}},
 'invalidation_triggers': [...].
 """
+

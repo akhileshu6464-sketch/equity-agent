@@ -91,19 +91,21 @@ PRE-CALCULATED FINANCIAL PAYLOAD (STAGE 1 PURE-PYTHON MATH):
 UNABRIDGED SECTOR ARCHETYPE CHECKLIST & RULES:
 {archetype_checklist}
 
-CRITICAL INSTITUTIONAL DEPTH & 4-TIER SCHEMA RULES:
-1. STRICT PROHIBITION: Never write one-line summaries, flat bullet points, or high-level summaries.
-2. For EVERY parameter, checklist item, or operational KPI evaluated across all agent domains (Moat, Forensics, Solvency, Industry KPIs, Valuation, Concall), you MUST structure your analysis using this 4-tier institutional JSON object:
+CRITICAL INSTITUTIONAL DEPTH & FLOWING PROSE SCHEMA RULES:
+1. STRICT PROHIBITION: Never write one-line summaries, flat bullet points, or markdown section headers ('#', '##', '###', '####'). Strictly prohibit standalone bold labels (e.g. 'Pillar 1:', 'Level A:').
+2. CONTINUOUS FLOWING NARRATIVE: Output must consist purely of coherent, multi-sentence continuous paragraphs (9–10 sentences each). Weave quantitative metrics, operational levers, competitive benchmarks, and downside risk triggers into natural prose transitions.
+3. For EVERY parameter, checklist item, or operational KPI evaluated across all agent domains (Moat, Forensics, Solvency, Industry KPIs, Valuation, Concall), you MUST provide both a unified flowing 9-10 sentence paragraph in 'narrative_prose' and structure your analysis using this 4-tier institutional JSON object:
    {{
      "title": "Parameter / Metric Title",
+     "narrative_prose": "Unified 9-10 sentence flowing paragraph weaving trajectory, operational mechanics, peer comparison, and downside thresholds without headers or bullet points.",
      "historical_trend_and_metrics": "Level A (Historical Trajectory & Data): Reference the 3-5 year trend with specific figures, percentages, or basis point shifts (min 35-50 words).",
      "operational_mechanics_and_drivers": "Level B (Operational & Strategic Drivers): Detail the precise business mechanics, volume/mix, pass-through, and operating levers (min 35-50 words).",
      "competitive_context_and_benchmarks": "Level C (Peer & Benchmark Context): Contrast against industry benchmarks and primary competitors (min 35-50 words).",
      "thesis_implication_and_risks": "Level D (Capital Allocation & Return Impact): Explain implications for RoA/RoE, long-term compounding, and valuation multiples (min 35-50 words)."
    }}
-3. For dashboard card display, populate the 'audit_metrics' dictionaries with crisp, formatted metric strings (e.g. {sample_metrics}).
-4. Include full markdown data tables for historical trends across Forensics, Solvency, Industry KPIs, and Valuation Scenarios.
-5. Strictly obey all banned metrics for this archetype ({financial_payload.get('sector_profile', {}).get('banned_metrics', [])}). NEVER cite banned metrics.
+4. For dashboard card display, populate the 'audit_metrics' dictionaries with crisp, formatted metric strings (e.g. {sample_metrics}).
+5. Include full markdown data tables for historical trends across Forensics, Solvency, Industry KPIs, and Valuation Scenarios.
+6. Strictly obey all banned metrics for this archetype ({financial_payload.get('sector_profile', {}).get('banned_metrics', [])}). NEVER cite banned metrics.
 {sector_prohibition}
 7. Use the exact pre-calculated figures from the financial payload. Do not invent contradictory numbers.
 8. For Agent 4 (Governance & Leadership), output MUST include:
