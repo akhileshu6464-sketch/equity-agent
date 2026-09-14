@@ -1,10 +1,19 @@
 """
 Institutional Equity Research Master Prompt Templates
 Eliminates shallow summaries and single-line bullet points.
-Enforces 4-level analytical depth and strict sector boundaries.
+Enforces 4-level analytical depth, verified public sources grounding, and strict sector boundaries.
 """
 
-SYSTEM_INSTITUTIONAL_FRAMEWORK = """
+ANALYST_SYSTEM_PROMPT = (
+    "You are an institutional equity analyst with live web search access. "
+    "Before drafting the audit, search for the target company's latest BSE/NSE exchange filings, "
+    "recent concall transcripts, and real operating product lines. "
+    "Ground all CapEx, peer comparisons, and guidance in verified public sources."
+)
+
+SYSTEM_INSTITUTIONAL_FRAMEWORK = f"""
+{ANALYST_SYSTEM_PROMPT}
+
 You are an Executive Director of Institutional Equity Research preparing an unabridged buy-side initiation dossier.
 
 MANDATORY WRITING & FORMATTING RULES:
@@ -16,10 +25,14 @@ MANDATORY WRITING & FORMATTING RULES:
 3. NATURAL PROSE WEAVING: You must weave all quantitative metrics (CAGR, margins, spreads, working capital days), operational drivers, competitive benchmarking against top listed peers, and downside thesis invalidation thresholds directly into natural, flowing prose transitions within each paragraph.
 4. SECTOR DISCIPLINE & ZERO CROSS-SECTOR CONTAMINATION:
    - For Banks/BFSI: Focus strictly on NIM, CASA ratio, Gross/Net NPAs, PCR, Cost of Funds, C/D ratio, and Tier-1 CET-1 capital. Strictly NEVER mention factories, plant capex, raw material inflation, or inventory.
-   - For Non-Financials (Consumer / Manufacturing / Industrials / FMCG / Tech): Focus strictly on Gross Margins, Raw Material Pass-through, Brand Equity, Distribution Reach, Cash Conversion Cycle (DIO/DSO/DPO), ROCE, and ROIC vs WACC. Strictly NEVER mention 'CASA', 'NIM', 'CET-1', 'CRAR', 'deposits', 'loan book', 'branches', 'slippages', 'PCR', or banking peers (e.g. HDFC Bank, ICICI Bank, Axis Bank, Kotak, SBI).
+   - For Specialty Chemicals / Advanced Materials: Focus strictly on proprietary product lines (e.g. ATBS, IBB, Veeral Organics), formula-indexed feedstock pass-through, customer qualification moats, and continuous-flow synthesis. Strictly NEVER mention retail dealer agreements, appliances, copper, or steel.
+   - For Non-Financials: Focus strictly on Gross Margins, Raw Material Pass-through, Brand Equity, Distribution Reach, Cash Conversion Cycle (DIO/DSO/DPO), ROCE, and ROIC vs WACC. Strictly NEVER mention 'CASA', 'NIM', 'CET-1', 'CRAR', 'deposits', 'loan book', 'branches', 'slippages', 'PCR', or banking peers.
 """
 
 def get_moat_prompt(ticker: str, company_name: str, sector: str, is_bank: bool, data_summary: str) -> str:
+    clean_sym = ticker.upper().replace(".NS", "").replace(".BO", "").strip()
+    is_chemicals = clean_sym in ["VINATIORGA", "DEEPAKNTR", "TATACHEM", "PIIND", "AARTIIND", "SRF", "NAVINFLUOR", "FLUOROCHEM", "ATUL", "CLEAN", "FINEORG", "ALKYLAMINE", "BALAMINES"] or "chemical" in sector.lower() or "materials" in sector.lower()
+
     if is_bank:
         sector_rules = (
             "SECTOR: BFSI / LENDING.\n"
@@ -30,13 +43,23 @@ def get_moat_prompt(ticker: str, company_name: str, sector: str, is_bank: bool, 
         p2_focus = "Operating Efficiency & Branch / Digital Underwriting Throughput (Cost-to-Income, turnaround times)"
         p3_focus = "Asset Quality & Credit Cost Trajectory (GNPA, NNPA, PCR, slippage ratio)"
         p4_focus = "Regulatory Capital & Balance Sheet Strength (CET-1, CRAR, LCR, RBI stress-testing buffers)"
+    elif is_chemicals:
+        sector_rules = (
+            "SECTOR: SPECIALTY CHEMICALS / ADVANCED MATERIALS.\n"
+            "MANDATORY FOCUS: Proprietary chemistry lines (e.g. ATBS, IBB, Veeral Organics butyl phenols / antioxidants), global market share, formula-indexed feedstock pass-through contracts, continuous-flow synthesis block capacity utilization, customer qualification cycles (2-3 year innovator qualification moats), and ROIC/ROCE vs WACC spreads.\n"
+            "STRICT PROHIBITION: Strictly NEVER mention retail consumer dealer agreements, appliances, copper, steel, CASA, NIM, or banking deposits."
+        )
+        p1_focus = "Proprietary Chemistry Moat, ATBS/IBB Global Market Share & Formula-Indexed Pass-Through (Raw material pass-through, export stickiness)"
+        p2_focus = "Continuous-Flow Chemical Synthesis, Veeral Organics Integration & Regulatory Moat (Synthesis block utilization, innovator qualification barriers, environmental ZLD compliance)"
+        p3_focus = "Working Capital Dynamics & Export Supply Chain Governance (Debtor aging with global chemical innovators, inventory turnover, CFO/PAT conversion)"
+        p4_focus = "Capital Allocation & Balance Sheet Durability (ROCE, ROIC, zero-debt balance sheet, organic expansion into butyl phenols/antioxidants)"
     else:
         sector_rules = (
             "SECTOR: INDUSTRIAL / CONSUMER / MANUFACTURING / FMCG.\n"
-            "MANDATORY FOCUS: Brand equity, gross margins, pricing power against raw materials (e.g. copper, aluminum, crude derivatives), dealer/distributor network velocity, working capital Cash Conversion Cycle (CCC, DIO, DSO, DPO), and ROIC/ROCE vs WACC spreads.\n"
+            "MANDATORY FOCUS: Brand equity, gross margins, pricing power against raw materials, dealer/distributor network velocity, working capital Cash Conversion Cycle (CCC, DIO, DSO, DPO), and ROIC/ROCE vs WACC spreads.\n"
             "STRICT PROHIBITION: Strictly NEVER mention 'CASA', 'NIM', 'net interest margin', 'deposits', 'loan book', 'branches', 'CET-1', 'CRAR', 'NPAs', 'slippages', 'PCR', or banking peers (e.g. HDFC Bank, ICICI Bank, Axis Bank, Kotak, SBI)."
         )
-        p1_focus = "Brand Moat, Pricing Power & Margin Defensibility (Gross margins, pricing power against raw materials like copper/aluminum, product mix)"
+        p1_focus = "Brand Moat, Pricing Power & Margin Defensibility (Gross margins, pricing power against volatile raw materials, product mix)"
         p2_focus = "Distribution Network, Channel Throughput & Operating Leverage (Dealer/distributor touchpoints, secondary sales velocity, capacity utilization, operating EBITDA margins)"
         p3_focus = "Working Capital Dynamics & Cash Conversion Cycle (DIO, DSO, DPO, inventory turnover, operating cash flow conversion)"
         p4_focus = "Capital Allocation & Balance Sheet Durability (ROCE, ROIC, debt-to-equity, free cash flow generation, capex/M&A reinvestment)"

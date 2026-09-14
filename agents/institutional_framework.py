@@ -7,7 +7,15 @@ and specialized prompt builders for deep, uncompromised equity research.
 import json
 from typing import Dict, Any
 
-SYSTEM_INSTITUTIONAL_DIRECTIVE = """
+ANALYST_SYSTEM_PROMPT = (
+    "You are an institutional equity analyst with live web search access. "
+    "Before drafting the audit, search for the target company's latest BSE/NSE exchange filings, "
+    "recent concall transcripts, and real operating product lines. "
+    "Ground all CapEx, peer comparisons, and guidance in verified public sources."
+)
+
+SYSTEM_INSTITUTIONAL_DIRECTIVE = f"""{ANALYST_SYSTEM_PROMPT}
+
 You are an Executive Director of Institutional Equity Research producing an unabridged, buy-side initiation dossier.
 
 MANDATORY WRITING & FORMATTING STANDARDS:
@@ -33,9 +41,14 @@ SECTOR_INSTRUCTIONS = {
     - REQUIRED FOCUS: Net Interest Margins (NIM), Credit-to-Deposit (C/D) ratio, CASA mobilization, Gross/Net NPAs, Provision Coverage (PCR), Slippage ratios, Return on Assets (DuPont RoA tree), Tier-1 CET-1 capital headroom.
     - STRICT PROHIBITION: Never mention plant capex, inventory, raw materials, factories, working capital cycles, or supply chain bottlenecks.
     """,
+    "CHEMICALS": """
+    SECTOR PROTOCOL: SPECIALTY CHEMICALS / ADVANCED MATERIALS
+    - REQUIRED FOCUS: Global market share in key proprietary chemistries (e.g. ATBS, IBB, Veeral Organics butyl phenols / antioxidants), formula-indexed feedstock pass-through contracts, continuous-flow synthesis block capacity utilization, customer qualification cycles (2-3 year innovator qualification moats), Zero Liquid Discharge (ZLD) environmental compliance, and ROCE/ROIC vs WACC spreads.
+    - STRICT PROHIBITION: Strictly NEVER mention retail consumer dealer agreements, appliances, copper, steel, CASA, NIM, or banking deposits.
+    """,
     "MANUFACTURING": """
     SECTOR PROTOCOL: INDUSTRIAL / CONSUMER GOODS / MANUFACTURING
-    - REQUIRED FOCUS: Brand equity, Gross Margins, Raw Material Pass-through (copper, aluminum, crude derivatives), Dealer/Distributor Touchpoints, Secondary Sales Velocity, Cash Conversion Cycle (CCC, DIO, DSO, DPO), Plant Capacity Utilization, ROCE, and ROIC vs WACC spreads.
+    - REQUIRED FOCUS: Brand equity, Gross Margins, Raw Material Pass-through, Dealer/Distributor Touchpoints, Secondary Sales Velocity, Cash Conversion Cycle (CCC, DIO, DSO, DPO), Plant Capacity Utilization, ROCE, and ROIC vs WACC spreads.
     - STRICT PROHIBITION: Strictly NEVER mention 'CASA', 'NIM', 'net interest margin', 'deposits', 'loan book', 'branches', 'CET-1', 'CRAR', 'NPAs', 'slippages', 'PCR', or banking peers (e.g. HDFC Bank, ICICI Bank, Axis Bank, Kotak, SBI).
     """,
     "TECH": """
@@ -51,6 +64,8 @@ def get_sector_protocol(is_bank: bool, sector: str = "", industry: str = "") -> 
     if is_bank:
         return SECTOR_INSTRUCTIONS["BFSI"]
     combined = (sector + " " + industry).lower()
+    if any(k in combined for k in ["chemical", "fertilizer", "agrochemical", "polymer", "materials"]):
+        return SECTOR_INSTRUCTIONS["CHEMICALS"]
     if any(k in combined for k in ["tech", "software", "information technology", "it services"]):
         return SECTOR_INSTRUCTIONS["TECH"]
     return SECTOR_INSTRUCTIONS["MANUFACTURING"]
@@ -62,6 +77,28 @@ def build_moat_prompt(ticker: str, financial_payload: Dict[str, Any], is_bank: b
     company_name = company_meta.get("short_name", ticker)
     sector_protocol = get_sector_protocol(is_bank, company_meta.get("sector", ""), company_meta.get("industry", ""))
     
+    clean_sym = ticker.upper().replace(".NS", "").replace(".BO", "").strip()
+    is_chem = (
+        clean_sym in ["VINATIORGA", "DEEPAKNTR", "TATACHEM", "PIIND", "AARTIIND", "SRF", "NAVINFLUOR", "FLUOROCHEM", "ATUL", "CLEAN", "FINEORG", "ALKYLAMINE", "BALAMINES"]
+        or any(k in (company_meta.get("sector", "") + " " + company_meta.get("industry", "")).lower() for k in ["chemical", "polymer", "materials"])
+    ) and not is_bank
+
+    if is_bank:
+        p1_desc = "Pillar 1: Core Revenue Engine & NIM / Liability Defensibility (CASA ratio, cost of funds, retail deposit granularity)"
+        p2_desc = "Pillar 2: Operating Efficiency & Branch / Digital Underwriting Throughput (Cost-to-Income, turnaround times)"
+        p3_desc = "Pillar 3: Asset Quality & Credit Cost Trajectory (GNPA, NNPA, PCR, slippage ratio)"
+        p4_desc = "Pillar 4: Regulatory Capital & Balance Sheet Strength (CET-1, CRAR, LCR, RBI stress-testing buffers)"
+    elif is_chem:
+        p1_desc = "Pillar 1: Proprietary Chemistry Moat, ATBS/IBB Global Market Share & Formula-Indexed Pass-Through (Raw material pass-through, export client stickiness)"
+        p2_desc = "Pillar 2: Continuous-Flow Chemical Synthesis, Veeral Organics Integration & Regulatory Moat (Synthesis block utilization, innovator qualification barriers, environmental ZLD compliance)"
+        p3_desc = "Pillar 3: Working Capital Dynamics & Export Supply Chain Governance (Debtor aging with global chemical innovators, inventory turnover, CFO/PAT conversion)"
+        p4_desc = "Pillar 4: Capital Allocation & Balance Sheet Durability (ROCE, ROIC, zero-debt balance sheet, organic expansion into butyl phenols/antioxidants)"
+    else:
+        p1_desc = "Pillar 1: Brand Moat, Pricing Power & Margin Defensibility (Gross margins, pricing power against raw materials, product mix)"
+        p2_desc = "Pillar 2: Distribution Network, Channel Throughput & Operating Leverage (Dealer/distributor touchpoints, secondary sales velocity, capacity utilization, operating EBITDA margins)"
+        p3_desc = "Pillar 3: Working Capital Dynamics & Cash Conversion Cycle (DIO, DSO, DPO, inventory turnover, operating cash flow conversion)"
+        p4_desc = "Pillar 4: Capital Allocation & Balance Sheet Durability (ROCE, ROIC, debt-to-equity, free cash flow generation, capex/M&A reinvestment)"
+
     return f"""
 {SYSTEM_INSTITUTIONAL_DIRECTIVE}
 
@@ -85,10 +122,10 @@ For EVERY pillar, provide a node with a unified continuous paragraph of 9 to 10 
 }}
 
 PILLARS TO EVALUATE:
-1. {'Pillar 1: Core Revenue Engine & NIM / Liability Defensibility (CASA ratio, cost of funds, retail deposit granularity)' if is_bank else 'Pillar 1: Brand Moat, Pricing Power & Margin Defensibility (Gross margins, pricing power against raw materials like copper/aluminum, product mix)'}
-2. {'Pillar 2: Operating Efficiency & Branch / Digital Underwriting Throughput (Cost-to-Income, turnaround times)' if is_bank else 'Pillar 2: Distribution Network, Channel Throughput & Operating Leverage (Dealer/distributor touchpoints, secondary sales velocity, capacity utilization, operating EBITDA margins)'}
-3. {'Pillar 3: Asset Quality & Credit Cost Trajectory (GNPA, NNPA, PCR, slippage ratio)' if is_bank else 'Pillar 3: Working Capital Dynamics & Cash Conversion Cycle (DIO, DSO, DPO, inventory turnover, operating cash flow conversion)'}
-4. {'Pillar 4: Regulatory Capital & Balance Sheet Strength (CET-1, CRAR, LCR, RBI stress-testing buffers)' if is_bank else 'Pillar 4: Capital Allocation & Balance Sheet Durability (ROCE, ROIC, debt-to-equity, free cash flow generation, capex/M&A reinvestment)'}
+1. {p1_desc}
+2. {p2_desc}
+3. {p3_desc}
+4. {p4_desc}
 
 Output valid JSON with keys:
 'summary', 'moat_rating' ('WIDE', 'NARROW', 'NONE'), 'risk_pill' ('GREEN', 'YELLOW', 'RED'),
@@ -128,17 +165,18 @@ For EVERY domain, provide a node with a unified continuous paragraph of 9 to 10 
 DOMAINS TO EVALUATE:
 1. {'Provisioning Adequacy & Slippage Forensics' if is_bank else 'Cash Flow Quality & CFO vs PAT Conversion'}
 2. {'Asset Quality Classification & Restructuring Scrutiny' if is_bank else 'Revenue Quality & Aggressive Accrual Detection (Modified Jones Model)'}
-3. {'Off-Balance Sheet Liabilities & Contingent Exposures' if is_bank else 'Depreciation Policy & Capitalization of Operating Expenses'}
-4. {'Auditor Quality & Governance Checklist' if is_bank else 'Auditor Independence, Qualifications & Auditor Turnover'}
+3. {'Capital Allocation Integrity & Auditor Track Record' if is_bank else 'Capital Allocation Integrity & Auditor Conservatism'}
+4. Forensic Risk Verdict & Comprehensive Accounting Score
 
 Output valid JSON with keys:
-'summary', 'forensic_score' ('CLEAN', 'WATCHLIST', 'SEVERE_ALERT'), 'risk_pill' ('GREEN', 'YELLOW', 'RED'),
-'domain_1', 'domain_2', 'domain_3', 'domain_4', 'red_flags', 'forensic_checklist'.
+'summary', 'forensic_score' ('CLEAN', 'ELEVATED', 'HIGH_RISK'), 'risk_pill' ('GREEN', 'YELLOW', 'RED'),
+'domain_1', 'domain_2', 'domain_3', 'domain_4',
+'red_flags', 'forensic_checklist'.
 """
 
 
-def build_leadership_prompt(ticker: str, financial_payload: Dict[str, Any], is_bank: bool) -> str:
-    """Builds an institutional leadership pedigree, crisis playbook and competitor benchmark prompt."""
+def build_leadership_prompt(ticker: str, financial_payload: Dict[str, Any], is_bank: bool, peers: list) -> str:
+    """Builds an institutional leadership pedigree, crisis playbook, and peer benchmark prompt."""
     company_meta = financial_payload.get("company_meta", {})
     company_name = company_meta.get("short_name", ticker)
     sector_protocol = get_sector_protocol(is_bank, company_meta.get("sector", ""), company_meta.get("industry", ""))
@@ -149,43 +187,37 @@ def build_leadership_prompt(ticker: str, financial_payload: Dict[str, Any], is_b
 {sector_protocol}
 
 COMPANY TARGET: {company_name} ({ticker})
+PRIMARY COMPETITORS: {', '.join(peers)}
 
 FINANCIAL PAYLOAD CONTEXT:
 {json.dumps(financial_payload, indent=2)}
 
-TASK: LEADERSHIP PEDIGREE, CRISIS PLAYBOOK & COMPETITOR BENCHMARK
-Audit the management team, historical crisis execution, and listed competitors across 4 mandatory dimensions.
-For each dimension, provide 'narrative_prose' containing exactly one continuous flowing paragraph of 9 to 10 complete sentences weaving all evidence together without headers or bullet points.
+TASK: LEADERSHIP PEDIGREE, CRISIS PLAYBOOK & COMPETITOR BENCHMARK AUDIT
+Audit the company across the 4 governance and competitive dimensions below.
+For EVERY dimension, provide a node with a unified continuous paragraph of 9 to 10 complete sentences in 'narrative_prose', as well as the granular fields:
+{{
+  "title": "Leadership Dimension Name",
+  "narrative_prose": "Exhaustive continuous flowing paragraph (9-10 sentences) weaving executive credentials, skin-in-the-game, crisis navigation, guidance fulfillment, and peer benchmarks without headers or bullets.",
+  "historical_trend_and_metrics": "Executive tenure, promoter pledge history, crisis survival metrics.",
+  "operational_mechanics_and_drivers": "Governance checks, operational resilience, guidance tracking systems.",
+  "competitive_context_and_benchmarks": "Direct contrast against listed peers ({', '.join(peers)}).",
+  "thesis_implication_and_risks": "Governance breaches, guidance misses, or succession risks."
+}}
 
-1. DIMENSION 1 (LEADERSHIP PEDIGREE & INCENTIVES):
-   - Key executive track records (CEO/MD, CFO, Promoters), tenure, historical institutional pedigree.
-   - Skin in the game: Promoter shareholding, pledge percentage, ESOP vesting.
-   - Executive remuneration vs Standalone Net Profit ratio.
-   - Board independence and second-line succession pipelines.
-
-2. DIMENSION 2 (CRISIS PLAYBOOK & HISTORICAL DOWNTURN EXECUTION):
-   - Empirical navigation through 2008 GFC, {'2018 IL&FS Liquidity Crisis' if is_bank else '2018 NBFC Liquidity Squeeze'}, 2020 COVID lockdowns, and raw material inflation cycles.
-   - Counter-cyclical market share gains, balance sheet preservation, and avoidance of dilutive distressed equity issuances.
-
-3. DIMENSION 3 (MANAGEMENT CREDIBILITY & COMMITMENT AUDIT):
-   - 3-5 year historical guidance audit (revenue, margins, CapEx commissioning vs reported delivery).
-   - Forensic integrity: Auditor resignations, corporate advances to promoter entities, arm's-length related-party transactions.
-   - Formal Credibility Verdict: 'HIGH INTEGRITY', 'PRAGMATIC', or 'PROMOTER-EXTRACTIVE'.
-
-4. DIMENSION 4 (DIRECT COMPETITOR BENCHMARK MATRIX):
-   - Direct peer comparison against top 2-3 listed Indian competitors.
-   - Comparison on scale, operating margins, RoE/RoIC, and market share migration.
-   - Institutional rationale explaining valuation premium or discount.
+DIMENSIONS TO EVALUATE:
+1. Executive Leadership Profile & Promoter Skin-in-the-Game (key executives, tenure, remuneration alignment, zero promoter pledge)
+2. Historical Crisis Playbook & Downturn Navigation (navigation through 2008 GFC, 2018 liquidity freeze, 2020 lockdowns, or feedstock inflation)
+3. Promise vs Delivery Audit (3-year guidance tracking against audited delivery)
+4. Head-to-Head Peer Comparison Matrix (direct benchmarking against {', '.join(peers)})
 
 Output valid JSON with keys:
-'summary', 'credibility_verdict', 'risk_pill',
-'dimension1_leadership_pedigree', 'dimension2_crisis_playbook',
-'dimension3_credibility_audit', 'dimension4_competitor_matrix'.
+'summary', 'credibility_verdict' ('HIGH INTEGRITY', 'PRAGMATIC', 'PROMOTER-EXTRACTIVE'), 'risk_pill' ('GREEN', 'YELLOW', 'RED'),
+'dimension1_leadership_pedigree', 'dimension2_crisis_playbook', 'dimension3_credibility_audit', 'dimension4_competitor_matrix'.
 """
 
 
 def build_valuation_prompt(ticker: str, financial_payload: Dict[str, Any], is_bank: bool) -> str:
-    """Builds an institutional valuation, reverse DCF/RoE and scenario analysis prompt."""
+    """Builds an institutional valuation hurdle rate and scenario analysis prompt."""
     company_meta = financial_payload.get("company_meta", {})
     company_name = company_meta.get("short_name", ticker)
     sector_protocol = get_sector_protocol(is_bank, company_meta.get("sector", ""), company_meta.get("industry", ""))
@@ -200,28 +232,19 @@ COMPANY TARGET: {company_name} ({ticker})
 FINANCIAL PAYLOAD CONTEXT:
 {json.dumps(financial_payload, indent=2)}
 
-TASK: VALUATION HURDLE, SCENARIOS & THESIS INVALIDATION
-Construct an institutional valuation appraisal.
-Provide 'narrative_prose' for the valuation synthesis as a continuous flowing paragraph of 9 to 10 complete sentences without headers or bullet points.
+TASK: VALUATION HURDLE RATES, SCENARIOS & THESIS INVALIDATION AUDIT
+Audit the company across valuation hurdles, 3 operational scenarios, and quantifiable invalidation triggers.
+Provide a unified continuous flowing paragraph (9-10 sentences) in 'narrative_prose' weaving implied growth hurdle rates, scenario returns, and invalidation triggers without headers or bullets.
 
-1. VALUATION HURDLE & REVERSE ENGINEERING:
-   - {'Sustainable RoE Hurdle Rate vs Cost of Equity' if is_bank else 'Reverse DCF Implied 10Y FCF Growth Rate'}.
-   - What operational performance is the current market price (CMP) pricing in?
-
-2. 3-TIER SCENARIO MODEL (BEAR / BASE / BULL):
-   - Bear Case: Downside assumptions, fair target price, expected drawdown.
-   - Base Case: Realistic growth trajectory, fair value target, expected IRR.
-   - Bull Case: Blue-sky operating leverage, multiple expansion target price.
-
-3. THESIS INVALIDATION TRIGGERS:
-   - Specific, quantifiable quarterly metrics that mandate an immediate thesis exit.
-
-4. INSTITUTIONAL VERDICT:
-   - Strong Buy, Buy / Accumulate, Hold / Fair Value, or Avoid / Trim.
+VALUATION DOMAINS TO EVALUATE:
+1. Intrinsic Valuation Multiple Audit ({'P/ABV & DuPont RoA Tree' if is_bank else 'Reverse DCF & EV/EBITDA'})
+2. 3-Scenario Return Framework (Bear, Base, and Bull operational trajectories and target prices)
+3. Three Quantifiable Thesis Invalidation Triggers (Exact numerical thresholds)
 
 Output valid JSON with keys:
-'summary', 'narrative_prose', 'primary_valuation', 'implied_hurdle_rate', 'institutional_rating', 'risk_pill',
-'scenario_analysis': {{'bear_case': {{...}}, 'base_case': {{...}}, 'bull_case': {{...}}}},
-'invalidation_triggers': [...].
+'summary', 'narrative_prose', 'primary_valuation', 'implied_hurdle_rate',
+'institutional_rating' ('BUY / ACCUMULATE', 'HOLD / FAIR VALUE', 'SELL / AVOID'),
+'risk_pill' ('GREEN', 'YELLOW', 'RED'),
+'scenario_analysis' (with 'bear_case', 'base_case', 'bull_case'),
+'invalidation_triggers' (list of 3 strings).
 """
-

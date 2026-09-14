@@ -1,8 +1,8 @@
 """
 Unified Institutional CIO Audit Client (Stage 2)
-Calls Google Gemini LLM using pre-calculated Stage 1 financial metrics to generate
-the complete unabridged 6-domain institutional equity research dossier.
-Includes zero-crash deterministic fallback for offline or quota-limited environments.
+Calls OpenAI LLM (gpt-6-astra) with native Web Search Grounding using pre-calculated Stage 1 financial metrics
+to generate the complete unabridged 6-domain institutional equity research dossier.
+Includes dual fallback to Google Gemini and zero-crash deterministic synthesis for offline or quota-limited environments.
 """
 
 import os
@@ -15,21 +15,71 @@ import requests
 
 logger = logging.getLogger("EquityPipeline.LLMClient")
 
+ANALYST_SYSTEM_PROMPT = (
+    "You are an institutional equity analyst with live web search access. "
+    "Before drafting the audit, search for the target company's latest BSE/NSE exchange filings, "
+    "recent concall transcripts, and real operating product lines. "
+    "Ground all CapEx, peer comparisons, and guidance in verified public sources."
+)
+
 
 class UnifiedLLMClient:
-    """Institutional CIO Auditor client interfacing with Google Gemini API."""
+    """Institutional CIO Auditor client interfacing with OpenAI (gpt-6-astra) and Google Gemini APIs."""
 
-    def __init__(self, model_name: str = "gemini-2.5-flash"):
+    def __init__(self, model_name: str = "gpt-6-astra"):
         self.model_name = model_name
-        self.api_key = self._resolve_api_key()
+        self.openai_api_key = self._resolve_openai_key()
+        self.gemini_api_key = self._resolve_gemini_key()
+        self.api_key = self.openai_api_key or self.gemini_api_key
 
-    def _resolve_api_key(self) -> Optional[str]:
-        """Resolves Gemini API key from environment or Streamlit secrets."""
-        key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-        if key:
+        self.openai_client = None
+        if self.openai_api_key:
+            try:
+                import openai
+                self.openai_client = openai.OpenAI(api_key=self.openai_api_key)
+                logger.info(f"UnifiedLLMClient initialized with OpenAI (model={self.model_name}).")
+            except Exception as e:
+                logger.warning(f"Failed to initialize OpenAI client: {e}")
+
+    def _resolve_openai_key(self) -> Optional[str]:
+        """Resolves OpenAI API key from environment, Streamlit secrets, or .env file."""
+        key = os.environ.get("OPENAI_API_KEY")
+        if key and key.strip():
             return key.strip()
 
         # Try streamlit secrets defensively
+        try:
+            import streamlit as st
+            if hasattr(st, "secrets"):
+                if "OPENAI_API_KEY" in st.secrets:
+                    return str(st.secrets["OPENAI_API_KEY"]).strip()
+                if "openai" in st.secrets and isinstance(st.secrets["openai"], dict):
+                    if "api_key" in st.secrets["openai"]:
+                        return str(st.secrets["openai"]["api_key"]).strip()
+        except Exception:
+            pass
+
+        # Optional .env search in project root
+        env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+        if os.path.exists(env_path):
+            try:
+                with open(env_path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        if line.strip().startswith("OPENAI_API_KEY="):
+                            val = line.strip().split("=", 1)[1].strip().strip('"').strip("'")
+                            if val:
+                                return val
+            except Exception:
+                pass
+
+        return None
+
+    def _resolve_gemini_key(self) -> Optional[str]:
+        """Resolves Gemini API key from environment or Streamlit secrets."""
+        key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+        if key and key.strip():
+            return key.strip()
+
         try:
             import streamlit as st
             if hasattr(st, "secrets"):
@@ -42,38 +92,57 @@ class UnifiedLLMClient:
 
         return None
 
-    def generate_institutional_audit(
+    def call_openai_responses(
+        self,
+        prompt: str,
+        system_instructions: Optional[str] = None
+    ) -> Optional[str]:
+        """
+        Calls OpenAI client.responses.create with native Web Search Grounding on gpt-6-astra.
+        Returns response.output_text directly.
+        """
+        if not self.openai_client:
+            return None
+
+        instructions = system_instructions or ANALYST_SYSTEM_PROMPT
+        try:
+            logger.info(f"Invoking OpenAI client.responses.create (model={self.model_name}) with web_search tool...")
+            response = self.openai_client.responses.create(
+                model=self.model_name,
+                tools=[{"type": "web_search"}],
+                input=prompt,
+                instructions=instructions
+            )
+            return getattr(response, "output_text", str(response))
+        except Exception as e:
+            logger.warning(f"OpenAI responses.create failed with model={self.model_name}: {e}")
+            return None
+
+    def _clean_and_parse_json(self, raw_text: str) -> Optional[Dict[str, Any]]:
+        """Cleans markdown code fences and parses JSON safely."""
+        if not raw_text:
+            return None
+        cleaned = raw_text.strip()
+        if cleaned.startswith("```"):
+            cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned, flags=re.MULTILINE)
+            cleaned = re.sub(r"```\s*$", "", cleaned, flags=re.MULTILINE).strip()
+        try:
+            return json.loads(cleaned)
+        except Exception:
+            match = re.search(r"(\{.*\})", cleaned, re.DOTALL)
+            if match:
+                try:
+                    return json.loads(match.group(1))
+                except Exception:
+                    pass
+        return None
+
+    def _build_audit_prompt(
         self,
         financial_payload: Dict[str, Any],
         archetype_checklist: str
-    ) -> Dict[str, Any]:
-        """
-        Executes Stage 2 Unified Institutional CIO Audit.
-        If an API key is available, queries Google Gemini with JSON schema enforcement.
-        Otherwise, seamlessly executes deterministic synthesis using pre-calculated math.
-        """
-        if self.api_key:
-            try:
-                logger.info(f"Invoking Gemini LLM ({self.model_name}) for {financial_payload.get('company_meta', {}).get('symbol')}...")
-                response_dict = self._call_gemini_api(financial_payload, archetype_checklist)
-                if response_dict and isinstance(response_dict, dict):
-                    logger.info("Successfully received and parsed unified Gemini audit response.")
-                    return response_dict
-            except Exception as e:
-                logger.warning(f"Gemini API call encountered an error: {e}. Activating deterministic fallback.")
-
-        # Deterministic institutional synthesis fallback
-        logger.info(f"Generating deterministic institutional audit dossier for {financial_payload.get('company_meta', {}).get('symbol')}...")
-        return self._deterministic_audit_fallback(financial_payload)
-
-    def _call_gemini_api(
-        self,
-        financial_payload: Dict[str, Any],
-        archetype_checklist: str
-    ) -> Optional[Dict[str, Any]]:
-        """Makes direct REST call to Google Gemini API with responseMimeType='application/json'."""
-        endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model_name}:generateContent?key={self.api_key}"
-
+    ) -> str:
+        """Constructs the comprehensive institutional audit prompt."""
         is_bfsi = bool(financial_payload.get("sector_profile", {}).get("is_bfsi", False))
         if is_bfsi:
             sample_metrics = "'3.85% NIM', '18.9% CET-1', '42.0% CASA', '0.42% Net NPA'"
@@ -82,7 +151,8 @@ class UnifiedLLMClient:
             sample_metrics = "'14.2x Interest Coverage', '45-day CCC', '18.5% ROIC', '32.0% Gross Margin'"
             sector_prohibition = "6. Since this is a NON-FINANCIAL entity, strictly NEVER mention 'CASA', 'NIM', 'net interest margin', 'deposits', 'loan book', 'branches', 'CET-1', 'CRAR', 'NPAs', 'slippages', 'PCR', or banking peers (e.g. HDFC Bank, ICICI Bank, Axis Bank, Kotak, SBI)."
 
-        prompt = f"""
+        return f"""{ANALYST_SYSTEM_PROMPT}
+
 You are an elite Institutional Equity Research Director. Using the pre-calculated financial metrics provided, generate the complete unabridged audit dossier across all domains (Moat, Forensics, Solvency, Governance, Industry KPIs, Valuation, Concall Guidance). Ensure seamless analytical cross-referencing between sections.
 
 PRE-CALCULATED FINANCIAL PAYLOAD (STAGE 1 PURE-PYTHON MATH):
@@ -116,6 +186,58 @@ CRITICAL INSTITUTIONAL DEPTH & FLOWING PROSE SCHEMA RULES:
 9. Output MUST be valid JSON conforming exactly to the expected dossier schema with all 8 agent structures (agent_0, agent_1, agent_2, agent_3, agent_4, agent_5, agent_6, agent_7), risk_pills, and institutional_rating.
 """
 
+    def generate_institutional_audit(
+        self,
+        financial_payload: Dict[str, Any],
+        archetype_checklist: str
+    ) -> Dict[str, Any]:
+        """
+        Executes Stage 2 Unified Institutional CIO Audit.
+        Primary: OpenAI gpt-6-astra with live Web Search Grounding.
+        Secondary: Google Gemini API.
+        Zero-crash fallback: Deterministic institutional synthesis using pre-calculated math.
+        """
+        sym = financial_payload.get("company_meta", {}).get("symbol", "TARGET")
+        prompt = self._build_audit_prompt(financial_payload, archetype_checklist)
+
+        # 1. Primary: OpenAI gpt-6-astra with Web Search Grounding
+        if self.openai_client:
+            try:
+                logger.info(f"Invoking OpenAI ({self.model_name}) with Web Search Grounding for {sym}...")
+                raw_output = self.call_openai_responses(prompt, system_instructions=ANALYST_SYSTEM_PROMPT)
+                if raw_output:
+                    resp_dict = self._clean_and_parse_json(raw_output)
+                    if resp_dict and isinstance(resp_dict, dict) and "risk_pills" in resp_dict:
+                        logger.info("Successfully received and parsed unified OpenAI audit response.")
+                        return resp_dict
+            except Exception as e:
+                logger.warning(f"OpenAI audit generation failed: {e}. Attempting secondary engines.")
+
+        # 2. Secondary: Google Gemini API
+        if self.gemini_api_key:
+            try:
+                logger.info(f"Invoking Gemini LLM for {sym}...")
+                resp_dict = self._call_gemini_api(financial_payload, archetype_checklist)
+                if resp_dict and isinstance(resp_dict, dict):
+                    logger.info("Successfully received and parsed unified Gemini audit response.")
+                    return resp_dict
+            except Exception as e:
+                logger.warning(f"Gemini API call encountered an error: {e}. Activating deterministic fallback.")
+
+        # 3. Deterministic institutional synthesis fallback
+        logger.info(f"Generating deterministic institutional audit dossier for {sym}...")
+        return self._deterministic_audit_fallback(financial_payload)
+
+    def _call_gemini_api(
+        self,
+        financial_payload: Dict[str, Any],
+        archetype_checklist: str
+    ) -> Optional[Dict[str, Any]]:
+        """Makes direct REST call to Google Gemini API with responseMimeType='application/json'."""
+        gemini_model = "gemini-2.5-flash" if "gemini" not in self.model_name else self.model_name
+        endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{gemini_model}:generateContent?key={self.gemini_api_key}"
+        prompt = self._build_audit_prompt(financial_payload, archetype_checklist)
+
         body = {
             "contents": [
                 {
@@ -140,13 +262,7 @@ CRITICAL INSTITUTIONAL DEPTH & FLOWING PROSE SCHEMA RULES:
         if not raw_text:
             return None
 
-        # Clean markdown wrappers if present
-        raw_text = raw_text.strip()
-        if raw_text.startswith("```"):
-            raw_text = re.sub(r"^```(?:json)?\s*", "", raw_text, flags=re.MULTILINE)
-            raw_text = re.sub(r"```\s*$", "", raw_text, flags=re.MULTILINE)
-
-        return json.loads(raw_text)
+        return self._clean_and_parse_json(raw_text)
 
     def _deterministic_audit_fallback(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """
