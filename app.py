@@ -647,6 +647,87 @@ def render_dimension_card(dimension_raw):
 
 
 def main():
+    st.set_page_config(
+        page_title="Research Beast | Institutional Equity Intelligence",
+        page_icon="⚡",
+        layout="wide",
+        initial_sidebar_state="collapsed"
+    )
+
+    # Standalone SaaS Branding: Completely Hide Streamlit Header, #MainMenu, GitHub Controls & Footers
+    st.markdown("""
+    <style>
+    /* Completely hide Streamlit top header, toolbar and main menu */
+    #MainMenu {
+        visibility: hidden !important;
+        display: none !important;
+    }
+    header {
+        visibility: hidden !important;
+        display: none !important;
+    }
+    header[data-testid="stHeader"] {
+        visibility: hidden !important;
+        display: none !important;
+    }
+    .stAppHeader {
+        visibility: hidden !important;
+        display: none !important;
+    }
+    [data-testid="stToolbar"] {
+        visibility: hidden !important;
+        display: none !important;
+    }
+    [data-testid="stDecoration"] {
+        visibility: hidden !important;
+        display: none !important;
+    }
+    [data-testid="stStatusWidget"] {
+        visibility: hidden !important;
+        display: none !important;
+    }
+    .stDeployButton {
+        visibility: hidden !important;
+        display: none !important;
+    }
+    [data-testid="stHeaderActionElements"] {
+        visibility: hidden !important;
+        display: none !important;
+    }
+    [data-testid="manage-app-button"] {
+        visibility: hidden !important;
+        display: none !important;
+    }
+
+    /* Completely hide top-right GitHub repository buttons and shortcuts */
+    a[href*="github.com"] {
+        visibility: hidden !important;
+        display: none !important;
+    }
+    button[title*="GitHub"],
+    button[aria-label*="GitHub"],
+    a[title*="GitHub"],
+    a[aria-label*="GitHub"] {
+        visibility: hidden !important;
+        display: none !important;
+    }
+
+    /* Completely hide residual footer links */
+    footer,
+    footer[data-testid="stFooter"],
+    .stFooter {
+        visibility: hidden !important;
+        display: none !important;
+    }
+
+    /* Adjust page container padding */
+    .block-container {
+        padding-top: 2rem !important;
+        padding-bottom: 2.5rem !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
     # Default Valuation & DCF Assumptions
     wacc_input = 0.115
     terminal_g_input = 0.055
