@@ -675,31 +675,118 @@ def main():
         </div>
         """, unsafe_allow_html=True)
 
+        # CSS to make search input noticeably larger, taller, and more prominent
+        st.markdown("""
+        <style>
+        /* Prominent enlarged hero search bar */
+        div[data-testid="stTextInput"] {
+            width: 100% !important;
+            margin-bottom: 8px !important;
+        }
+        div[data-testid="stTextInput"] > div > div > input {
+            height: 64px !important;
+            font-size: 1.18rem !important;
+            font-weight: 600 !important;
+            padding: 16px 22px !important;
+            border-radius: 16px !important;
+            background: rgba(15, 23, 42, 0.85) !important;
+            border: 2px solid rgba(56, 189, 248, 0.45) !important;
+            box-shadow: 0 8px 30px -4px rgba(0, 0, 0, 0.7), 0 0 25px -2px rgba(6, 182, 212, 0.25) !important;
+            color: #ffffff !important;
+            letter-spacing: 0.02em !important;
+            transition: all 0.25s ease-in-out !important;
+        }
+        div[data-testid="stTextInput"] > div > div > input:focus {
+            border-color: #38bdf8 !important;
+            box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.25), 0 0 35px rgba(6, 182, 212, 0.35) !important;
+            background: rgba(15, 23, 42, 0.95) !important;
+        }
+        div[data-testid="stTextInput"] input::placeholder {
+            color: #64748b !important;
+            font-size: 1.05rem !important;
+            font-weight: 400 !important;
+        }
+
+        /* Match selector dropdown */
+        div[data-testid="stSelectbox"] > div > div {
+            min-height: 52px !important;
+            border-radius: 12px !important;
+            background: rgba(15, 23, 42, 0.9) !important;
+            border: 1.5px solid rgba(56, 189, 248, 0.4) !important;
+        }
+
+        /* Audit Action Button */
+        button[kind="primary"] {
+            min-height: 52px !important;
+            border-radius: 14px !important;
+            font-size: 1.05rem !important;
+            font-weight: 700 !important;
+            background: linear-gradient(135deg, #06b6d4 0%, #2563eb 100%) !important;
+            border: none !important;
+            box-shadow: 0 4px 20px rgba(6, 182, 212, 0.35) !important;
+            transition: all 0.2s ease-in-out !important;
+        }
+        button[kind="primary"]:hover {
+            box-shadow: 0 6px 28px rgba(6, 182, 212, 0.55) !important;
+            transform: translateY(-1px) !important;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+
         # Centered Search Input
-        col_l, col_center, col_r = st.columns([1, 2.5, 1])
+        col_l, col_center, col_r = st.columns([0.8, 3.4, 0.8])
         with col_center:
-            companies = load_listed_companies()
-            company_options = [
-                f"{c['symbol']} — {c['name']}"
-                for c in companies
-            ]
-            selected_company = st.selectbox(
-                "Search Equities",
-                options=company_options,
-                index=None,
-                placeholder="Search by company name or ticker (e.g. Reliance, Crompton, Tata Consumer)...",
+            MASTER_STOCKS = load_listed_companies()
+
+            # 1. Provide an enlarged text search input instead of an open dropdown
+            search_query = st.text_input(
+                "",
+                placeholder="Search scrip name (e.g. CROMPTON, RELIANCE, BAJAJ-AUTO)...",
+                key="search_input",
                 label_visibility="collapsed"
-            )
+            ).strip().upper()
+
+            selected_scrip = None
+
+            # 2. Only search and display matching suggestions IF the user has typed at least 2 characters
+            if len(search_query) >= 2:
+                # Filter master company list against the query
+                # Match against either clean scrip symbol or company name
+                matches = [
+                    s for s in MASTER_STOCKS
+                    if search_query in s["symbol"].upper() or search_query in s["name"].upper()
+                ][:10]  # Limit to top 10 relevant matches
+
+                if matches:
+                    # Display only clean scrip names (e.g., "BAJAJ-AUTO — Bajaj Auto Ltd")
+                    match_options = [f"{m['symbol']} — {m['name']}" for m in matches]
+                    chosen = st.selectbox(
+                        "Matching Scrips:",
+                        options=match_options,
+                        key="match_selector",
+                        label_visibility="collapsed"
+                    )
+                    if chosen:
+                        # Extract strictly the scrip before the separator (e.g. "BAJAJ-AUTO")
+                        selected_scrip = chosen.split(" — ")[0].strip()
+                else:
+                    st.caption("No matching listed scrip found.")
 
             # Sample Quick-Select Buttons
-            st.markdown("<p style='text-align:center; color:#64748b; font-size:0.75rem; margin-top:12px;'>POPULAR INSTITUTIONAL TICKERS</p>", unsafe_allow_html=True)
+            st.markdown("<p style='text-align:center; color:#64748b; font-size:0.75rem; margin-top:16px;'>POPULAR INSTITUTIONAL TICKERS</p>", unsafe_allow_html=True)
             q1, q2, q3, q4 = st.columns(4)
             ticker_search = None
             if q1.button("CROMPTON", use_container_width=True): ticker_search = "CROMPTON"
             if q2.button("RELIANCE", use_container_width=True): ticker_search = "RELIANCE"
             if q3.button("HDFCBANK", use_container_width=True): ticker_search = "HDFCBANK"
             if q4.button("TCS", use_container_width=True): ticker_search = "TCS"
-            if selected_company: ticker_search = selected_company
+
+            # Primary Audit Trigger Button (when scrip is selected or typed)
+            target_to_audit = selected_scrip or (search_query if len(search_query) >= 2 else None)
+            if target_to_audit:
+                st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
+                if st.button(f"🚀 Run Institutional Audit ({target_to_audit})", type="primary", use_container_width=True, key="btn_run_audit"):
+                    ticker_search = target_to_audit
 
             if ticker_search:
                 clean_ticker = FinancialDataService.normalize_ticker(ticker_search)

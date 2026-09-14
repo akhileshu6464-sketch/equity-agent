@@ -159,13 +159,8 @@ async def get_tickers(q: Optional[str] = "", limit: int = 15):
     """
     query = (q or "").strip().lower()
     tickers = _get_cached_tickers()
-    if not query:
-        popular_symbols = [
-            "RELIANCE", "TCS", "HDFCBANK", "INFY", "CROMPTON",
-            "TATACONSUM", "ICICIBANK", "ANDHRAPET"
-        ]
-        popular = [t for t in tickers if t.get("symbol") in popular_symbols]
-        return popular[:limit]
+    if len(query) < 2:
+        return []
 
     exact_sym = []
     prefix_sym = []
