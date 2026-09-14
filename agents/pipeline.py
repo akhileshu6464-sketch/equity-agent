@@ -624,10 +624,10 @@ def _deterministic_chapter_fallback(
     peer_str = f"{peer1} and {peer2}"
 
     # Target price helpers scaled to CMP
-    base_cmp = cmp if cmp > 0 else 500.0
-    bear_px = max(1.0, round(base_cmp * 0.85, 1))
-    base_px = max(1.0, round(base_cmp * 1.15, 1))
-    bull_px = max(1.0, round(base_cmp * 1.35, 1))
+    base_cmp = cmp if cmp > 0 else 0.0
+    bear_px = max(1.0, round(base_cmp * 0.85, 1)) if base_cmp > 0 else 0.0
+    base_px = max(1.0, round(base_cmp * 1.15, 1)) if base_cmp > 0 else 0.0
+    bull_px = max(1.0, round(base_cmp * 1.35, 1)) if base_cmp > 0 else 0.0
 
     if "economic moat" in prompt_lower or "chapter 1" in prompt_lower or "audit competitive moat" in prompt_lower or "moat dimension" in prompt_lower:
         if is_bank:

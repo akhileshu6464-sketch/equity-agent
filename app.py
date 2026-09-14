@@ -713,11 +713,7 @@ def main():
 
                 st.session_state["active_ticker"] = clean_ticker
                 st.query_params["ticker"] = clean_display
-
-                with st.spinner(f"Running isolated institutional audit for {clean_display}..."):
-                    # Ensure a completely fresh dictionary is returned
-                    st.session_state["dossier"] = run_deep_institutional_pipeline(clean_ticker)
-                    st.rerun()
+                st.rerun()
 
     # STATE 2: Full Institutional Dossier (Shows after ticker selection)
     else:
@@ -757,18 +753,22 @@ def main():
                     st.session_state["dossier"] = dossier
                 except Exception as e:
                     err_msg = str(e)
-                    if any(k in err_msg.lower() for k in ["rate limit", "429", "resourceexhausted", "quota"]):
+                    if "real-time fundamental data unavailable" in err_msg.lower():
+                        st.error(f"Real-time fundamental data unavailable for {ticker}")
+                        st.info("💡 **Tip**: Please verify that the symbol is an active stock listed on NSE or BSE.")
+                    elif any(k in err_msg.lower() for k in ["rate limit", "429", "resourceexhausted", "quota"]):
                         st.error("🚨 **Gemini API Rate Limit Reached**: The free-tier AI request quota has been temporarily exhausted. Please wait 30–60 seconds before re-trying.")
                         st.info("💡 **Tip**: Running consecutive deep analyses on high-cap companies can trigger temporary API rate limiting. Pausing briefly will reset the quota window.")
                     elif any(k in err_msg.lower() for k in ["failed to retrieve", "not found", "404", "delisted", "quote not found"]):
-                        st.error(f"❌ **Stock Ticker Not Found**: yfinance failed to retrieve financial statement data for **'{ticker}'**.")
-                        st.info(f"💡 **Tip**: Please verify that the symbol is an active stock listed on the National Stock Exchange of India (NSE) or Bombay Stock Exchange (BSE). Examples: `RELIANCE.NS`, `TCS.NS`, `HDFCBANK.NS`, `INFY.NS`, `CROMPTON.NS`.")
+                        st.error(f"Real-time fundamental data unavailable for {ticker}")
+                        st.info(f"💡 **Tip**: Please verify that the symbol is an active stock listed on the National Stock Exchange of India (NSE) or Bombay Stock Exchange (BSE). Examples: `RELIANCE`, `TCS`, `HDFCBANK`, `INFY`, `CROMPTON`.")
                     else:
                         st.error(f"⚠️ **Analysis Execution Error**: An unexpected error occurred while auditing '{ticker}': {err_msg}")
                         st.info("💡 **Tip**: Please verify your network connection, try an alternate ticker, or refresh the page.")
                     
                     if st.button("← Return to Search Landing", key="err_btn_return"):
                         st.session_state.active_ticker = ""
+                        st.query_params.clear()
                         st.rerun()
                     return
 

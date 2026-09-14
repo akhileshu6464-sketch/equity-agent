@@ -244,6 +244,12 @@ async def analyze_equity(request: AnalyzeRequest):
         err_str = str(exc)
         logger.error(f"Error executing institutional pipeline for {clean_ticker}: {err_str}", exc_info=True)
 
+        if "real-time fundamental data unavailable" in err_str.lower():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Real-time fundamental data unavailable for {clean_ticker}"
+            )
+
         if any(k in err_str.lower() for k in ["rate limit", "429", "resourceexhausted", "quota"]):
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -331,10 +337,16 @@ async def export_pdf(request: ExportPDFRequest):
     except HTTPException:
         raise
     except Exception as exc:
-        logger.error(f"Error compiling institutional PDF for {clean_ticker}: {exc}", exc_info=True)
+        err_str = str(exc)
+        logger.error(f"Error compiling institutional PDF for {clean_ticker}: {err_str}", exc_info=True)
+        if "real-time fundamental data unavailable" in err_str.lower():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Real-time fundamental data unavailable for {clean_ticker}"
+            )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate institutional PDF report: {exc}"
+            detail=f"Failed to generate institutional PDF report: {err_str}"
         )
 
 

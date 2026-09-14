@@ -46,9 +46,9 @@ class Agent6Synthesizer(BaseAgent):
         name = company_data.get("short_name", "")
         ticker = company_data.get("symbol", "")
 
-        sector_key = context.get("sector_key", "CONSUMER_DURABLES_FMCG")
+        sector_key = context.get("sector_key") or "DIVERSIFIED_INDUSTRIALS"
         archetype = context.get("archetype") or get_archetype_by_key(sector_key)
-        display_name = archetype.get("display_name", "Consumer Goods, Durables & FMCG")
+        display_name = archetype.get("display_name", "Diversified Industrials & Manufacturing")
         primary_val_type = archetype.get("primary_valuation", "Reverse DCF (FCF CAGR Hurdle)")
         banned_metrics = archetype.get("banned_metrics", [])
 

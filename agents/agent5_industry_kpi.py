@@ -26,9 +26,9 @@ class Agent5IndustryKPI(BaseAgent):
         )
 
     def analyze(self, company_data: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
-        sector_key = context.get("sector_key", "CONSUMER_DURABLES_FMCG")
+        sector_key = context.get("sector_key") or "DIVERSIFIED_INDUSTRIALS"
         archetype = context.get("archetype") or get_archetype_by_key(sector_key)
-        display_name = archetype.get("display_name", "Consumer Goods, Durables & FMCG")
+        display_name = archetype.get("display_name", "Diversified Industrials & Manufacturing")
         history = company_data.get("history_years", [])
         latest = history[-1] if history else {}
 
