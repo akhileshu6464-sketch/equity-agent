@@ -170,11 +170,52 @@ from pdf_generator import build_institutional_pdf, build_presentation_pdf
 
 # Page configuration
 st.set_page_config(
-    page_title="Research Beast",
-    page_icon="🏛️",
+    page_title="Research Beast | Institutional Equity Intelligence",
+    page_icon="⚡",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
+
+# Standalone SaaS Branding: Suppress Streamlit Header, GitHub Controls, Viewer Badges & Adjust Padding
+st.markdown("""
+<style>
+/* Suppress Streamlit top header, toolbar, deploy button, and main menu */
+header[data-testid="stHeader"],
+header,
+.stAppHeader,
+[data-testid="stHeader"],
+.stAppDeployButton,
+.stDeployButton,
+[data-testid="stDeployButton"],
+#MainMenu,
+footer,
+footer[data-testid="stFooter"],
+.stFooter,
+[data-testid="manage-app-button"],
+.viewerBadge,
+[class*="viewerBadge"],
+[data-testid*="viewerBadge"],
+.viewer-badge,
+[data-testid="stToolbar"],
+[data-testid="stDecoration"],
+[data-testid="stStatusWidget"],
+[data-testid="stHeaderActionElements"],
+a[href*="github.com"],
+button[title*="GitHub"],
+button[aria-label*="GitHub"],
+a[title*="GitHub"],
+a[aria-label*="GitHub"] {
+    visibility: hidden !important;
+    display: none !important;
+}
+
+/* Adjust page container padding */
+.block-container {
+    padding-top: 2rem !important;
+    padding-bottom: 2.5rem !important;
+}
+</style>
+""", unsafe_allow_html=True)
 
 # 3D Glassmorphism & Ambient 3D Floating Orbs Styles
 st.markdown("""
@@ -647,75 +688,35 @@ def render_dimension_card(dimension_raw):
 
 
 def main():
-    st.set_page_config(
-        page_title="Research Beast | Institutional Equity Intelligence",
-        page_icon="⚡",
-        layout="wide",
-        initial_sidebar_state="collapsed"
-    )
-
-    # Standalone SaaS Branding: Completely Hide Streamlit Header, #MainMenu, GitHub Controls & Footers
+    # Standalone SaaS Branding: Suppress Streamlit Header, GitHub Controls, Viewer Badges & Adjust Padding
     st.markdown("""
     <style>
-    /* Completely hide Streamlit top header, toolbar and main menu */
-    #MainMenu {
-        visibility: hidden !important;
-        display: none !important;
-    }
-    header {
-        visibility: hidden !important;
-        display: none !important;
-    }
-    header[data-testid="stHeader"] {
-        visibility: hidden !important;
-        display: none !important;
-    }
-    .stAppHeader {
-        visibility: hidden !important;
-        display: none !important;
-    }
-    [data-testid="stToolbar"] {
-        visibility: hidden !important;
-        display: none !important;
-    }
-    [data-testid="stDecoration"] {
-        visibility: hidden !important;
-        display: none !important;
-    }
-    [data-testid="stStatusWidget"] {
-        visibility: hidden !important;
-        display: none !important;
-    }
-    .stDeployButton {
-        visibility: hidden !important;
-        display: none !important;
-    }
-    [data-testid="stHeaderActionElements"] {
-        visibility: hidden !important;
-        display: none !important;
-    }
-    [data-testid="manage-app-button"] {
-        visibility: hidden !important;
-        display: none !important;
-    }
-
-    /* Completely hide top-right GitHub repository buttons and shortcuts */
-    a[href*="github.com"] {
-        visibility: hidden !important;
-        display: none !important;
-    }
+    /* Completely hide Streamlit top header, toolbar, deploy button, and main menu */
+    header[data-testid="stHeader"],
+    header,
+    .stAppHeader,
+    [data-testid="stHeader"],
+    .stAppDeployButton,
+    .stDeployButton,
+    [data-testid="stDeployButton"],
+    #MainMenu,
+    footer,
+    footer[data-testid="stFooter"],
+    .stFooter,
+    [data-testid="manage-app-button"],
+    .viewerBadge,
+    [class*="viewerBadge"],
+    [data-testid*="viewerBadge"],
+    .viewer-badge,
+    [data-testid="stToolbar"],
+    [data-testid="stDecoration"],
+    [data-testid="stStatusWidget"],
+    [data-testid="stHeaderActionElements"],
+    a[href*="github.com"],
     button[title*="GitHub"],
     button[aria-label*="GitHub"],
     a[title*="GitHub"],
     a[aria-label*="GitHub"] {
-        visibility: hidden !important;
-        display: none !important;
-    }
-
-    /* Completely hide residual footer links */
-    footer,
-    footer[data-testid="stFooter"],
-    .stFooter {
         visibility: hidden !important;
         display: none !important;
     }
