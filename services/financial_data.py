@@ -118,6 +118,30 @@ def _sanitize_for_storage(obj: Any) -> Any:
     return str(obj)
 
 
+_TICKER_LOOKUP_MAP: Optional[Dict[str, str]] = None
+
+
+def _get_ticker_lookup_map() -> Dict[str, str]:
+    """Loads and caches the internal lookup dictionary mapping clean symbols to pipeline tickers."""
+    global _TICKER_LOOKUP_MAP
+    if _TICKER_LOOKUP_MAP is None:
+        _TICKER_LOOKUP_MAP = {}
+        json_path = os.path.join(DEFAULT_CACHE_DIR, "listed_companies.json")
+        if os.path.exists(json_path):
+            try:
+                with open(json_path, "r", encoding="utf-8") as f:
+                    companies = json.load(f)
+                    for c in companies:
+                        sym = str(c.get("symbol", "")).strip().upper()
+                        tkr = str(c.get("ticker", "")).strip().upper() or f"{sym}.NS"
+                        if sym:
+                            _TICKER_LOOKUP_MAP[sym] = tkr
+                            _TICKER_LOOKUP_MAP[sym.replace(".NS", "").replace(".BO", "")] = tkr
+            except Exception as e:
+                logger.warning(f"Error loading ticker lookup map: {e}")
+    return _TICKER_LOOKUP_MAP
+
+
 class FinancialDataService:
     """Service to retrieve and parse institutional financial statements and market metrics."""
 
@@ -211,9 +235,9 @@ class FinancialDataService:
     @staticmethod
     def normalize_ticker(ticker: str) -> str:
         """
-        Normalizes Indian stock tickers for NSE and BSE.
-        Handles plain symbols, exchange-suffixed tickers (.NS, .BO), numeric BSE scrip codes,
-        and composite dropdown labels (e.g. 'TATACONSUM.NS — Tata Consumer Products Limited (NSE)').
+        Normalizes any input ticker to its verified backend exchange ticker symbol.
+        Handles clean symbols (e.g. CROMPTON -> CROMPTON.NS), exchange-suffixed tickers (.NS, .BO),
+        numeric BSE scrip codes, and composite dropdown labels (e.g. 'RELIANCE — Reliance Industries Limited').
         """
         if not ticker:
             return ""
@@ -239,7 +263,12 @@ class FinancialDataService:
         if clean.endswith(".NS") or clean.endswith(".BO"):
             return clean
 
-        # Check if pure 6-digit numeric string (BSE scrip code, e.g. 500209)
+        # Check internal lookup dictionary (e.g. CROMPTON -> CROMPTON.NS, ANDHRAPET -> 500012.BO)
+        lookup = _get_ticker_lookup_map()
+        if clean in lookup:
+            return lookup[clean]
+
+        # Check if pure 6-digit numeric string (legacy BSE scrip code, e.g. 500209)
         if clean.isdigit() and len(clean) == 6:
             return f"{clean}.BO"
 

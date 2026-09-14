@@ -123,15 +123,15 @@ def _get_cached_tickers() -> List[Dict[str, str]]:
                 logger.error(f"Error reading {json_path}: {e}")
         if not _CACHED_TICKERS:
             _CACHED_TICKERS = [
-                {"symbol": "CROMPTON.NS", "name": "Crompton Greaves Consumer Electricals Limited", "exchange": "NSE"},
-                {"symbol": "RELIANCE.NS", "name": "Reliance Industries Limited", "exchange": "NSE"},
-                {"symbol": "HDFCBANK.NS", "name": "HDFC Bank Limited", "exchange": "NSE"},
-                {"symbol": "TCS.NS", "name": "Tata Consultancy Services Limited", "exchange": "NSE"},
-                {"symbol": "INFY.NS", "name": "Infosys Limited", "exchange": "NSE"},
-                {"symbol": "TATACONSUM.NS", "name": "Tata Consumer Products Limited", "exchange": "NSE"},
-                {"symbol": "ICICIBANK.NS", "name": "ICICI Bank Limited", "exchange": "NSE"},
-                {"symbol": "500209.BO", "name": "Infosys Ltd", "exchange": "BSE"},
-                {"symbol": "500800.BO", "name": "Tata Consumer Products Limited", "exchange": "BSE"},
+                {"symbol": "CROMPTON", "name": "Crompton Greaves Consumer Electricals Limited", "ticker": "CROMPTON.NS", "exchange": "NSE"},
+                {"symbol": "RELIANCE", "name": "Reliance Industries Limited", "ticker": "RELIANCE.NS", "exchange": "NSE"},
+                {"symbol": "HDFCBANK", "name": "HDFC Bank Limited", "ticker": "HDFCBANK.NS", "exchange": "NSE"},
+                {"symbol": "TCS", "name": "Tata Consultancy Services Limited", "ticker": "TCS.NS", "exchange": "NSE"},
+                {"symbol": "INFY", "name": "Infosys Limited", "ticker": "INFY.NS", "exchange": "NSE"},
+                {"symbol": "TATACONSUM", "name": "Tata Consumer Products Limited", "ticker": "TATACONSUM.NS", "exchange": "NSE"},
+                {"symbol": "ICICIBANK", "name": "ICICI Bank Limited", "ticker": "ICICIBANK.NS", "exchange": "NSE"},
+                {"symbol": "ANDHRAPET", "name": "Andhra Petrochemicals Limited", "ticker": "500012.BO", "exchange": "BSE"},
+                {"symbol": "AMBALALSA", "name": "Ambalal Sarabhai Enterprises Ltd", "ticker": "500009.BO", "exchange": "BSE"},
             ]
     return _CACHED_TICKERS
 
@@ -155,20 +155,21 @@ async def health_check():
 async def get_tickers(q: Optional[str] = "", limit: int = 15):
     """
     Search endpoint for NSE & BSE listed equity tickers.
-    Supports instant prefix, substring, and company name matching.
+    Supports instant prefix, substring, and company name matching without duplicate exchange listings.
     """
     query = (q or "").strip().lower()
     tickers = _get_cached_tickers()
     if not query:
         popular_symbols = [
-            "RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFY.NS", "CROMPTON.NS",
-            "TATACONSUM.NS", "ICICIBANK.NS", "500209.BO", "500800.BO"
+            "RELIANCE", "TCS", "HDFCBANK", "INFY", "CROMPTON",
+            "TATACONSUM", "ICICIBANK", "ANDHRAPET"
         ]
         popular = [t for t in tickers if t.get("symbol") in popular_symbols]
         return popular[:limit]
 
     exact_sym = []
     prefix_sym = []
+    exact_word_in_name = []
     prefix_name = []
     sub_match = []
 
@@ -176,19 +177,24 @@ async def get_tickers(q: Optional[str] = "", limit: int = 15):
         sym = c.get("symbol", "").lower()
         name = c.get("name", "").lower()
 
-        if sym == query or sym.split(".")[0] == query:
+        clean_sym = sym.replace(".ns", "").replace(".bo", "")
+        words = name.split()
+
+        if clean_sym == query:
             exact_sym.append(c)
-        elif sym.startswith(query):
+        elif clean_sym.startswith(query):
             prefix_sym.append(c)
-        elif any(w.startswith(query) for w in name.split()):
+        elif any(w == query for w in words):
+            exact_word_in_name.append(c)
+        elif any(w.startswith(query) for w in words):
             prefix_name.append(c)
         elif query in sym or query in name:
             sub_match.append(c)
 
-        if len(exact_sym) + len(prefix_sym) + len(prefix_name) >= limit * 2:
+        if len(exact_sym) + len(prefix_sym) + len(exact_word_in_name) + len(prefix_name) >= limit * 2:
             break
 
-    results = (exact_sym + prefix_sym + prefix_name + sub_match)[:limit]
+    results = (exact_sym + prefix_sym + exact_word_in_name + prefix_name + sub_match)[:limit]
     return results
 
 

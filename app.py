@@ -36,15 +36,15 @@ def load_listed_companies() -> List[Dict[str, str]]:
         except Exception:
             pass
     return [
-        {"symbol": "CROMPTON.NS", "name": "Crompton Greaves Consumer Electricals Limited", "exchange": "NSE"},
-        {"symbol": "RELIANCE.NS", "name": "Reliance Industries Limited", "exchange": "NSE"},
-        {"symbol": "HDFCBANK.NS", "name": "HDFC Bank Limited", "exchange": "NSE"},
-        {"symbol": "TCS.NS", "name": "Tata Consultancy Services Limited", "exchange": "NSE"},
-        {"symbol": "INFY.NS", "name": "Infosys Limited", "exchange": "NSE"},
-        {"symbol": "TATACONSUM.NS", "name": "Tata Consumer Products Limited", "exchange": "NSE"},
-        {"symbol": "ICICIBANK.NS", "name": "ICICI Bank Limited", "exchange": "NSE"},
-        {"symbol": "500209.BO", "name": "Infosys Ltd", "exchange": "BSE"},
-        {"symbol": "500800.BO", "name": "Tata Consumer Products Limited", "exchange": "BSE"},
+        {"symbol": "CROMPTON", "name": "Crompton Greaves Consumer Electricals Limited", "ticker": "CROMPTON.NS", "exchange": "NSE"},
+        {"symbol": "RELIANCE", "name": "Reliance Industries Limited", "ticker": "RELIANCE.NS", "exchange": "NSE"},
+        {"symbol": "HDFCBANK", "name": "HDFC Bank Limited", "ticker": "HDFCBANK.NS", "exchange": "NSE"},
+        {"symbol": "TCS", "name": "Tata Consultancy Services Limited", "ticker": "TCS.NS", "exchange": "NSE"},
+        {"symbol": "INFY", "name": "Infosys Limited", "ticker": "INFY.NS", "exchange": "NSE"},
+        {"symbol": "TATACONSUM", "name": "Tata Consumer Products Limited", "ticker": "TATACONSUM.NS", "exchange": "NSE"},
+        {"symbol": "ICICIBANK", "name": "ICICI Bank Limited", "ticker": "ICICIBANK.NS", "exchange": "NSE"},
+        {"symbol": "ANDHRAPET", "name": "Andhra Petrochemicals Limited", "ticker": "500012.BO", "exchange": "BSE"},
+        {"symbol": "AMBALALSA", "name": "Ambalal Sarabhai Enterprises Ltd", "ticker": "500009.BO", "exchange": "BSE"},
     ]
 
 
@@ -680,14 +680,14 @@ def main():
         with col_center:
             companies = load_listed_companies()
             company_options = [
-                f"{c['symbol']} — {c['name']} ({c['exchange']})"
+                f"{c['symbol']} — {c['name']}"
                 for c in companies
             ]
             selected_company = st.selectbox(
-                "Search NSE/BSE Equities",
+                "Search Equities",
                 options=company_options,
                 index=None,
-                placeholder="Search by company name or ticker (e.g. Tata Consumer, RELIANCE, 500209)...",
+                placeholder="Search by company name or ticker (e.g. Reliance, Crompton, Tata Consumer)...",
                 label_visibility="collapsed"
             )
 
@@ -695,14 +695,15 @@ def main():
             st.markdown("<p style='text-align:center; color:#64748b; font-size:0.75rem; margin-top:12px;'>POPULAR INSTITUTIONAL TICKERS</p>", unsafe_allow_html=True)
             q1, q2, q3, q4 = st.columns(4)
             ticker_search = None
-            if q1.button("CROMPTON", use_container_width=True): ticker_search = "CROMPTON.NS"
-            if q2.button("RELIANCE", use_container_width=True): ticker_search = "RELIANCE.NS"
-            if q3.button("HDFCBANK", use_container_width=True): ticker_search = "HDFCBANK.NS"
-            if q4.button("TCS", use_container_width=True): ticker_search = "TCS.NS"
+            if q1.button("CROMPTON", use_container_width=True): ticker_search = "CROMPTON"
+            if q2.button("RELIANCE", use_container_width=True): ticker_search = "RELIANCE"
+            if q3.button("HDFCBANK", use_container_width=True): ticker_search = "HDFCBANK"
+            if q4.button("TCS", use_container_width=True): ticker_search = "TCS"
             if selected_company: ticker_search = selected_company
 
             if ticker_search:
                 clean_ticker = FinancialDataService.normalize_ticker(ticker_search)
+                clean_display = clean_ticker.replace(".NS", "").replace(".BO", "")
 
                 # WIPE PREVIOUS STATE COMPLETELY TO PREVENT DATA CONTAMINATION
                 keys_to_clear = ["dossier", "dossier_data", "raw_financials", "active_ticker", "company_info", "dossier_cache", "company_data"]
@@ -711,9 +712,9 @@ def main():
                         del st.session_state[k]
 
                 st.session_state["active_ticker"] = clean_ticker
-                st.query_params["ticker"] = clean_ticker
+                st.query_params["ticker"] = clean_display
 
-                with st.spinner(f"Running isolated institutional audit for {clean_ticker}..."):
+                with st.spinner(f"Running isolated institutional audit for {clean_display}..."):
                     # Ensure a completely fresh dictionary is returned
                     st.session_state["dossier"] = run_deep_institutional_pipeline(clean_ticker)
                     st.rerun()
@@ -721,13 +722,14 @@ def main():
     # STATE 2: Full Institutional Dossier (Shows after ticker selection)
     else:
         ticker = st.session_state.active_ticker
-        if st.query_params.get("ticker") != ticker:
-            st.query_params["ticker"] = ticker
+        display_ticker = ticker.replace(".NS", "").replace(".BO", "")
+        if st.query_params.get("ticker") != display_ticker:
+            st.query_params["ticker"] = display_ticker
 
         # Minimal Top Navigation / Re-search Bar
         top_col1, top_col2 = st.columns([4.2, 1.8])
         with top_col1:
-            st.markdown(f"<span style='color:#94a3b8; font-size:0.85rem;'>Analyzing:</span> <b style='font-size:1.2rem; color:#fff;'>{ticker}</b>", unsafe_allow_html=True)
+            st.markdown(f"<span style='color:#94a3b8; font-size:0.85rem;'>Analyzing:</span> <b style='font-size:1.2rem; color:#fff;'>{display_ticker}</b>", unsafe_allow_html=True)
         with top_col2:
             if st.button("← Search Another Stock", use_container_width=True):
                 # WIPE PREVIOUS STATE COMPLETELY TO PREVENT DATA CONTAMINATION
