@@ -37,10 +37,17 @@ SECTOR_TAXONOMY = {
             "Revenue per Billable Head", "Top 5 / Top 10 Client Concentration %", "Subcontracting Costs % of Sales"
         ],
         "primary_valuation": "FCF Yield, PEG Multiple & Earnings Power Value (EPV)",
-        "banned_metrics": ["Inventory Turnover", "GMROI", "Plant Capacity Utilization", "Fixed Asset Turnover", "NIM", "Gross NPA"]
+        "banned_metrics": [
+            "Inventory Turnover", "GMROI", "Plant Capacity Utilization", "Fixed Asset Turnover",
+            "NIM", "CASA", "CASA Ratio", "CET-1", "CRAR", "Gross NPA", "Net NPA", "PCR", "Credit Cost"
+        ]
     },
     "CONSUMER_DURABLES_FMCG": {
-        "identifiers": ["Consumer Durables", "Household Appliances", "Packaged Foods", "Personal Care", "FMCG"],
+        "identifiers": [
+            "Furnishings, Fixtures & Appliances", "Consumer Cyclical", "Consumer Durables",
+            "Household Appliances", "Consumer Electronics", "Electrical Equipment",
+            "Packaged Foods", "Personal Care", "FMCG", "Appliances"
+        ],
         "display_name": "Consumer Goods, Durables & FMCG",
         "required_kpis": [
             "Cash Conversion Cycle (CCC)", "Days Sales of Inventory (DSI)", "Gross Margin Return on Inventory (GMROI)",
@@ -48,7 +55,11 @@ SECTOR_TAXONOMY = {
             "Raw Material Input Cost Inflation Lag (Pass-through Days)", "Volume vs Value Growth Spread"
         ],
         "primary_valuation": "Reverse DCF (FCF CAGR Hurdle) & Normalized Cash ROIC vs WACC",
-        "banned_metrics": ["NIM", "PCR", "Gross NPA", "Loan Book", "TCV Deal Wins", "Order Book-to-Bill"]
+        "banned_metrics": [
+            "NIM", "Net Interest Margin", "CASA", "CASA Ratio", "CET-1", "CRAR", "Gross NPA",
+            "Net NPA", "PCR", "Credit Cost", "Slippages", "Loan Book", "Deposits", "Branches",
+            "TCV Deal Wins", "Order Book-to-Bill"
+        ]
     },
     "PHARMA_HEALTHCARE": {
         "identifiers": ["Drug Manufacturers", "Pharmaceuticals", "Healthcare Facilities", "Biotechnology", "CDMO"],
@@ -59,10 +70,16 @@ SECTOR_TAXONOMY = {
             "Price Erosion in US Generics vs Domestic Branded Formulation Growth", "Cleanroom / Reactor Capacity (kL)"
         ],
         "primary_valuation": "Patent-Adjusted Mid-Cycle EV/EBITDA & Target P/E Multiple",
-        "banned_metrics": ["NIM", "CASA Ratio", "Order Book-to-Bill", "SSSG", "App Installs"]
+        "banned_metrics": [
+            "NIM", "CASA", "CASA Ratio", "CET-1", "CRAR", "Gross NPA", "Net NPA", "PCR", "Credit Cost",
+            "Order Book-to-Bill", "SSSG", "App Installs"
+        ]
     },
     "INFRA_CAPITAL_GOODS_EPC": {
-        "identifiers": ["Engineering - Industrial", "Heavy Electrical Equipment", "Infrastructure", "Construction"],
+        "identifiers": [
+            "Engineering - Industrial", "Heavy Electrical Equipment", "Infrastructure",
+            "Construction", "Electrical Equipment & Parts", "Industrial Machinery"
+        ],
         "display_name": "Capital Goods, Infrastructure & EPC",
         "required_kpis": [
             "Order Book-to-Bill Ratio (>2.5x-3.0x)", "Net Working Capital as % of Order Book",
@@ -70,7 +87,10 @@ SECTOR_TAXONOMY = {
             "Raw Material Price Escalation Clauses %", "Contingent Liabilities & Bank Guarantees Issued"
         ],
         "primary_valuation": "Mid-Cycle EV/EBITDA & Sum-of-the-Parts (SOTP)",
-        "banned_metrics": ["Gross Margin Return on Inventory", "CASA Ratio", "TCV Contract Wins", "App GMV"]
+        "banned_metrics": [
+            "NIM", "CASA", "CASA Ratio", "CET-1", "CRAR", "Gross NPA", "Net NPA", "PCR", "Credit Cost",
+            "Gross Margin Return on Inventory", "TCV Contract Wins", "App GMV"
+        ]
     },
     "AUTOMOTIVE": {
         "identifiers": ["Auto Manufacturers", "Auto Parts", "Commercial Vehicles", "Two-Wheelers"],
@@ -81,7 +101,10 @@ SECTOR_TAXONOMY = {
             "Raw Material Pass-through Mechanism (Steel/Aluminium/Lead)", "Export Revenue Mix %"
         ],
         "primary_valuation": "Mid-Cycle EV/EBITDA & RoCE Spread vs Cost of Capital",
-        "banned_metrics": ["NIM", "Gross NPA", "Offshore Mix", "Client Concentration"]
+        "banned_metrics": [
+            "NIM", "CASA", "CASA Ratio", "CET-1", "CRAR", "Gross NPA", "Net NPA", "PCR", "Credit Cost",
+            "Offshore Mix", "Client Concentration"
+        ]
     },
     "METALS_MINING": {
         "identifiers": ["Steel", "Aluminum", "Other Industrial Metals & Mining", "Coal"],
@@ -92,7 +115,10 @@ SECTOR_TAXONOMY = {
             "Blast Furnace / Smelter Capacity Utilization %", "Net Debt to EBITDA Cycle Sensitivity"
         ],
         "primary_valuation": "Mid-Cycle EV/EBITDA & Replacement Cost / EV per Ton of Capacity",
-        "banned_metrics": ["Trailing P/E Ratio (Cyclical Value Trap)", "Terminal Multi-Stage DCF", "DSO"]
+        "banned_metrics": [
+            "NIM", "CASA", "CASA Ratio", "CET-1", "CRAR", "Gross NPA", "Net NPA", "PCR", "Credit Cost",
+            "Trailing P/E Ratio (Cyclical Value Trap)", "Terminal Multi-Stage DCF", "DSO"
+        ]
     },
     "OIL_GAS_ENERGY": {
         "identifiers": ["Oil & Gas Refining & Marketing", "Oil & Gas E&P", "Utilities - Regulated Electric", "Power Generation"],
@@ -103,7 +129,10 @@ SECTOR_TAXONOMY = {
             "Transmission Loss % / Distribution AT&C Losses", "Upstream Realization Net of Windfall Taxes"
         ],
         "primary_valuation": "Mid-Cycle EV/EBITDA, Regulated Equity Multiples & SOTP",
-        "banned_metrics": ["Inventory GMROI", "CASA Ratio", "TCV Deal Wins"]
+        "banned_metrics": [
+            "NIM", "CASA", "CASA Ratio", "CET-1", "CRAR", "Gross NPA", "Net NPA", "PCR", "Credit Cost",
+            "Inventory GMROI", "TCV Deal Wins"
+        ]
     },
     "REAL_ESTATE": {
         "identifiers": ["Real Estate - Development", "REIT", "Residential Real Estate"],
@@ -114,7 +143,10 @@ SECTOR_TAXONOMY = {
             "Embedded EBITDA Margin of Unrecognized Sales", "Net Debt to Operating Cash Flow"
         ],
         "primary_valuation": "Net Asset Value (NAV) per Share & P/NAV Discount/Premium",
-        "banned_metrics": ["Trailing P/E Ratio (Distorted by Completion Accounting)", "Cash Conversion Cycle", "Inventory Turnover"]
+        "banned_metrics": [
+            "NIM", "CASA", "CASA Ratio", "CET-1", "CRAR", "Gross NPA", "Net NPA", "PCR", "Credit Cost",
+            "Trailing P/E Ratio (Distorted by Completion Accounting)", "Cash Conversion Cycle", "Inventory Turnover"
+        ]
     },
     "RETAIL_QUICK_SERVICE": {
         "identifiers": ["Specialty Retail", "Department Stores", "Restaurants", "Quick Service Restaurants (QSR)"],
@@ -125,7 +157,10 @@ SECTOR_TAXONOMY = {
             "Store-Level EBITDA Margin (Pre-Corporate Overhead)", "Payback Period per New Store"
         ],
         "primary_valuation": "EV/EBITDA, Reverse DCF & Pre-IndAS 116 Lease-Adjusted Returns",
-        "banned_metrics": ["NIM", "Order Book-to-Bill", "US FDA Observations", "Raw Material Delta per Ton"]
+        "banned_metrics": [
+            "NIM", "CASA", "CASA Ratio", "CET-1", "CRAR", "Gross NPA", "Net NPA", "PCR", "Credit Cost",
+            "Order Book-to-Bill", "US FDA Observations", "Raw Material Delta per Ton"
+        ]
     },
     "CHEMICALS_SPECIALTY": {
         "identifiers": ["Chemicals", "Specialty Chemicals", "Agrochemicals", "Fertilizers"],
@@ -136,7 +171,10 @@ SECTOR_TAXONOMY = {
             "Export Mix vs Chinese Dumping Price Pressure", "Environmental Clearance & ETP Compliance"
         ],
         "primary_valuation": "EV/EBITDA & Normalized Cash ROIC vs 12% Hurdle",
-        "banned_metrics": ["NIM", "CASA Ratio", "TCV Contract Wins"]
+        "banned_metrics": [
+            "NIM", "CASA", "CASA Ratio", "CET-1", "CRAR", "Gross NPA", "Net NPA", "PCR", "Credit Cost",
+            "TCV Contract Wins"
+        ]
     }
 }
 
@@ -197,11 +235,10 @@ def is_bfsi(sector_or_archetype: Any = "", industry: str = "") -> bool:
             return True
         identifiers = sector_or_archetype.get("identifiers", [])
         combined = " ".join(identifiers).lower()
-        if any(k in combined for k in ["bank", "financial", "lending", "nbfc", "housing finance", "insurance"]):
+        if any(k in combined for k in ["bank", "financial services", "lending", "nbfc", "housing finance", "insurance"]):
             return True
         sector_or_archetype = sector_or_archetype.get("display_name", "")
 
     s = str(sector_or_archetype or "").lower()
     i = str(industry or "").lower()
-    return any(k in s or k in i for k in ["bank", "financial", "lending", "nbfc", "housing finance", "insurance", "bfsi"])
-
+    return any(k in s or k in i for k in ["bank", "financial services", "lending", "nbfc", "housing finance", "insurance", "bfsi"])

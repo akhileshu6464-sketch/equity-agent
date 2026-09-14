@@ -38,12 +38,16 @@ python pipeline.py RELIANCE.NS
 python pipeline.py TCS.NS
 ```
 
-### 3. Launch Streamlit Web Dashboard
-Launch the interactive web dashboard with colored risk pills, accordion tabs, and interactive DCF sliders:
+### 3. Launch Production Web Stack (FastAPI + Dark UI SPA)
+Launch the decoupled high-performance FastAPI server hosting the single-page dark UI frontend and JSON endpoints:
 ```bash
-streamlit run app.py
+uvicorn api:app --reload --port 8000
 ```
-Open `http://localhost:8501` in your browser.
+Open `http://localhost:8000` in your browser.
+
+- **Web Dashboard**: `http://localhost:8000/`
+- **Interactive Swagger Docs**: `http://localhost:8000/docs`
+- **API Health Check**: `http://localhost:8000/health`
 
 ---
 

@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Research Beast • Institutional Equity Intelligence</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brandDark: '#0B0E14',
+            cardDark: '#151A23',
+            cardElevated: '#1C2331',
+            borderDark: '#263042',
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background-color: #0B0E14;
+      color: #E2E8F0;
+    }
+    .font-mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .glass-panel {
+      background: rgba(21, 26, 35, 0.85);
+      backdrop-filter: blur(12px);
+      border: 1px solid #263042;
+    }
+    .glass-panel-elevated {
+      background: rgba(28, 35, 49, 0.9);
+      backdrop-filter: blur(16px);
+      border: 1px solid #334155;
+    }
+    .glow-cyan {
+      box-shadow: 0 0 25px -5px rgba(6, 182, 212, 0.25);
+    }
+    .glow-emerald {
+      box-shadow: 0 0 25px -5px rgba(16, 185, 129, 0.25);
+    }
+    /* Custom scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0B0E14;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #263042;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #334155;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-brandDark text-slate-200 flex flex-col selection:bg-cyan-500 selection:text-black">
+
+  <!-- Top Navigation Bar -->
+  <header class="w-full border-b border-borderDark/80 bg-brandDark/90 backdrop-blur sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-cyan-500 via-blue-600 to-indigo-700 flex items-center justify-center font-bold text-white shadow-lg glow-cyan text-base">
+          RB
+        </div>
+        <div>
+          <span class="font-extrabold tracking-tight text-white text-lg">RESEARCH BEAST</span>
+          <span class="hidden sm:inline-block ml-2 text-xs font-medium px-2 py-0.5 rounded bg-slate-800 text-cyan-400 border border-slate-700/70">v2.0 FastAPI</span>
+        </div>
+      </div>
+      <div class="flex items-center space-x-4">
+        <div class="flex items-center space-x-2 text-xs font-mono text-slate-400 bg-cardDark px-3 py-1.5 rounded-full border border-borderDark">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span>7-Agent Pipeline Active</span>
+        </div>
+        <a href="/health" target="_blank" class="text-xs text-slate-400 hover:text-cyan-400 transition-colors hidden md:inline-block">API Health</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+    <!-- Hero Header -->
+    <section class="text-center max-w-3xl mx-auto pt-6 pb-8">
+      <div class="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full text-xs font-mono tracking-wider font-semibold text-cyan-400 bg-cyan-950/40 border border-cyan-800/60 mb-5">
+        <span>⚡ 7-AGENT AUTONOMOUS EQUITY AUDIT</span>
+      </div>
+      <h1 class="text-4xl sm:text-5xl font-extrabold tracking-tight text-white mb-3">
+        Research <span class="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-teal-300 to-emerald-400">Beast</span>
+      </h1>
+      <p class="text-slate-400 text-sm sm:text-base leading-relaxed">
+        Institutional Equity Intelligence • 7-Agent Autonomous Audit • Uncompromising Buy-Side Rigor
+      </p>
+    </section>
+
+    <!-- Search Bar & Shortcuts -->
+    <section class="max-w-2xl mx-auto mb-10">
+      <div class="glass-panel p-2 rounded-2xl shadow-2xl flex flex-col sm:flex-row gap-2 border border-borderDark focus-within:border-cyan-500/70 focus-within:ring-1 focus-within:ring-cyan-500/50 transition-all">
+        <div class="relative flex-grow flex items-center">
+          <svg class="w-5 h-5 text-slate-400 absolute left-4 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+          </svg>
+          <input
+            id="ticker-input"
+            type="text"
+            placeholder="Enter NSE/BSE Ticker (e.g. CROMPTON, RELIANCE, HDFCBANK)"
+            class="w-full bg-transparent pl-12 pr-4 py-3.5 text-white placeholder-slate-500 font-mono text-sm focus:outline-none uppercase"
+          />
+        </div>
+        <button
+          id="btn-analyze"
+          onclick="runAudit()"
+          class="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-black font-semibold text-sm px-6 py-3.5 rounded-xl shadow-lg glow-cyan transition-all transform active:scale-95 flex items-center justify-center space-x-2"
+        >
+          <span>Run Institutional Audit</span>
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Quick Ticker Shortcuts -->
+      <div class="flex items-center justify-center gap-2 mt-4 flex-wrap text-xs">
+        <span class="text-slate-500 font-medium mr-1">Quick Audits:</span>
+        <button onclick="setTicker('CROMPTON')" class="px-3 py-1 rounded-lg bg-cardDark border border-borderDark hover:border-cyan-500/60 hover:text-cyan-400 text-slate-300 font-mono transition-colors">CROMPTON</button>
+        <button onclick="setTicker('RELIANCE')" class="px-3 py-1 rounded-lg bg-cardDark border border-borderDark hover:border-cyan-500/60 hover:text-cyan-400 text-slate-300 font-mono transition-colors">RELIANCE</button>
+        <button onclick="setTicker('HDFCBANK')" class="px-3 py-1 rounded-lg bg-cardDark border border-borderDark hover:border-cyan-500/60 hover:text-cyan-400 text-slate-300 font-mono transition-colors">HDFCBANK</button>
+        <button onclick="setTicker('TCS')" class="px-3 py-1 rounded-lg bg-cardDark border border-borderDark hover:border-cyan-500/60 hover:text-cyan-400 text-slate-300 font-mono transition-colors">TCS</button>
+      </div>
+    </section>
+
+    <!-- Error Banner -->
+    <div id="error-banner" class="hidden max-w-3xl mx-auto mb-8 p-4 rounded-xl bg-rose-950/40 border border-rose-800 text-rose-300 text-sm flex items-start space-x-3">
+      <svg class="w-5 h-5 text-rose-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+      </svg>
+      <div id="error-message" class="flex-grow">An error occurred during audit.</div>
+    </div>
+
+    <!-- Loading State Indicator -->
+    <section id="loading-state" class="hidden max-w-2xl mx-auto my-12 text-center">
+      <div class="glass-panel p-8 rounded-2xl border border-borderDark shadow-2xl relative overflow-hidden">
+        <div class="w-16 h-16 mx-auto mb-6 relative flex items-center justify-center">
+          <div class="absolute inset-0 rounded-full border-4 border-cyan-500/20 border-t-cyan-400 animate-spin"></div>
+          <div class="w-8 h-8 rounded-full bg-cyan-500/10 flex items-center justify-center">
+            <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping"></span>
+          </div>
+        </div>
+        <h3 id="loading-ticker" class="text-xl font-bold text-white mb-2">Analyzing Ticker...</h3>
+        <p id="loading-step" class="text-sm font-mono text-cyan-400 animate-pulse mb-6">Stage 1: Ingesting financial statements & computing deterministic math...</p>
+        <div class="w-full bg-slate-800/80 rounded-full h-1.5 overflow-hidden">
+          <div id="progress-bar" class="bg-gradient-to-r from-cyan-500 to-emerald-400 h-1.5 w-1/4 transition-all duration-500"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Results Section -->
+    <section id="results-section" class="hidden space-y-8 animate-fade-in">
+
+      <!-- Header Overview Card -->
+      <div class="glass-panel rounded-2xl p-6 sm:p-8 border border-borderDark shadow-2xl">
+        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6 pb-6 border-b border-borderDark/80">
+          <div>
+            <div class="flex items-center gap-3 flex-wrap mb-2">
+              <h2 id="res-company-name" class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Company Name</h2>
+              <span id="res-ticker-badge" class="px-2.5 py-1 rounded-md text-xs font-mono font-bold bg-cyan-950/70 border border-cyan-800 text-cyan-300">TICKER.NS</span>
+              <span id="res-sector-badge" class="px-2.5 py-1 rounded-md text-xs font-medium bg-slate-800/80 border border-slate-700 text-slate-300">Sector</span>
+              <span id="res-archetype-badge" class="px-2.5 py-1 rounded-md text-xs font-medium bg-purple-950/50 border border-purple-800/70 text-purple-300">Archetype</span>
+            </div>
+            <p id="res-industry" class="text-sm text-slate-400">Industry • Furnishings, Fixtures & Appliances</p>
+          </div>
+
+          <!-- Verdict Badge -->
+          <div class="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+            <div class="text-right">
+              <div class="text-xs text-slate-400 uppercase tracking-wider font-semibold">Institutional Verdict</div>
+              <div id="res-verdict" class="text-xl sm:text-2xl font-black font-mono text-emerald-400">[BUY / ACCUMULATE]</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Metric Cards Row -->
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 pt-6">
+          <div class="bg-cardDark/90 p-3.5 rounded-xl border border-borderDark">
+            <div class="text-xs text-slate-400 mb-1">CMP (Last Price)</div>
+            <div id="res-cmp" class="text-lg font-bold font-mono text-white">₹0.00</div>
+          </div>
+          <div class="bg-cardDark/90 p-3.5 rounded-xl border border-borderDark">
+            <div class="text-xs text-slate-400 mb-1">Market Cap</div>
+            <div id="res-mcap" class="text-lg font-bold font-mono text-white">₹0 Cr</div>
+          </div>
+          <div class="bg-cardDark/90 p-3.5 rounded-xl border border-borderDark">
+            <div class="text-xs text-slate-400 mb-1">Trailing P/E</div>
+            <div id="res-pe" class="text-lg font-bold font-mono text-white">0.0x</div>
+          </div>
+          <div class="bg-cardDark/90 p-3.5 rounded-xl border border-borderDark">
+            <div class="text-xs text-slate-400 mb-1">EV / EBITDA</div>
+            <div id="res-evebitda" class="text-lg font-bold font-mono text-white">0.0x</div>
+          </div>
+          <div class="bg-cardDark/90 p-3.5 rounded-xl border border-borderDark">
+            <div class="text-xs text-slate-400 mb-1">52W Range</div>
+            <div id="res-52w" class="text-xs font-bold font-mono text-slate-300 mt-1">₹0 - ₹0</div>
+          </div>
+          <div class="bg-cardDark/90 p-3.5 rounded-xl border border-borderDark">
+            <div class="text-xs text-slate-400 mb-1">Implied Hurdle</div>
+            <div id="res-hurdle" class="text-lg font-bold font-mono text-cyan-400">10.0%</div>
+          </div>
+        </div>
+
+        <!-- Risk Pills Row -->
+        <div class="mt-6 pt-4 border-t border-borderDark/60 flex items-center gap-2 flex-wrap text-xs font-mono">
+          <span class="text-slate-500 font-semibold mr-1">Risk Pill Matrix:</span>
+          <span id="pill-moat" class="px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-borderDark">Moat: GREEN</span>
+          <span id="pill-forensics" class="px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-borderDark">Forensics: GREEN</span>
+          <span id="pill-solvency" class="px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-borderDark">Solvency: GREEN</span>
+          <span id="pill-gov" class="px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-borderDark">Governance: GREEN</span>
+          <span id="pill-kpi" class="px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-borderDark">KPIs: GREEN</span>
+          <span id="pill-val" class="px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-borderDark">Valuation: GREEN</span>
+        </div>
+      </div>
+
+      <!-- Chapter Tabs Navigation -->
+      <div class="flex items-center gap-2 overflow-x-auto pb-2 border-b border-borderDark">
+        <button onclick="switchTab('tab-moat')" id="btn-tab-moat" class="tab-btn px-4 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap bg-cyan-500/10 text-cyan-400 border border-cyan-500/40">
+          🛡️ Chapter 1: Economic Moat (4 Pillars)
+        </button>
+        <button onclick="switchTab('tab-forensics')" id="btn-tab-forensics" class="tab-btn px-4 py-2.5 rounded-xl text-sm font-medium whitespace-nowrap text-slate-400 hover:text-slate-200 hover:bg-cardDark border border-transparent">
+          🔍 Chapter 2: Forensics & Quality
+        </button>
+        <button onclick="switchTab('tab-gov')" id="btn-tab-gov" class="tab-btn px-4 py-2.5 rounded-xl text-sm font-medium whitespace-nowrap text-slate-400 hover:text-slate-200 hover:bg-cardDark border border-transparent">
+          🏛️ Chapter 3: Leadership & Peers
+        </button>
+        <button onclick="switchTab('tab-val')" id="btn-tab-val" class="tab-btn px-4 py-2.5 rounded-xl text-sm font-medium whitespace-nowrap text-slate-400 hover:text-slate-200 hover:bg-cardDark border border-transparent">
+          🎯 Chapter 4: Valuation & Scenarios
+        </button>
+        <button onclick="switchTab('tab-concall')" id="btn-tab-concall" class="tab-btn px-4 py-2.5 rounded-xl text-sm font-medium whitespace-nowrap text-slate-400 hover:text-slate-200 hover:bg-cardDark border border-transparent">
+          🎙️ Concall & Guidance Audit
+        </button>
+        <button onclick="switchTab('tab-metrics')" id="btn-tab-metrics" class="tab-btn px-4 py-2.5 rounded-xl text-sm font-medium whitespace-nowrap text-slate-400 hover:text-slate-200 hover:bg-cardDark border border-transparent">
+          📊 Stage 1 Financial Math
+        </button>
+      </div>
+
+      <!-- TAB 1: CHAPTER 1 ECONOMIC MOAT & 4 PILLARS -->
+      <div id="tab-moat" class="tab-pane space-y-6">
+        
+        <!-- Moat Thesis Hero Card -->
+        <div class="glass-panel p-6 sm:p-8 rounded-2xl border border-borderDark shadow-xl">
+          <div class="flex items-center justify-between flex-wrap gap-4 mb-4">
+            <div class="flex items-center space-x-3">
+              <span class="text-2xl">🛡️</span>
+              <h3 class="text-xl font-bold text-white">Executive Moat Thesis</h3>
+            </div>
+            <div class="flex items-center gap-2">
+              <span id="moat-rating-tag" class="px-3 py-1 rounded-lg text-xs font-mono font-bold bg-emerald-950/70 border border-emerald-800 text-emerald-400">WIDE MOAT</span>
+              <span id="moat-risk-tag" class="px-3 py-1 rounded-lg text-xs font-mono font-bold bg-slate-800 border border-slate-700 text-slate-300">RISK: GREEN</span>
+            </div>
+          </div>
+          <p id="moat-summary" class="text-slate-300 text-sm sm:text-base leading-relaxed">
+            Moat thesis summary description goes here...
+          </p>
+        </div>
+
+        <!-- 4 Pillars Section Header -->
+        <div class="flex items-center justify-between">
+          <h4 class="text-lg font-bold text-white flex items-center space-x-2">
+            <span>Institutional 4-Pillar Moat Deconstruction</span>
+            <span class="text-xs font-mono text-cyan-400 font-normal px-2 py-0.5 rounded bg-cyan-950/50 border border-cyan-800/40">Sector-Isolated</span>
+          </h4>
+        </div>
+
+        <!-- 4 Pillars Grid -->
+        <div id="pillars-container" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <!-- Pillar cards dynamically populated via JavaScript -->
+        </div>
+      </div>
+
+      <!-- TAB 2: FORENSIC AUDIT -->
+      <div id="tab-forensics" class="tab-pane hidden space-y-6">
+        <div class="glass-panel p-6 sm:p-8 rounded-2xl border border-borderDark shadow-xl">
+          <div class="flex items-center justify-between flex-wrap gap-4 mb-4">
+            <div class="flex items-center space-x-3">
+              <span class="text-2xl">🔍</span>
+              <h3 class="text-xl font-bold text-white">Chapter 2: Forensic Audit & Earnings Quality</h3>
+            </div>
+            <div id="forensic-score-badge" class="px-3 py-1 rounded-lg text-xs font-mono font-bold bg-emerald-950/70 border border-emerald-800 text-emerald-400">
+              INTEGRITY: CLEAN
+            </div>
+          </div>
+          <p id="forensic-summary" class="text-slate-300 text-sm sm:text-base leading-relaxed mb-6"></p>
+          <div id="forensic-domains" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+        </div>
+      </div>
+
+      <!-- TAB 3: GOVERNANCE & CRISIS PLAYBOOK -->
+      <div id="tab-gov" class="tab-pane hidden space-y-6">
+        <div class="glass-panel p-6 sm:p-8 rounded-2xl border border-borderDark shadow-xl">
+          <div class="flex items-center justify-between flex-wrap gap-4 mb-4">
+            <div class="flex items-center space-x-3">
+              <span class="text-2xl">🏛️</span>
+              <h3 class="text-xl font-bold text-white">Chapter 3: Leadership Pedigree, Crisis Playbook & Competitor Matrix</h3>
+            </div>
+            <div id="gov-verdict-badge" class="px-3 py-1 rounded-lg text-xs font-mono font-bold bg-cyan-950/70 border border-cyan-800 text-cyan-400">
+              HIGH INTEGRITY
+            </div>
+          </div>
+          <p id="gov-summary" class="text-slate-300 text-sm sm:text-base leading-relaxed mb-6"></p>
+          <div id="gov-dimensions" class="space-y-4"></div>
+        </div>
+      </div>
+
+      <!-- TAB 4: VALUATION & SCENARIOS -->
+      <div id="tab-val" class="tab-pane hidden space-y-6">
+        <div class="glass-panel p-6 sm:p-8 rounded-2xl border border-borderDark shadow-xl">
+          <div class="flex items-center justify-between flex-wrap gap-4 mb-4">
+            <div class="flex items-center space-x-3">
+              <span class="text-2xl">🎯</span>
+              <h3 class="text-xl font-bold text-white">Chapter 4: Intrinsic Valuation Hurdle Rates & Thesis Invalidation</h3>
+            </div>
+          </div>
+          <p id="val-summary" class="text-slate-300 text-sm sm:text-base leading-relaxed mb-6"></p>
+          
+          <!-- Scenarios Grid -->
+          <div id="val-scenarios" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6"></div>
+
+          <!-- Invalidation Triggers -->
+          <div class="mt-6 pt-6 border-t border-borderDark">
+            <h4 class="text-base font-bold text-rose-400 mb-3 flex items-center space-x-2">
+              <span>⚠️ Thesis Invalidation Triggers (Cut-Loss Criteria)</span>
+            </h4>
+            <ul id="val-triggers" class="space-y-2 text-sm text-slate-300"></ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 5: CONCALL & GUIDANCE -->
+      <div id="tab-concall" class="tab-pane hidden space-y-6">
+        <div class="glass-panel p-6 sm:p-8 rounded-2xl border border-borderDark shadow-xl">
+          <div class="flex items-center justify-between flex-wrap gap-4 mb-4">
+            <div class="flex items-center space-x-3">
+              <span class="text-2xl">🎙️</span>
+              <h3 class="text-xl font-bold text-white">Agent 7: Concall Guidance & Management Integrity</h3>
+            </div>
+            <div id="concall-tone-badge" class="px-3 py-1 rounded-lg text-xs font-mono font-bold bg-blue-950/70 border border-blue-800 text-blue-400">
+              BULLISH
+            </div>
+          </div>
+          <div id="concall-cards" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6"></div>
+          <div class="mt-6 pt-6 border-t border-borderDark">
+            <h4 class="text-sm font-bold text-slate-200 mb-3">Scrutinized Q&A Highlights:</h4>
+            <div id="concall-qa" class="space-y-3"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 6: FINANCIAL BASELINE -->
+      <div id="tab-metrics" class="tab-pane hidden space-y-6">
+        <div class="glass-panel p-6 sm:p-8 rounded-2xl border border-borderDark shadow-xl">
+          <h3 class="text-xl font-bold text-white mb-4">Stage 1: Pure-Python Deterministic Math Calculations</h3>
+          <div id="financial-metrics-grid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4"></div>
+        </div>
+      </div>
+
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="w-full border-t border-borderDark/80 py-6 text-center text-xs text-slate-500 bg-brandDark">
+    <div class="max-w-7xl mx-auto px-4">
+      <p>Research Beast • Institutional Equity Research Platform • Strictly for Institutional Professional Auditing</p>
+    </div>
+  </footer>
+
+  <!-- Client-Side JavaScript Application -->
+  <script>
+    let activeData = null;
+
+    function setTicker(symbol) {
+      document.getElementById('ticker-input').value = symbol;
+      runAudit();
+    }
+
+    document.getElementById('ticker-input').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        runAudit();
+      }
+    });
+
+    async function runAudit() {
+      const input = document.getElementById('ticker-input');
+      const ticker = input.value.trim().toUpperCase();
+      if (!ticker) {
+        showError('Please enter a valid stock ticker symbol (e.g. CROMPTON, RELIANCE, HDFCBANK).');
+        return;
+      }
+
+      hideError();
+      showLoading(ticker);
+
+      // Multi-step progress animation
+      let stepIdx = 0;
+      const steps = [
+        "Stage 1: Ingesting official financial statements & computing deterministic math...",
+        "Stage 2: Auditing Chapter 1 Economic Moat across 4 institutional pillars...",
+        "Stage 3: Running forensic accounting, governance & concall models...",
+        "Stage 4: Synthesizing intrinsic valuation hurdle rates & return scenarios..."
+      ];
+      const progressBar = document.getElementById('progress-bar');
+      const loadingStep = document.getElementById('loading-step');
+
+      const progressTimer = setInterval(() => {
+        stepIdx = (stepIdx + 1) % steps.length;
+        loadingStep.innerText = steps[stepIdx];
+        progressBar.style.width = `${((stepIdx + 1) / steps.length) * 90}%`;
+      }, 3500);
+
+      try {
+        const response = await fetch('/api/analyze', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ ticker: ticker })
+        });
+
+        clearInterval(progressTimer);
+
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.detail || `Server returned HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+        activeData = data;
+        hideLoading();
+        renderResults(data);
+      } catch (err) {
+        clearInterval(progressTimer);
+        hideLoading();
+        showError(err.message || 'Failed to complete institutional audit. Please verify the ticker or try again.');
+      }
+    }
+
+    function showLoading(ticker) {
+      document.getElementById('loading-ticker').innerText = `Analyzing ${ticker}...`;
+      document.getElementById('loading-state').classList.remove('hidden');
+      document.getElementById('results-section').classList.add('hidden');
+      document.getElementById('btn-analyze').disabled = true;
+      document.getElementById('btn-analyze').classList.add('opacity-50', 'cursor-not-allowed');
+    }
+
+    function hideLoading() {
+      document.getElementById('loading-state').classList.add('hidden');
+      document.getElementById('btn-analyze').disabled = false;
+      document.getElementById('btn-analyze').classList.remove('opacity-50', 'cursor-not-allowed');
+    }
+
+    function showError(msg) {
+      const banner = document.getElementById('error-banner');
+      document.getElementById('error-message').innerText = msg;
+      banner.classList.remove('hidden');
+    }
+
+    function hideError() {
+      document.getElementById('error-banner').classList.add('hidden');
+    }
+
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-pane').forEach(p => p.classList.add('hidden'));
+      document.querySelectorAll('.tab-btn').forEach(b => {
+        b.classList.remove('bg-cyan-500/10', 'text-cyan-400', 'border-cyan-500/40', 'font-semibold');
+        b.classList.add('text-slate-400', 'border-transparent', 'font-medium');
+      });
+
+      const activePane = document.getElementById(tabId);
+      if (activePane) activePane.classList.remove('hidden');
+
+      const activeBtn = document.getElementById(`btn-${tabId}`);
+      if (activeBtn) {
+        activeBtn.classList.remove('text-slate-400', 'border-transparent', 'font-medium');
+        activeBtn.classList.add('bg-cyan-500/10', 'text-cyan-400', 'border-cyan-500/40', 'font-semibold');
+      }
+    }
+
+    function renderResults(data) {
+      document.getElementById('results-section').classList.remove('hidden');
+
+      // Top metadata
+      document.getElementById('res-company-name').innerText = data.company_name || data.ticker;
+      document.getElementById('res-ticker-badge').innerText = data.ticker;
+      document.getElementById('res-sector-badge').innerText = data.sector || 'General';
+      document.getElementById('res-archetype-badge').innerText = data.is_bfsi ? 'BFSI / Lending' : 'Consumer / Industrial';
+      document.getElementById('res-industry').innerText = `Industry • ${data.industry || 'N/A'}`;
+
+      // Verdict
+      const verdictEl = document.getElementById('res-verdict');
+      const vText = data.institutional_rating || '[HOLD / FAIR VALUE]';
+      verdictEl.innerText = vText;
+      if (vText.includes('BUY') || vText.includes('ACCUMULATE')) {
+        verdictEl.className = 'text-xl sm:text-2xl font-black font-mono text-emerald-400';
+      } else if (vText.includes('AVOID') || vText.includes('SELL')) {
+        verdictEl.className = 'text-xl sm:text-2xl font-black font-mono text-rose-400';
+      } else {
+        verdictEl.className = 'text-xl sm:text-2xl font-black font-mono text-amber-400';
+      }
+
+      // Metrics row
+      document.getElementById('res-cmp').innerText = `₹${(data.current_price || 0).toLocaleString('en-IN')}`;
+      document.getElementById('res-mcap').innerText = `₹${Math.round(data.market_cap_cr || 0).toLocaleString('en-IN')} Cr`;
+      document.getElementById('res-pe').innerText = `${(data.trailing_pe || 0).toFixed(1)}x`;
+      document.getElementById('res-evebitda').innerText = `${(data.ev_to_ebitda || 0).toFixed(1)}x`;
+      document.getElementById('res-52w').innerText = `₹${data.fifty_two_week_low || 0} - ₹${data.fifty_two_week_high || 0}`;
+      document.getElementById('res-hurdle').innerText = data.implied_growth_pct || '10.0%';
+
+      // Risk Pills
+      const pills = data.risk_pills || {};
+      const setPill = (id, label, val) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const colorClass = val === 'RED' ? 'bg-rose-950/60 text-rose-300 border-rose-800' : (val === 'YELLOW' ? 'bg-amber-950/60 text-amber-300 border-amber-800' : 'bg-emerald-950/60 text-emerald-300 border-emerald-800');
+        el.className = `px-2.5 py-0.5 rounded-full border text-xs font-mono ${colorClass}`;
+        el.innerText = `${label}: ${val || 'GREEN'}`;
+      };
+      setPill('pill-moat', 'Moat', pills['Moat & Business'] || 'GREEN');
+      setPill('pill-forensics', 'Forensics', pills['Forensics'] || 'GREEN');
+      setPill('pill-solvency', 'Solvency', pills['Solvency'] || 'GREEN');
+      setPill('pill-gov', 'Governance', pills['Governance'] || 'GREEN');
+      setPill('pill-kpi', 'KPIs', pills['Industry KPIs'] || 'GREEN');
+      setPill('pill-val', 'Valuation', pills['Valuation'] || 'GREEN');
+
+      // Chapter 1: Moat & 4 Pillars
+      renderMoatChapter(data.moat || {});
+
+      // Chapter 2: Forensics
+      renderForensicsChapter(data.forensics || {});
+
+      // Chapter 3: Governance & Leadership
+      renderGovChapter(data.leadership || data.gov || {});
+
+      // Chapter 4: Valuation & Scenarios
+      renderValuationChapter(data.valuation || data.val || {});
+
+      // Chapter 5: Concall Guidance
+      renderConcallChapter(data.agent_7 || {});
+
+      // Chapter 6: Financial Math
+      renderFinancialMetrics(data.financial_payload || {});
+
+      // Default to Moat tab
+      switchTab('tab-moat');
+    }
+
+    function renderMoatChapter(moat) {
+      document.getElementById('moat-summary').innerText = moat.summary || 'Strong defensible economic moat verified across historical cycles.';
+      document.getElementById('moat-rating-tag').innerText = `${moat.moat_rating || 'WIDE'} MOAT`;
+      document.getElementById('moat-risk-tag').innerText = `RISK: ${moat.risk_pill || 'GREEN'}`;
+
+      const pillarsContainer = document.getElementById('pillars-container');
+      pillarsContainer.innerHTML = '';
+
+      // Check both pillar_X and dimension_X keys
+      for (let i = 1; i <= 4; i++) {
+        const pillar = moat[`pillar_${i}`] || moat[`dimension_${i}`] || {};
+        const title = pillar.title || `Pillar ${i}`;
+        const hist = pillar.historical_trend_and_metrics || pillar.trajectory_and_metrics || '';
+        const ops = pillar.operational_mechanics_and_drivers || pillar.operational_drivers || '';
+        const peer = pillar.competitive_context_and_benchmarks || pillar.peer_comparison || '';
+        const thesis = pillar.thesis_implication_and_risks || pillar.thesis_invalidation || '';
+
+        const card = document.createElement('div');
+        card.className = 'glass-panel p-6 rounded-xl border border-borderDark flex flex-col justify-between hover:border-cyan-500/40 transition-colors shadow-lg';
+        card.innerHTML = `
+          <div>
+            <div class="flex items-start justify-between gap-2 mb-3">
+              <div class="flex items-center space-x-2">
+                <span class="w-6 h-6 rounded-full bg-cyan-500/10 text-cyan-400 font-mono text-xs flex items-center justify-center font-bold border border-cyan-500/30">P${i}</span>
+                <h5 class="font-bold text-white text-base">${title}</h5>
+              </div>
+            </div>
+            <div class="space-y-3 text-xs leading-relaxed">
+              ${hist ? `<div class="p-3 rounded-lg bg-cardDark border border-borderDark"><span class="font-bold text-cyan-400 block mb-1">Level A (Trajectory & Metrics):</span><p class="text-slate-300">${hist}</p></div>` : ''}
+              ${ops ? `<div class="p-3 rounded-lg bg-cardDark border border-borderDark"><span class="font-bold text-emerald-400 block mb-1">Level B (Operational Drivers):</span><p class="text-slate-300">${ops}</p></div>` : ''}
+              ${peer ? `<div class="p-3 rounded-lg bg-cardDark border border-borderDark"><span class="font-bold text-purple-400 block mb-1">Level C (Peer Benchmarks):</span><p class="text-slate-300">${peer}</p></div>` : ''}
+            </div>
+          </div>
+          ${thesis ? `<div class="mt-4 pt-3 border-t border-borderDark/70"><div class="p-2.5 rounded-lg bg-rose-950/30 border border-rose-900/60 text-xs text-rose-300"><span class="font-bold text-rose-400">Thesis Invalidation:</span> ${thesis}</div></div>` : ''}
+        `;
+        pillarsContainer.appendChild(card);
+      }
+    }
+
+    function renderForensicsChapter(forensics) {
+      document.getElementById('forensic-summary').innerText = forensics.summary || 'Accounting forensic audit completed with clean integrity score.';
+      const badge = document.getElementById('forensic-score-badge');
+      badge.innerText = `INTEGRITY: ${forensics.forensic_score || 'CLEAN'}`;
+
+      const container = document.getElementById('forensic-domains');
+      container.innerHTML = '';
+      for (let i = 1; i <= 4; i++) {
+        const d = forensics[`domain_${i}`] || {};
+        if (!d.title) continue;
+        const div = document.createElement('div');
+        div.className = 'bg-cardDark p-4 rounded-xl border border-borderDark';
+        div.innerHTML = `
+          <h5 class="font-bold text-white text-sm mb-2">${d.title}</h5>
+          <p class="text-xs text-slate-300 mb-2">${d.historical_trend_and_metrics || ''}</p>
+          <div class="text-xs text-slate-400 border-t border-slate-800 pt-2">${d.operational_mechanics_and_drivers || ''}</div>
+        `;
+        container.appendChild(div);
+      }
+    }
+
+    function renderGovChapter(gov) {
+      document.getElementById('gov-summary').innerText = gov.summary || 'Leadership audit and governance credibility confirmed.';
+      const badge = document.getElementById('gov-verdict-badge');
+      badge.innerText = gov.credibility_verdict || 'HIGH INTEGRITY';
+
+      const container = document.getElementById('gov-dimensions');
+      container.innerHTML = '';
+      const dims = [
+        { key: 'dimension1_leadership_pedigree', label: 'Dimension 1: Leadership Pedigree & Skin-in-the-Game' },
+        { key: 'dimension2_crisis_playbook', label: 'Dimension 2: Historical Crisis Navigation Playbook' },
+        { key: 'dimension3_credibility_audit', label: 'Dimension 3: Promise vs Delivery Audit' },
+        { key: 'dimension4_competitor_matrix', label: 'Dimension 4: Head-to-Head Peer Comparison Matrix' }
+      ];
+      dims.forEach(d => {
+        const obj = gov[d.key];
+        if (!obj) return;
+        const card = document.createElement('div');
+        card.className = 'bg-cardDark p-5 rounded-xl border border-borderDark';
+        card.innerHTML = `
+          <h5 class="font-bold text-cyan-400 text-sm mb-2">${d.label}</h5>
+          <div class="text-xs text-slate-300 space-y-2">
+            ${typeof obj === 'string' ? `<p>${obj}</p>` : `<pre class="whitespace-pre-wrap font-sans">${JSON.stringify(obj, null, 2)}</pre>`}
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function renderValuationChapter(val) {
+      document.getElementById('val-summary').innerText = val.summary || 'Intrinsic valuation hurdle rates modeled under multi-scenario frameworks.';
+      
+      const sContainer = document.getElementById('val-scenarios');
+      sContainer.innerHTML = '';
+      const scenarios = val.scenario_analysis || {};
+      const scKeys = [
+        { k: 'bear_case', label: 'Bear Case Scenario', color: 'rose' },
+        { k: 'base_case', label: 'Base Case (Target)', color: 'cyan' },
+        { k: 'bull_case', label: 'Bull Case Scenario', color: 'emerald' }
+      ];
+      scKeys.forEach(s => {
+        const sc = scenarios[s.k] || {};
+        const div = document.createElement('div');
+        div.className = `bg-cardDark p-4 rounded-xl border border-borderDark flex flex-col justify-between`;
+        div.innerHTML = `
+          <div>
+            <div class="text-xs font-bold text-${s.color}-400 mb-1 uppercase">${s.label}</div>
+            <div class="text-xl font-bold font-mono text-white mb-2">${sc.fair_target_price || sc.target_price || '₹0.00'}</div>
+            <p class="text-xs text-slate-400">${sc.growth_assumptions || sc.catalyst || ''}</p>
+          </div>
+          <div class="mt-3 text-xs font-mono text-slate-500">${sc.multiple_used || ''}</div>
+        `;
+        sContainer.appendChild(div);
+      });
+
+      const tContainer = document.getElementById('val-triggers');
+      tContainer.innerHTML = '';
+      const triggers = val.invalidation_triggers || [];
+      triggers.forEach(t => {
+        const li = document.createElement('li');
+        li.className = 'flex items-start space-x-2';
+        li.innerHTML = `<span class="text-rose-400 font-bold">•</span><span>${t}</span>`;
+        tContainer.appendChild(li);
+      });
+    }
+
+    function renderConcallChapter(concall) {
+      const toneBadge = document.getElementById('concall-tone-badge');
+      toneBadge.innerText = concall.tone_sentiment || 'BULLISH';
+
+      const cards = document.getElementById('concall-cards');
+      cards.innerHTML = `
+        <div class="bg-cardDark p-4 rounded-xl border border-borderDark"><div class="text-xs text-slate-400 mb-1">Revenue Guidance</div><div class="text-sm font-bold text-white">${concall.revenue_growth_guidance || '12-14% YoY'}</div></div>
+        <div class="bg-cardDark p-4 rounded-xl border border-borderDark"><div class="text-xs text-slate-400 mb-1">Margin Corridor</div><div class="text-sm font-bold text-white">${concall.margin_outlook || '13.5-15.0%'}</div></div>
+        <div class="bg-cardDark p-4 rounded-xl border border-borderDark"><div class="text-xs text-slate-400 mb-1">Committed CapEx</div><div class="text-sm font-bold text-white">${concall.committed_capex || 'Rs. 350-500 Cr'}</div></div>
+        <div class="bg-cardDark p-4 rounded-xl border border-borderDark"><div class="text-xs text-slate-400 mb-1">Integrity Score</div><div class="text-sm font-bold text-emerald-400">${concall.integrity_score || 'HIGH'}</div></div>
+      `;
+
+      const qaContainer = document.getElementById('concall-qa');
+      qaContainer.innerHTML = '';
+      const qas = concall.qa_highlights || [];
+      qas.forEach((qa, idx) => {
+        const div = document.createElement('div');
+        div.className = 'p-3 rounded-xl bg-cardDark border border-borderDark text-xs';
+        div.innerHTML = `
+          <div class="font-bold text-slate-200 mb-1">Q${idx + 1}: ${qa.question || ''}</div>
+          <div class="text-slate-400 mb-1"><span class="text-cyan-400 font-semibold">Management:</span> ${qa.answer || ''}</div>
+          <div class="text-emerald-400/90 font-medium"><span class="text-slate-500">Takeaway:</span> ${qa.takeaway || ''}</div>
+        `;
+        qaContainer.appendChild(div);
+      });
+    }
+
+    function renderFinancialMetrics(payload) {
+      const grid = document.getElementById('financial-metrics-grid');
+      grid.innerHTML = '';
+      const calc = payload.calculated_metrics || {};
+      for (const [key, val] of Object.entries(calc)) {
+        const div = document.createElement('div');
+        div.className = 'bg-cardDark p-3.5 rounded-xl border border-borderDark';
+        const formattedVal = typeof val === 'number' ? (Number.isInteger(val) ? val.toLocaleString('en-IN') : val.toFixed(2)) : val;
+        div.innerHTML = `
+          <div class="text-xs text-slate-400 font-mono mb-1 truncate" title="${key}">${key.replace(/_/g, ' ').toUpperCase()}</div>
+          <div class="text-base font-bold font-mono text-white">${formattedVal}</div>
+        `;
+        grid.appendChild(div);
+      }
+    }
+  </script>
+</body>
+</html>

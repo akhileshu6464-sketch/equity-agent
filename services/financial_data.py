@@ -129,12 +129,40 @@ class FinancialDataService:
         institutional_holders = stock.institutional_holders
         shareholding_summary = self._parse_shareholding(major_holders, info)
 
+        # Extract both sector and industry
+        sector = str(info.get("sector") or "").strip()
+        industry = str(info.get("industry") or "").strip()
+
+        # Heuristic fallback if sector or industry missing from yfinance
+        clean_s = symbol.upper()
+        if not sector or sector.lower() in ["unknown sector", "unknown"]:
+            if any(b in clean_s for b in ["HDFC", "ICICI", "KOTAK", "SBIN", "AXIS", "INDUSIND", "BANK", "FIN"]):
+                sector = "Financial Services"
+                if not industry:
+                    industry = "Private Sector Bank"
+            elif any(c in clean_s for c in ["CROMPTON", "HAVELL", "VOLTAS", "ORIENT", "POLYCAB", "BAJAJELEC"]):
+                sector = "Consumer Cyclical"
+                if not industry:
+                    industry = "Furnishings, Fixtures & Appliances"
+            elif any(t in clean_s for t in ["TCS", "INFY", "WIPRO", "HCLTECH"]):
+                sector = "Technology"
+                if not industry:
+                    industry = "Information Technology Services"
+            elif "RELIANCE" in clean_s:
+                sector = "Energy"
+                if not industry:
+                    industry = "Oil & Gas Refining & Marketing"
+            else:
+                sector = "Industrial Goods"
+                if not industry:
+                    industry = "Diversified Industrials"
+
         data = {
             "symbol": symbol,
             "short_name": info.get("shortName") or info.get("longName") or symbol,
             "long_name": info.get("longName") or info.get("shortName") or symbol,
-            "sector": info.get("sector") or "Unknown Sector",
-            "industry": info.get("industry") or "Unknown Industry",
+            "sector": sector,
+            "industry": industry,
             "summary": info.get("longBusinessSummary") or "",
             "current_price": float(current_price),
             "currency": info.get("currency") or "INR",

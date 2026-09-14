@@ -29,13 +29,13 @@ SECTOR_INSTRUCTIONS = {
     """,
     "MANUFACTURING": """
     SECTOR PROTOCOL: INDUSTRIAL / CONSUMER GOODS / MANUFACTURING
-    - REQUIRED FOCUS: Gross Margin Return on Inventory (GMROI), Days Sales of Inventory (DSI), Cash Conversion Cycle (CCC), Plant Capacity Utilization, Gross vs EBITDA margin spreads, Maintenance vs Growth CapEx, Power/Fuel costs.
-    - STRICT PROHIBITION: Never mention NIM, CASA, slippages, or credit costs.
+    - REQUIRED FOCUS: Brand equity, Gross Margins, Raw Material Pass-through (copper, aluminum, crude derivatives), Dealer/Distributor Touchpoints, Secondary Sales Velocity, Cash Conversion Cycle (CCC, DIO, DSO, DPO), Plant Capacity Utilization, ROCE, and ROIC vs WACC spreads.
+    - STRICT PROHIBITION: Strictly NEVER mention 'CASA', 'NIM', 'net interest margin', 'deposits', 'loan book', 'branches', 'CET-1', 'CRAR', 'NPAs', 'slippages', 'PCR', or banking peers (e.g. HDFC Bank, ICICI Bank, Axis Bank, Kotak, SBI).
     """,
     "TECH": """
     SECTOR PROTOCOL: IT SERVICES & SOFTWARE
     - REQUIRED FOCUS: Billable utilization, offshore-onsite delivery ratio, client concentration, voluntary attrition rates, TCV/ACV order pipeline, revenue per employee.
-    - STRICT PROHIBITION: Never mention raw materials, factories, or inventory.
+    - STRICT PROHIBITION: Never mention raw materials, factories, inventory, CASA, NIM, or banking deposits.
     """
 }
 
@@ -67,26 +67,26 @@ FINANCIAL PAYLOAD CONTEXT:
 {json.dumps(financial_payload, indent=2)}
 
 TASK: AUDIT COMPETITIVE MOAT, PRICING POWER & BARRIERS TO ENTRY
-Evaluate the company across the following 5 critical moat dimensions.
-For EVERY dimension, you MUST provide a structured 4-tier institutional node:
+Evaluate the company across the following 4 critical moat pillars.
+For EVERY pillar, you MUST provide a structured 4-tier institutional node:
 {{
-  "title": "Moat Dimension Name",
+  "title": "Moat Pillar Name",
   "historical_trend_and_metrics": "Level A (Data & Trajectory): Multi-year figures, margin spreads, market share shifts (min 40-60 words).",
   "operational_mechanics_and_drivers": "Level B (Operational Drivers): Pricing power, switching costs, network effects, structural cost advantages (min 40-60 words).",
   "competitive_context_and_benchmarks": "Level C (Peer Benchmarking): Direct contrast against top 2-3 domestic listed competitors (min 40-60 words).",
   "thesis_implication_and_risks": "Level D (Thesis Invalidation): The precise structural or competitive threshold that breaks this moat (min 40-60 words)."
 }}
 
-DIMENSIONS TO EVALUATE:
-1. {'Core Spread Defense & CASA Liability Franchise' if is_bank else 'Pricing Power & Gross Margin Durability'}
-2. {'Underwriting Moat, Credit Algorithm & Risk Filtering' if is_bank else 'Intangible Assets, Brand Equity & Regulatory Moats'}
-3. {'Customer Stickiness, Switching Costs & Cross-Sell Ratio' if is_bank else 'Switching Costs & Customer Retention Economics'}
-4. {'Branch Network Vintage & Operational Cost Advantage' if is_bank else 'Structural Cost Leadership & Scale Economies'}
-5. {'Network Effects & Ecosystem Dominance' if is_bank else 'Distribution Reach & Channel Moat'}
+PILLARS TO EVALUATE:
+1. {'Pillar 1: Core Revenue Engine & NIM / Liability Defensibility (CASA ratio, cost of funds, retail deposit granularity)' if is_bank else 'Pillar 1: Brand Moat, Pricing Power & Margin Defensibility (Gross margins, pricing power against raw materials like copper/aluminum, product mix)'}
+2. {'Pillar 2: Operating Efficiency & Branch / Digital Underwriting Throughput (Cost-to-Income, turnaround times)' if is_bank else 'Pillar 2: Distribution Network, Channel Throughput & Operating Leverage (Dealer/distributor touchpoints, secondary sales velocity, capacity utilization, operating EBITDA margins)'}
+3. {'Pillar 3: Asset Quality & Credit Cost Trajectory (GNPA, NNPA, PCR, slippage ratio)' if is_bank else 'Pillar 3: Working Capital Dynamics & Cash Conversion Cycle (DIO, DSO, DPO, inventory turnover, operating cash flow conversion)'}
+4. {'Pillar 4: Regulatory Capital & Balance Sheet Strength (CET-1, CRAR, LCR, RBI stress-testing buffers)' if is_bank else 'Pillar 4: Capital Allocation & Balance Sheet Durability (ROCE, ROIC, debt-to-equity, free cash flow generation, capex/M&A reinvestment)'}
 
 Output valid JSON with keys:
 'summary', 'moat_rating' ('WIDE', 'NARROW', 'NONE'), 'risk_pill' ('GREEN', 'YELLOW', 'RED'),
-'dimension_1', 'dimension_2', 'dimension_3', 'dimension_4', 'dimension_5'.
+'dimension_1', 'dimension_2', 'dimension_3', 'dimension_4',
+'pillar_1', 'pillar_2', 'pillar_3', 'pillar_4'.
 """
 
 

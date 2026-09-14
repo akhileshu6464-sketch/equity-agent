@@ -74,6 +74,14 @@ class UnifiedLLMClient:
         """Makes direct REST call to Google Gemini API with responseMimeType='application/json'."""
         endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model_name}:generateContent?key={self.api_key}"
 
+        is_bfsi = bool(financial_payload.get("sector_profile", {}).get("is_bfsi", False))
+        if is_bfsi:
+            sample_metrics = "'3.85% NIM', '18.9% CET-1', '42.0% CASA', '0.42% Net NPA'"
+            sector_prohibition = "6. If BFSI (Bank/NBFC), strictly NEVER mention 'inventory', 'raw material', 'factory', 'plant', or 'machinery'."
+        else:
+            sample_metrics = "'14.2x Interest Coverage', '45-day CCC', '18.5% ROIC', '32.0% Gross Margin'"
+            sector_prohibition = "6. Since this is a NON-FINANCIAL entity, strictly NEVER mention 'CASA', 'NIM', 'net interest margin', 'deposits', 'loan book', 'branches', 'CET-1', 'CRAR', 'NPAs', 'slippages', 'PCR', or banking peers (e.g. HDFC Bank, ICICI Bank, Axis Bank, Kotak, SBI)."
+
         prompt = f"""
 You are an elite Institutional Equity Research Director. Using the pre-calculated financial metrics provided, generate the complete unabridged audit dossier across all domains (Moat, Forensics, Solvency, Governance, Industry KPIs, Valuation, Concall Guidance). Ensure seamless analytical cross-referencing between sections.
 
@@ -93,10 +101,10 @@ CRITICAL INSTITUTIONAL DEPTH & 4-TIER SCHEMA RULES:
      "competitive_context_and_benchmarks": "Level C (Peer & Benchmark Context): Contrast against industry benchmarks and primary competitors (min 35-50 words).",
      "thesis_implication_and_risks": "Level D (Capital Allocation & Return Impact): Explain implications for RoA/RoE, long-term compounding, and valuation multiples (min 35-50 words)."
    }}
-3. For dashboard card display, populate the 'audit_metrics' dictionaries with crisp, formatted metric strings (e.g. '3.85% NIM', '14.2x Interest Coverage').
+3. For dashboard card display, populate the 'audit_metrics' dictionaries with crisp, formatted metric strings (e.g. {sample_metrics}).
 4. Include full markdown data tables for historical trends across Forensics, Solvency, Industry KPIs, and Valuation Scenarios.
 5. Strictly obey all banned metrics for this archetype ({financial_payload.get('sector_profile', {}).get('banned_metrics', [])}). NEVER cite banned metrics.
-6. If BFSI (Bank/NBFC), strictly NEVER mention 'inventory', 'raw material', 'factory', or 'machinery'.
+{sector_prohibition}
 7. Use the exact pre-calculated figures from the financial payload. Do not invent contradictory numbers.
 8. For Agent 4 (Governance & Leadership), output MUST include:
    - 'dimension1_leadership_pedigree': with 'key_executives', 'skin_in_the_game' (4-tier), 'governance_structure' (4-tier)
