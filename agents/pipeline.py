@@ -18,6 +18,8 @@ Stage 2 (Unified Institutional CIO Audit):
 """
 
 import os
+import sys
+import json
 import logging
 from typing import Dict, Any, List, Optional
 
@@ -1096,6 +1098,34 @@ class MarkdownDict(dict):
         return super().__repr__()
 
 
+def parse_dimension_data(raw_data: Any) -> Any:
+    """
+    Safely parses raw dimension/chapter data whether it is already a dict,
+    a JSON string, or wrapped in markdown code fences.
+    """
+    if isinstance(raw_data, dict):
+        return raw_data
+    if isinstance(raw_data, list):
+        return raw_data
+    if isinstance(raw_data, str):
+        cleaned = raw_data.strip()
+        # Strip markdown code fences if present
+        if cleaned.startswith("```json"):
+            cleaned = cleaned[7:]
+        elif cleaned.startswith("```"):
+            cleaned = cleaned[3:]
+        if cleaned.endswith("```"):
+            cleaned = cleaned[:-3]
+        cleaned = cleaned.strip()
+        try:
+            parsed = json.loads(cleaned)
+            if isinstance(parsed, (dict, list)):
+                return parsed
+        except Exception:
+            return raw_data
+    return raw_data
+
+
 def build_moat_markdown(moat_out: Dict[str, Any], ticker: str, company_name: str, is_bank: bool) -> str:
     summary = moat_out.get("summary", "")
     rating = moat_out.get("moat_rating", "WIDE")
@@ -1171,10 +1201,15 @@ def build_leadership_markdown(leadership_out: Dict[str, Any], ticker: str, compa
     cred = leadership_out.get("credibility_verdict", "HIGH INTEGRITY")
     risk_pill = leadership_out.get("risk_pill", "GREEN")
     
-    dim1 = leadership_out.get("dimension1_leadership_pedigree", {})
-    dim2 = leadership_out.get("dimension2_crisis_playbook", {})
-    dim3 = leadership_out.get("dimension3_credibility_audit", {})
-    dim4 = leadership_out.get("dimension4_competitor_matrix", {})
+    dim1 = parse_dimension_data(leadership_out.get("dimension1_leadership_pedigree", {}))
+    dim2 = parse_dimension_data(leadership_out.get("dimension2_crisis_playbook", {}))
+    dim3 = parse_dimension_data(leadership_out.get("dimension3_credibility_audit", {}))
+    dim4 = parse_dimension_data(leadership_out.get("dimension4_competitor_matrix", {}))
+
+    if not isinstance(dim1, dict): dim1 = {}
+    if not isinstance(dim2, dict): dim2 = {}
+    if not isinstance(dim3, dict): dim3 = {}
+    if not isinstance(dim4, dict): dim4 = {}
     
     md_lines = [
         f"### 🏛️ Chapter 3: Leadership Pedigree, Crisis Playbook & Competitor Benchmark",
@@ -1380,7 +1415,9 @@ def run_deep_institutional_pipeline(
     agent_4["risk_pill"] = leadership_out.get("risk_pill", agent_4.get("risk_pill", "GREEN"))
     for l_dim in ["dimension1_leadership_pedigree", "dimension2_crisis_playbook", "dimension3_credibility_audit", "dimension4_competitor_matrix"]:
         if l_dim in leadership_out:
-            agent_4[l_dim] = leadership_out[l_dim]
+            parsed_dim = parse_dimension_data(leadership_out[l_dim])
+            leadership_out[l_dim] = parsed_dim
+            agent_4[l_dim] = parsed_dim
 
     agent_5 = Agent5IndustryKPI().analyze(company_data, context)
 

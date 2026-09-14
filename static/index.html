@@ -622,32 +622,278 @@
       }
     }
 
+    function parseDimensionData(rawData) {
+      if (!rawData) return {};
+      if (typeof rawData === 'object' && rawData !== null) return rawData;
+      if (typeof rawData === 'string') {
+        let cleaned = rawData.trim();
+        if (cleaned.startsWith('```json')) {
+          cleaned = cleaned.slice(7);
+        } else if (cleaned.startsWith('```')) {
+          cleaned = cleaned.slice(3);
+        }
+        if (cleaned.endsWith('```')) {
+          cleaned = cleaned.slice(0, -3);
+        }
+        cleaned = cleaned.trim();
+        try {
+          const parsed = JSON.parse(cleaned);
+          if (typeof parsed === 'object' && parsed !== null) {
+            return parsed;
+          }
+        } catch (e) {
+          return { description: rawData };
+        }
+      }
+      return {};
+    }
+
     function renderGovChapter(gov) {
       document.getElementById('gov-summary').innerText = gov.summary || 'Leadership audit and governance credibility confirmed.';
       const badge = document.getElementById('gov-verdict-badge');
-      badge.innerText = gov.credibility_verdict || 'HIGH INTEGRITY';
+      const verd = gov.credibility_verdict || 'HIGH INTEGRITY';
+      badge.innerText = verd;
+      if (verd.toUpperCase().includes('HIGH')) {
+        badge.className = 'px-3 py-1 rounded-lg text-xs font-mono font-bold bg-emerald-950/70 border border-emerald-800 text-emerald-400';
+      } else if (verd.toUpperCase().includes('PRAGMATIC') || verd.toUpperCase().includes('MODERATE')) {
+        badge.className = 'px-3 py-1 rounded-lg text-xs font-mono font-bold bg-amber-950/70 border border-amber-800 text-amber-400';
+      } else {
+        badge.className = 'px-3 py-1 rounded-lg text-xs font-mono font-bold bg-rose-950/70 border border-rose-800 text-rose-400';
+      }
 
       const container = document.getElementById('gov-dimensions');
       container.innerHTML = '';
-      const dims = [
-        { key: 'dimension1_leadership_pedigree', label: 'Dimension 1: Leadership Pedigree & Skin-in-the-Game' },
-        { key: 'dimension2_crisis_playbook', label: 'Dimension 2: Historical Crisis Navigation Playbook' },
-        { key: 'dimension3_credibility_audit', label: 'Dimension 3: Promise vs Delivery Audit' },
-        { key: 'dimension4_competitor_matrix', label: 'Dimension 4: Head-to-Head Peer Comparison Matrix' }
-      ];
-      dims.forEach(d => {
-        const obj = gov[d.key];
-        if (!obj) return;
-        const card = document.createElement('div');
-        card.className = 'bg-cardDark p-5 rounded-xl border border-borderDark';
-        card.innerHTML = `
-          <h5 class="font-bold text-cyan-400 text-sm mb-2">${d.label}</h5>
-          <div class="text-xs text-slate-300 space-y-2">
-            ${typeof obj === 'string' ? `<p>${obj}</p>` : `<pre class="whitespace-pre-wrap font-sans">${JSON.stringify(obj, null, 2)}</pre>`}
+
+      const dim1 = parseDimensionData(gov.dimension1_leadership_pedigree);
+      const dim2 = parseDimensionData(gov.dimension2_crisis_playbook);
+      const dim3 = parseDimensionData(gov.dimension3_credibility_audit);
+      const dim4 = parseDimensionData(gov.dimension4_competitor_matrix);
+
+      // Helper for 4-tier parameter blocks
+      const render4Tier = (d) => {
+        const hist = d.historical_trend_and_metrics || d.trajectory_and_metrics || '';
+        const ops = d.operational_mechanics_and_drivers || d.operational_drivers || '';
+        const peer = d.competitive_context_and_benchmarks || d.peer_comparison || '';
+        const thesis = d.thesis_implication_and_risks || d.thesis_invalidation || '';
+        if (!hist && !ops && !peer && !thesis) return '';
+        return `
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4 text-xs">
+            ${hist ? `<div class="p-3 rounded-lg bg-cardDark/90 border border-borderDark"><span class="font-bold text-cyan-400 block mb-1">Level A (Trajectory & Alignment):</span><p class="text-slate-300 leading-relaxed">${hist}</p></div>` : ''}
+            ${ops ? `<div class="p-3 rounded-lg bg-cardDark/90 border border-borderDark"><span class="font-bold text-emerald-400 block mb-1">Level B (Operational Levers):</span><p class="text-slate-300 leading-relaxed">${ops}</p></div>` : ''}
+            ${peer ? `<div class="p-3 rounded-lg bg-cardDark/90 border border-borderDark"><span class="font-bold text-purple-400 block mb-1">Level C (Stewardship & Peers):</span><p class="text-slate-300 leading-relaxed">${peer}</p></div>` : ''}
+            ${thesis ? `<div class="p-3 rounded-lg bg-rose-950/30 border border-rose-900/60"><span class="font-bold text-rose-400 block mb-1">Level D (Thesis Invalidation):</span><p class="text-rose-200 leading-relaxed">${thesis}</p></div>` : ''}
           </div>
         `;
-        container.appendChild(card);
-      });
+      };
+
+      // -----------------------------------------------------------------------
+      // DIMENSION 1: LEADERSHIP PEDIGREE & SKIN-IN-THE-GAME
+      // -----------------------------------------------------------------------
+      const card1 = document.createElement('div');
+      card1.className = 'glass-panel p-6 rounded-xl border border-borderDark shadow-lg';
+      let execsHtml = '';
+      const execs = Array.isArray(dim1.key_executives) ? dim1.key_executives : [];
+      if (execs.length > 0) {
+        execsHtml = `
+          <div class="mt-4 pt-4 border-t border-borderDark">
+            <h6 class="text-xs font-mono font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center space-x-2">
+              <span>Executive Leadership Profiles & Incentive Hurdle Alignment</span>
+            </h6>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              ${execs.map(ex => `
+                <div class="p-4 rounded-xl bg-cardDark border border-borderDark flex flex-col justify-between">
+                  <div>
+                    <div class="flex items-center justify-between gap-2 mb-2">
+                      <div>
+                        <span class="font-bold text-white text-sm">${ex.name || 'Executive'}</span>
+                        <span class="text-xs text-slate-400 ml-1.5">— ${ex.role || 'Leadership'}</span>
+                      </div>
+                      ${ex.tenure ? `<span class="px-2 py-0.5 rounded-full text-xs font-mono font-semibold bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 whitespace-nowrap">${ex.tenure}</span>` : ''}
+                    </div>
+                    ${ex.background ? `<p class="text-xs text-slate-300 mb-1.5 leading-relaxed">${ex.background}</p>` : ''}
+                    ${ex.past_affiliation ? `<div class="text-xs text-slate-500 mb-2">Past: ${ex.past_affiliation}</div>` : ''}
+                  </div>
+                  ${ex.incentive_alignment ? `<div class="pt-2 border-t border-slate-800 text-xs text-emerald-400"><span class="font-bold text-emerald-500">Incentive Alignment:</span> ${ex.incentive_alignment}</div>` : ''}
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }
+
+      card1.innerHTML = `
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center space-x-2.5">
+            <span class="w-7 h-7 rounded-lg bg-cyan-500/10 text-cyan-400 font-mono text-xs flex items-center justify-center font-bold border border-cyan-500/30">D1</span>
+            <h5 class="font-bold text-white text-base">${dim1.title || 'Executive Leadership Profile & Promoter Skin-in-the-Game'}</h5>
+          </div>
+        </div>
+        ${dim1.description ? `<p class="text-xs text-slate-300 mb-3">${dim1.description}</p>` : ''}
+        ${render4Tier(dim1)}
+        ${execsHtml}
+      `;
+      container.appendChild(card1);
+
+      // -----------------------------------------------------------------------
+      // DIMENSION 2: HISTORICAL CRISIS PLAYBOOK
+      // -----------------------------------------------------------------------
+      const card2 = document.createElement('div');
+      card2.className = 'glass-panel p-6 rounded-xl border border-borderDark shadow-lg';
+      let crisisHtml = '';
+      const crises = Array.isArray(dim2.crisis_history) ? dim2.crisis_history : [];
+      if (crises.length > 0) {
+        crisisHtml = `
+          <div class="mt-4 pt-4 border-t border-borderDark">
+            <h6 class="text-xs font-mono font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center space-x-2">
+              <span>Historical Dislocation Stress-Test (Empirical Crisis Navigation)</span>
+            </h6>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+              ${crises.map(cr => `
+                <div class="p-4 rounded-xl bg-cardDark border border-borderDark flex flex-col justify-between">
+                  <div>
+                    <div class="flex items-start justify-between gap-2 mb-2">
+                      <span class="font-bold text-white text-xs">${cr.crisis_event || 'Macro Event'}</span>
+                      ${cr.timeline ? `<span class="px-2 py-0.5 rounded-full text-xs font-mono font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/30 whitespace-nowrap">${cr.timeline}</span>` : ''}
+                    </div>
+                    ${cr.macro_shock_impact ? `<div class="text-xs text-slate-400 mb-2 leading-relaxed"><span class="text-slate-500 font-semibold">Shock:</span> ${cr.macro_shock_impact}</div>` : ''}
+                    ${cr.management_execution ? `<div class="p-2.5 rounded-lg bg-slate-900/70 border border-slate-800 text-xs text-slate-200 mb-2 leading-relaxed"><span class="text-cyan-400 font-semibold">Execution:</span> ${cr.management_execution}</div>` : ''}
+                  </div>
+                  ${cr.capital_preservation_outcome ? `<div class="text-xs text-emerald-400 pt-2 border-t border-slate-800"><span class="text-emerald-500 font-bold">Outcome:</span> ${cr.capital_preservation_outcome}</div>` : ''}
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }
+
+      card2.innerHTML = `
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center space-x-2.5">
+            <span class="w-7 h-7 rounded-lg bg-amber-500/10 text-amber-400 font-mono text-xs flex items-center justify-center font-bold border border-amber-500/30">D2</span>
+            <h5 class="font-bold text-white text-base">${dim2.title || 'Historical Crisis Playbook & Downturn Navigation'}</h5>
+          </div>
+        </div>
+        ${dim2.downturn_resilience_summary ? `
+          <div class="p-3.5 rounded-xl bg-amber-950/20 border border-amber-800/40 text-xs text-amber-200 leading-relaxed mb-4">
+            <span class="font-bold text-amber-400 mr-1">Resilience Playbook:</span> ${dim2.downturn_resilience_summary}
+          </div>
+        ` : ''}
+        ${render4Tier(dim2)}
+        ${crisisHtml}
+      `;
+      container.appendChild(card2);
+
+      // -----------------------------------------------------------------------
+      // DIMENSION 3: PROMISE VS DELIVERY AUDIT
+      // -----------------------------------------------------------------------
+      const card3 = document.createElement('div');
+      card3.className = 'glass-panel p-6 rounded-xl border border-borderDark shadow-lg';
+      let guidanceHtml = '';
+      const guidanceList = Array.isArray(dim3.guidance_vs_delivery) ? dim3.guidance_vs_delivery : [];
+      if (guidanceList.length > 0) {
+        guidanceHtml = `
+          <div class="mt-4 pt-4 border-t border-borderDark">
+            <h6 class="text-xs font-mono font-bold text-slate-400 uppercase tracking-wider mb-3">
+              Multi-Year Guidance vs Actual Reported Delivery
+            </h6>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+              ${guidanceList.map(g => `
+                <div class="p-4 rounded-xl bg-cardDark border border-borderDark flex flex-col justify-between">
+                  <div>
+                    <div class="flex items-start justify-between gap-2 mb-2">
+                      <span class="font-bold text-white text-xs">${g.parameter || 'Guidance Track'}</span>
+                      <span class="px-2 py-0.5 rounded-full text-xs font-mono font-bold ${String(g.audit_verdict || '').includes('WALK') ? 'bg-emerald-950/70 border border-emerald-800 text-emerald-400' : 'bg-amber-950/70 border border-amber-800 text-amber-400'}">
+                        ${g.audit_verdict || '[WALKED THE TALK]'}
+                      </span>
+                    </div>
+                    <div class="text-xs text-slate-400 mb-1.5"><span class="text-slate-500 font-semibold">Guidance:</span> ${g.management_guidance || 'N/A'}</div>
+                    <div class="text-xs text-slate-200 mb-2"><span class="text-cyan-400 font-semibold">Actual Delivery:</span> ${g.reported_delivery || 'N/A'}</div>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }
+
+      card3.innerHTML = `
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center space-x-2.5">
+            <span class="w-7 h-7 rounded-lg bg-purple-500/10 text-purple-400 font-mono text-xs flex items-center justify-center font-bold border border-purple-500/30">D3</span>
+            <h5 class="font-bold text-white text-base">${dim3.title || 'Promise vs Delivery Audit (3-Year Guidance Tracking)'}</h5>
+          </div>
+          <span class="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-emerald-950/70 border border-emerald-800 text-emerald-400">
+            ${dim3.credibility_verdict || 'HIGH INTEGRITY'}
+          </span>
+        </div>
+        ${dim3.verdict_justification ? `<p class="text-xs text-slate-300 leading-relaxed mb-3">${dim3.verdict_justification}</p>` : ''}
+        ${render4Tier(dim3)}
+        ${guidanceHtml}
+      `;
+      container.appendChild(card3);
+
+      // -----------------------------------------------------------------------
+      // DIMENSION 4: COMPETITOR MATRIX
+      // -----------------------------------------------------------------------
+      const card4 = document.createElement('div');
+      card4.className = 'glass-panel p-6 rounded-xl border border-borderDark shadow-lg';
+      let tableHtml = '';
+      const bTable = Array.isArray(dim4.benchmark_table) ? dim4.benchmark_table : [];
+      if (bTable.length > 0) {
+        const peersList = Array.isArray(dim4.primary_peers) ? dim4.primary_peers : ['Peer 1', 'Peer 2'];
+        tableHtml = `
+          <div class="mt-4 pt-4 border-t border-borderDark overflow-x-auto">
+            <h6 class="text-xs font-mono font-bold text-slate-400 uppercase tracking-wider mb-3">
+              Head-to-Head Listed Competitor Comparison Table
+            </h6>
+            <table class="w-full text-left text-xs">
+              <thead>
+                <tr class="border-b border-borderDark text-slate-400 font-mono">
+                  <th class="pb-2.5 pr-4">Operational Metric</th>
+                  <th class="pb-2.5 px-4 text-cyan-400 font-bold">Target Company</th>
+                  <th class="pb-2.5 px-4">${peersList[0] || 'Peer 1'}</th>
+                  <th class="pb-2.5 px-4">${peersList[1] || 'Peer 2'}</th>
+                  <th class="pb-2.5 pl-4">Analytical Commentary</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-borderDark/60">
+                ${bTable.map(row => `
+                  <tr class="hover:bg-cardDark/50 transition-colors">
+                    <td class="py-3 pr-4 font-semibold text-white">${row.metric || 'Metric'}</td>
+                    <td class="py-3 px-4 font-mono font-bold text-cyan-400 bg-cyan-950/20 rounded">${row.company || 'N/A'}</td>
+                    <td class="py-3 px-4 font-mono text-slate-300">${row.peer1 || 'N/A'}</td>
+                    <td class="py-3 px-4 font-mono text-slate-300">${row.peer2 || 'N/A'}</td>
+                    <td class="py-3 pl-4 text-slate-400 leading-relaxed">${row.commentary || ''}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        `;
+      }
+
+      card4.innerHTML = `
+        <div class="flex items-center justify-between flex-wrap gap-2 mb-3">
+          <div class="flex items-center space-x-2.5">
+            <span class="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-400 font-mono text-xs flex items-center justify-center font-bold border border-emerald-500/30">D4</span>
+            <h5 class="font-bold text-white text-base">${dim4.title || 'Head-to-Head Peer Comparison Matrix'}</h5>
+          </div>
+          ${Array.isArray(dim4.primary_peers) && dim4.primary_peers.length > 0 ? `
+            <div class="flex items-center gap-1.5 text-xs font-mono text-slate-400">
+              <span class="text-slate-500">Peers:</span>
+              ${dim4.primary_peers.map(p => `<span class="px-2 py-0.5 rounded bg-cardDark border border-borderDark text-slate-300">${p}</span>`).join('')}
+            </div>
+          ` : ''}
+        </div>
+        ${dim4.valuation_differential_rationale ? `
+          <div class="p-3.5 rounded-xl bg-purple-950/20 border border-purple-800/40 text-xs text-purple-200 leading-relaxed mb-4">
+            <span class="font-bold text-purple-400 mr-1">Valuation Differential:</span> ${dim4.valuation_differential_rationale}
+          </div>
+        ` : ''}
+        ${render4Tier(dim4)}
+        ${tableHtml}
+      `;
+      container.appendChild(card4);
     }
 
     function renderValuationChapter(val) {

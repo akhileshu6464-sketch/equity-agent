@@ -20,7 +20,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak, KeepTogether
 from reportlab.pdfgen import canvas
 
-from agents.pipeline import run_deep_institutional_pipeline, EquityAgentPipeline
+from agents.pipeline import run_deep_institutional_pipeline, EquityAgentPipeline, parse_dimension_data
 
 
 class NumberedCanvas(canvas.Canvas):
@@ -1095,10 +1095,14 @@ def main():
             st.markdown("<div class='glass-panel'>", unsafe_allow_html=True)
             st.markdown(dossier.get("gov") or dossier.get("leadership"))
             with st.expander("🔍 Explore Granular Executive Profiles, Crisis History & RPT Audit", expanded=False):
-                dim1 = a4.get("dimension1_leadership_pedigree", {})
-            dim2 = a4.get("dimension2_crisis_playbook", {})
-            dim3 = a4.get("dimension3_credibility_audit", {})
-            dim4 = a4.get("dimension4_competitor_matrix", {})
+                dim1 = parse_dimension_data(a4.get("dimension1_leadership_pedigree", {}))
+                if not isinstance(dim1, dict): dim1 = {}
+                dim2 = parse_dimension_data(a4.get("dimension2_crisis_playbook", {}))
+                if not isinstance(dim2, dict): dim2 = {}
+                dim3 = parse_dimension_data(a4.get("dimension3_credibility_audit", {}))
+                if not isinstance(dim3, dict): dim3 = {}
+                dim4 = parse_dimension_data(a4.get("dimension4_competitor_matrix", {}))
+                if not isinstance(dim4, dict): dim4 = {}
             cred_verdict = a4.get("credibility_verdict", dim3.get("credibility_verdict", "HIGH INTEGRITY"))
             
             cred_badge_class = "pill-green" if "HIGH" in cred_verdict.upper() else ("pill-yellow" if "PRAGMATIC" in cred_verdict.upper() else "pill-red")
