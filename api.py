@@ -9,8 +9,12 @@ import sys
 import logging
 from typing import Optional, Dict, Any, List
 from datetime import datetime
+from dotenv import load_dotenv
 
-from fastapi import FastAPI, HTTPException, status, Response
+# Automatically load environment variables from .env file
+load_dotenv()
+
+from fastapi import FastAPI, HTTPException, status, Response, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
@@ -141,10 +145,11 @@ def _get_cached_tickers() -> List[Dict[str, str]]:
 # -------------------------------------------------------------------------
 
 @app.get("/health", response_model=HealthResponse)
+@app.get("/api/health", response_model=HealthResponse)
 async def health_check():
     """Health check endpoint for container uptime and proxy probes."""
     return {
-        "status": "ok",
+        "status": "healthy",
         "service": "Research Beast API",
         "version": "2.0.0",
         "timestamp": datetime.utcnow().isoformat() + "Z"
@@ -355,16 +360,34 @@ if os.path.isdir(STATIC_DIR):
 
 
 @app.get("/")
-async def root():
-    """Serves the single-page dark UI frontend application."""
+async def root(request: Request):
+    """
+    Root endpoint.
+    - If requested by a browser (Accept contains text/html), serves the dark UI SPA (static/index.html).
+    - Otherwise (automated container probes, Render health checks, curl, API clients),
+      returns {"status": "healthy", "service": "Research Beast API"} so Render's automated health checks pass immediately on boot.
+    """
+    accept = request.headers.get("accept", "").lower()
+    index_file = os.path.join(STATIC_DIR, "index.html")
+
+    if "text/html" in accept and os.path.isfile(index_file):
+        return FileResponse(index_file)
+
+    return {
+        "status": "healthy",
+        "service": "Research Beast API",
+        "version": "2.0.0",
+        "timestamp": datetime.utcnow().isoformat() + "Z"
+    }
+
+
+@app.get("/app")
+async def serve_app():
+    """Direct route to serve the single-page dark UI application."""
     index_file = os.path.join(STATIC_DIR, "index.html")
     if os.path.isfile(index_file):
         return FileResponse(index_file)
-    return {
-        "message": "Research Beast API running.",
-        "docs_url": "/docs",
-        "health_url": "/health"
-    }
+    raise HTTPException(status_code=404, detail="Frontend index.html not found")
 
 
 if __name__ == "__main__":

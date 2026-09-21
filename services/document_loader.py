@@ -22,9 +22,45 @@ import requests
 from bs4 import BeautifulSoup
 
 try:
+    import pymupdf
+except ImportError:
+    pymupdf = None
+
+try:
     import pypdf
 except ImportError:
     pypdf = None
+
+
+def _extract_pdf_pages_text(content_bytes: bytes, start_page: int = 0, max_pages: int = 5) -> str:
+    """Extract text from raw PDF bytes using pymupdf if available, falling back to pypdf."""
+    text_chunks: List[str] = []
+    if pymupdf is not None:
+        try:
+            doc = pymupdf.open(stream=content_bytes, filetype="pdf")
+            end_page = min(len(doc), start_page + max_pages)
+            for p_no in range(start_page, end_page):
+                text_chunks.append(doc[p_no].get_text())
+            if text_chunks:
+                return "\n".join(text_chunks)
+        except Exception as exc:
+            logger.debug(f"pymupdf extraction failed: {exc}")
+
+    if pypdf is not None:
+        try:
+            reader = pypdf.PdfReader(io.BytesIO(content_bytes))
+            end_page = min(len(reader.pages), start_page + max_pages)
+            for p_no in range(start_page, end_page):
+                txt = reader.pages[p_no].extract_text()
+                if txt:
+                    text_chunks.append(txt)
+            if text_chunks:
+                return "\n".join(text_chunks)
+        except Exception as exc:
+            logger.debug(f"pypdf extraction failed: {exc}")
+
+    return ""
+
 
 logger = logging.getLogger("EquityPipeline.DocumentLoader")
 
@@ -319,7 +355,7 @@ class DocumentLoader:
             "source": "Not Disclosed in Management Filings"
         }
 
-        if not soup or not pypdf:
+        if not soup or (not pymupdf and not pypdf):
             return default_rating
 
         doc_sec = soup.find("section", id="documents")
@@ -348,8 +384,7 @@ class DocumentLoader:
         try:
             resp = self._session.get(rating_url, timeout=10)
             if resp.status_code == 200 and len(resp.content) > 1000:
-                reader = pypdf.PdfReader(io.BytesIO(resp.content))
-                first_page = reader.pages[0].extract_text() if len(reader.pages) > 0 else ""
+                first_page = _extract_pdf_pages_text(resp.content, start_page=0, max_pages=1)
                 clean_text = _clean_ascii(first_page)
                 cleaned = self.clean_disclaimer_boilerplate(clean_text)
 
@@ -397,7 +432,7 @@ class DocumentLoader:
             "source": "Not Disclosed in Management Filings"
         }
 
-        if not soup or not pypdf:
+        if not soup or (not pymupdf and not pypdf):
             return default_concall
 
         doc_sec = soup.find("section", id="documents")
@@ -418,12 +453,10 @@ class DocumentLoader:
         try:
             resp = self._session.get(concall_url, timeout=12)
             if resp.status_code == 200 and len(resp.content) > 1000:
-                reader = pypdf.PdfReader(io.BytesIO(resp.content))
-                num_pages = len(reader.pages)
                 # Combine pages 2, 3, 4 (typically management remarks)
-                combined_pages = ""
-                for p_idx in range(1, min(5, num_pages)):
-                    combined_pages += reader.pages[p_idx].extract_text() + "\n"
+                combined_pages = _extract_pdf_pages_text(resp.content, start_page=1, max_pages=4)
+                if not combined_pages.strip():
+                    combined_pages = _extract_pdf_pages_text(resp.content, start_page=0, max_pages=3)
 
                 clean_text = _clean_ascii(combined_pages)
                 cleaned = self.clean_disclaimer_boilerplate(clean_text)
