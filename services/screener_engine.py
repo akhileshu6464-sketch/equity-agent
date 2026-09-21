@@ -18,6 +18,7 @@ except ImportError:
     yf = None
 
 from services.financial_data import FinancialDataService, extract_pure_symbol
+from utils.symbol_resolver import resolve_ticker
 
 logger = logging.getLogger("ResearchBeast.ScreenerEngine")
 
@@ -72,7 +73,8 @@ class ScreenerEngine:
         Main entrypoint. Ingests raw data, computes ratios and historical P&L,
         and constructs the context-locked financial payload.
         """
-        clean_sym = extract_pure_symbol(symbol)
+        resolved = resolve_ticker(symbol)
+        clean_sym = extract_pure_symbol(resolved) or resolved
         raw_symbol = clean_sym.replace(".NS", "").replace(".BO", "").strip().upper()
 
         # 1. Ingest via yfinance defensively

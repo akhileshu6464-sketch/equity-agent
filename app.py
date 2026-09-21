@@ -17,6 +17,7 @@ import numpy as np
 from services.financial_data import extract_pure_symbol
 from services.screener_engine import ScreenerEngine
 from agents.editorial_agent import EditorialAgent
+from utils.symbol_resolver import resolve_ticker, resolve_ticker_info
 from pdf_generator import build_institutional_pdf
 
 # -------------------------------------------------------------------------
@@ -457,6 +458,8 @@ if "editorial_memo" not in st.session_state:
     st.session_state["editorial_memo"] = None
 if "active_symbol" not in st.session_state:
     st.session_state["active_symbol"] = ""
+if "resolved_from" not in st.session_state:
+    st.session_state["resolved_from"] = ""
 
 
 # -------------------------------------------------------------------------
@@ -469,7 +472,7 @@ with col_search:
     ticker_input = st.text_input(
         "Search Indian Stock / Ticker:",
         value=st.session_state.get("active_symbol", ""),
-        placeholder="Enter symbol (e.g., VINATIORGA, TATAMOTORS, HDFCBANK, CROMPTON, RELIANCE)...",
+        placeholder="Enter symbol or company name (e.g., vinati organics, tata motors, HDFCBANK, CROMPTON)...",
         label_visibility="collapsed"
     )
 
@@ -483,7 +486,7 @@ st.markdown("<div style='font-size: 0.8rem; color: #64748b; margin-top: -0.4rem;
 
 
 # -------------------------------------------------------------------------
-# Trigger Pipeline Analysis
+# Trigger Pipeline Analysis with Auto-Symbol Resolution
 # -------------------------------------------------------------------------
 target_symbol = None
 if analyze_click and ticker_input.strip():
@@ -493,13 +496,21 @@ elif st.session_state.get("screener_data") is None and not ticker_input.strip():
     target_symbol = "VINATIORGA.NS"
 
 if target_symbol:
-    clean_sym = extract_pure_symbol(target_symbol)
-    if not clean_sym:
-        clean_sym = f"{target_symbol.upper().replace('.NS', '').replace('.BO', '')}.NS"
+    raw_user_input = target_symbol.strip()
+    resolved_sym, matched_name = resolve_ticker_info(raw_user_input)
+    clean_sym = extract_pure_symbol(resolved_sym) or resolved_sym
 
     st.session_state["active_symbol"] = clean_sym
+    is_resolved = clean_sym.upper() != raw_user_input.upper()
+    st.session_state["resolved_from"] = raw_user_input if is_resolved else ""
 
-    with st.spinner(f"Extracting fundamentals and computing deterministic ratios for {clean_sym}..."):
+    # Display clean status message indicating security matching
+    if is_resolved:
+        status_msg = f"Analyzing {clean_sym} (resolved from '{raw_user_input}')..."
+    else:
+        status_msg = f"Extracting fundamentals and computing deterministic ratios for {clean_sym}..."
+
+    with st.spinner(status_msg):
         try:
             # 1. Deterministic Calculation
             scr_data = ScreenerEngine.get_screener_data(clean_sym)
@@ -564,6 +575,15 @@ if data:
         </div>
     </div>
     """, unsafe_allow_html=True)
+
+    # Resolved query notice if applicable
+    resolved_from = st.session_state.get("resolved_from", "")
+    if resolved_from:
+        st.markdown(
+            f'<div style="font-size: 0.84rem; color: #38bdf8; margin-top: -0.75rem; margin-bottom: 1rem;">'
+            f'🔍 Matched security for: <strong>"{resolved_from}"</strong></div>',
+            unsafe_allow_html=True
+        )
 
     # Verification Banner
     st.markdown(f"""
