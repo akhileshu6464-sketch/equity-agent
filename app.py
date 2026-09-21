@@ -1,170 +1,370 @@
 """
-Research Beast — Investment Thesis
-Clean editorial investment blog format serving institutional-grade research memos.
-Powered by the 7-Agent Autonomous Equity Analysis Engine.
+Research Beast — Screener Financial Intelligence Dashboard
+100% deterministic mathematical calculations and multi-year financial modeling.
+Separates deterministic quantitative figures from context-locked LLM editorial analysis.
 """
 
 import os
 import io
 import re
 import json
+import logging
+from typing import Optional, Dict, Any, List, Tuple
 import streamlit as st
-import yfinance as yf
-from typing import Dict, Any, Optional
+import pandas as pd
+import numpy as np
 
-from agents.pipeline import run_deep_institutional_pipeline
-from services.financial_data import extract_pure_symbol, FinancialDataService
+from services.financial_data import extract_pure_symbol
+from services.screener_engine import ScreenerEngine
+from agents.editorial_agent import EditorialAgent
 from pdf_generator import build_institutional_pdf
 
 # -------------------------------------------------------------------------
-# Page Setup: Clean Editorial Width
+# Page Configuration
 # -------------------------------------------------------------------------
 st.set_page_config(
-    page_title="Research Beast — Investment Thesis",
-    page_icon="📑",
-    layout="centered",
+    page_title="Research Beast — Screener Financial Intelligence",
+    page_icon="📈",
+    layout="wide",
     initial_sidebar_state="collapsed",
 )
 
 # -------------------------------------------------------------------------
-# Custom Editorial / Blog Typography CSS
+# Screener.in-Style High-Density Typography & Custom CSS
 # -------------------------------------------------------------------------
 st.markdown("""
 <style>
-    /* Hide top Streamlit decoration header, toolbar, & deploy buttons */
+    /* Suppress Streamlit chrome, deploy buttons, toolbar, and footer */
     header[data-testid="stHeader"],
     .stAppDeployButton,
     footer,
     #MainMenu,
-    [data-testid="manage-app-button"] {
+    [data-testid="manage-app-button"],
+    .viewerBadge {
         display: none !important;
         visibility: hidden !important;
     }
 
-    /* Document container styled like an editorial publication */
+    /* Container max-width & padding for desktop & mobile */
     .block-container {
-        max-width: 780px !important;
-        padding-top: 3.5rem !important;
+        max-width: 1140px !important;
+        padding-top: 2.2rem !important;
         padding-bottom: 5rem !important;
     }
 
-    /* Script Title & Live Price Header */
-    .memo-header {
-        border-bottom: 1px solid #2d3748;
-        padding-bottom: 1.5rem;
-        margin-bottom: 2.5rem;
+    /* Screener Top Header */
+    .company-header {
+        border-bottom: 1px solid #1e293b;
+        padding-bottom: 1.25rem;
+        margin-bottom: 1.5rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+    .company-name {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-size: 2.15rem;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        color: #f8fafc;
+        margin: 0;
+        line-height: 1.2;
+    }
+    .company-badges {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        margin-top: 0.45rem;
+        flex-wrap: wrap;
+    }
+    .badge-ticker {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: #38bdf8;
+        background: rgba(56, 189, 248, 0.12);
+        padding: 3px 8px;
+        border-radius: 4px;
+        border: 1px solid rgba(56, 189, 248, 0.25);
+    }
+    .badge-sector {
+        font-size: 0.82rem;
+        color: #94a3b8;
+        background: #1e293b;
+        padding: 3px 8px;
+        border-radius: 4px;
+    }
+    .price-box {
+        text-align: right;
+    }
+    .live-price {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 1.95rem;
+        font-weight: 700;
+        color: #4ade80;
+        line-height: 1.2;
+    }
+    .price-range {
+        font-size: 0.85rem;
+        color: #94a3b8;
+        margin-top: 0.2rem;
+    }
+
+    /* Screener "About the Company" Box */
+    .about-card {
+        background: #0f172a;
+        border: 1px solid #1e293b;
+        border-radius: 8px;
+        padding: 1.35rem 1.6rem;
+        margin-bottom: 1.75rem;
+    }
+    .about-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.85rem;
+        border-bottom: 1px solid #1e293b;
+        padding-bottom: 0.6rem;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+    .about-title {
+        font-size: 0.88rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #94a3b8;
+    }
+    .exchange-links {
+        display: flex;
+        gap: 0.75rem;
+    }
+    .exchange-link {
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: #38bdf8;
+        text-decoration: none;
+        background: rgba(56, 189, 248, 0.08);
+        border: 1px solid rgba(56, 189, 248, 0.22);
+        padding: 2px 8px;
+        border-radius: 4px;
+        transition: all 0.15s ease;
+    }
+    .exchange-link:hover {
+        background: rgba(56, 189, 248, 0.2);
+        color: #7dd3fc;
+        text-decoration: none;
+    }
+    .about-overview {
+        font-size: 0.95rem;
+        line-height: 1.65;
+        color: #cbd5e1;
+        margin-bottom: 1rem;
+    }
+    .key-points-list {
+        list-style: none;
+        padding-left: 0;
+        margin: 0;
+    }
+    .key-point-item {
+        font-size: 0.92rem;
+        line-height: 1.6;
+        color: #cbd5e1;
+        margin-bottom: 0.45rem;
+        display: flex;
+        gap: 0.5rem;
+    }
+    .key-point-bullet {
+        color: #38bdf8;
+        font-weight: bold;
+    }
+    .key-point-category {
+        font-weight: 600;
+        color: #f1f5f9;
+    }
+
+    /* Screener Ratio Grid */
+    .ratio-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0.85rem;
+        margin-bottom: 1.75rem;
+    }
+    @media (max-width: 860px) {
+        .ratio-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+    .ratio-card {
+        background: #0f172a;
+        border: 1px solid #1e293b;
+        border-radius: 6px;
+        padding: 0.85rem 1rem;
         display: flex;
         justify-content: space-between;
         align-items: baseline;
     }
-    .company-title {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        font-size: 2.1rem;
-        font-weight: 700;
-        letter-spacing: -0.02em;
-        color: #f7fafc;
-        margin: 0;
+    .ratio-label {
+        font-size: 0.84rem;
+        color: #94a3b8;
+        font-weight: 500;
     }
-    .company-sub {
-        font-size: 0.95rem;
-        color: #718096;
-        margin-top: 0.35rem;
-    }
-    .price-tag {
+    .ratio-value {
         font-family: 'JetBrains Mono', monospace;
-        font-size: 1.35rem;
-        font-weight: 600;
-        color: #48bb78;
-        margin: 0;
-        text-align: right;
+        font-size: 0.98rem;
+        font-weight: 700;
+        color: #f8fafc;
     }
-    .price-sub {
-        font-size: 0.8rem;
-        color: #718096;
-        margin-top: 0.2rem;
-        text-align: right;
+    .ratio-value-highlight {
+        color: #38bdf8;
+    }
+    .ratio-value-green {
+        color: #4ade80;
     }
 
-    /* Blog-style typography for the thesis body */
-    .thesis-body h2, .block-container h2 {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        font-size: 1.45rem;
-        font-weight: 600;
-        color: #e2e8f0;
-        margin-top: 2.2rem;
-        margin-bottom: 0.85rem;
-        border-bottom: 1px solid #1a202c;
-        padding-bottom: 0.45rem;
+    /* Compounded Growth Section */
+    .growth-container {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1.25rem;
+        margin-bottom: 1.75rem;
     }
-    .thesis-body h3, .block-container h3 {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        font-size: 1.15rem;
-        font-weight: 600;
-        color: #cbd5e0;
-        margin-top: 1.4rem;
-        margin-bottom: 0.5rem;
+    @media (max-width: 680px) {
+        .growth-container {
+            grid-template-columns: 1fr;
+        }
     }
-    .thesis-body p, .block-container p {
-        font-family: "Georgia", Cambria, serif;
-        font-size: 1.12rem;
-        line-height: 1.85;
-        color: #cbd5e0;
-        margin-bottom: 1.5rem;
+    .growth-card {
+        background: #0f172a;
+        border: 1px solid #1e293b;
+        border-radius: 8px;
+        padding: 1.1rem 1.35rem;
     }
-    .thesis-body ul, .block-container ul {
-        font-family: "Georgia", Cambria, serif;
-        font-size: 1.08rem;
-        line-height: 1.8;
-        color: #cbd5e0;
-        margin-bottom: 1.5rem;
-        padding-left: 1.25rem;
-    }
-    .thesis-body li, .block-container li {
-        margin-bottom: 0.6rem;
-    }
-    .thesis-body blockquote, .block-container blockquote {
-        border-left: 3px solid #4a5568;
-        padding-left: 1rem;
-        margin-left: 0;
-        color: #a0aec0;
-        font-style: italic;
-    }
-
-    /* Clean metadata pills */
-    .rating-pill {
-        display: inline-block;
-        padding: 3px 10px;
-        border-radius: 4px;
-        font-size: 0.82rem;
+    .growth-header {
+        font-size: 0.86rem;
         font-weight: 700;
         letter-spacing: 0.05em;
         text-transform: uppercase;
+        color: #94a3b8;
+        border-bottom: 1px solid #1e293b;
+        padding-bottom: 0.5rem;
+        margin-bottom: 0.75rem;
     }
-    .rating-pill-green {
-        background: rgba(72, 187, 120, 0.15);
-        color: #48bb78;
-        border: 1px solid rgba(72, 187, 120, 0.35);
+    .growth-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 0.35rem 0;
+        font-size: 0.9rem;
+        color: #cbd5e1;
     }
-    .rating-pill-yellow {
-        background: rgba(236, 201, 75, 0.15);
-        color: #ecc94b;
-        border: 1px solid rgba(236, 201, 75, 0.35);
+    .growth-rate {
+        font-family: 'JetBrains Mono', monospace;
+        font-weight: 600;
+        color: #4ade80;
     }
-    .rating-pill-red {
-        background: rgba(245, 101, 101, 0.15);
-        color: #f56565;
-        border: 1px solid rgba(245, 101, 101, 0.35);
+    .growth-rate-neg {
+        font-family: 'JetBrains Mono', monospace;
+        font-weight: 600;
+        color: #f87171;
+    }
+
+    /* Screener Financial Statement Table */
+    .section-title {
+        font-size: 1.2rem;
+        font-weight: 700;
+        color: #f1f5f9;
+        margin-top: 2rem;
+        margin-bottom: 0.85rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+    }
+    .section-subtitle {
+        font-size: 0.8rem;
+        font-weight: normal;
+        color: #64748b;
+    }
+    .screener-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 2rem;
+        font-size: 0.9rem;
+        background: #0f172a;
+        border-radius: 6px;
+        overflow: hidden;
+        border: 1px solid #1e293b;
+    }
+    .screener-table th {
+        background: #1e293b;
+        color: #94a3b8;
+        font-weight: 600;
+        text-align: right;
+        padding: 10px 14px;
+        border-bottom: 1px solid #334155;
+        font-size: 0.84rem;
+        letter-spacing: 0.03em;
+    }
+    .screener-table th:first-child {
+        text-align: left;
+    }
+    .screener-table td {
+        padding: 9px 14px;
+        text-align: right;
+        border-bottom: 1px solid #1e293b;
+        color: #cbd5e1;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.88rem;
+    }
+    .screener-table td:first-child {
+        text-align: left;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-weight: 500;
+        color: #f1f5f9;
+    }
+    .screener-table tr:hover td {
+        background: rgba(30, 41, 59, 0.4);
+    }
+    .screener-table tr.highlight-row td {
+        background: rgba(56, 189, 248, 0.05);
+        font-weight: 600;
+    }
+
+    /* Editorial Memo Callouts */
+    .pros-box {
+        background: rgba(34, 197, 94, 0.06);
+        border: 1px solid rgba(34, 197, 94, 0.25);
+        border-left: 4px solid #22c55e;
+        border-radius: 6px;
+        padding: 1rem 1.25rem;
+        margin-bottom: 1.25rem;
+    }
+    .cons-box {
+        background: rgba(239, 68, 68, 0.06);
+        border: 1px solid rgba(239, 68, 68, 0.25);
+        border-left: 4px solid #ef4444;
+        border-radius: 6px;
+        padding: 1rem 1.25rem;
+        margin-bottom: 1.25rem;
+    }
+    .memo-card {
+        background: #0f172a;
+        border: 1px solid #1e293b;
+        border-radius: 8px;
+        padding: 1.5rem 1.8rem;
+        margin-top: 1.5rem;
     }
 
     /* Verification Badge */
     .audit-badge {
-        font-family: monospace;
-        font-size: 0.8rem;
-        color: #718096;
-        padding: 6px 12px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.78rem;
+        color: #94a3b8;
+        padding: 5px 12px;
         border-radius: 6px;
-        background: #111622;
-        border: 1px solid #1f293d;
+        background: #0f172a;
+        border: 1px solid #1e293b;
         display: inline-flex;
         align-items: center;
         gap: 6px;
@@ -175,349 +375,437 @@ st.markdown("""
 
 
 # -------------------------------------------------------------------------
-# Helper: Live Price Retrieval
+# Helper Functions: Formatters
 # -------------------------------------------------------------------------
-def get_clean_price(ticker: str, fallback_price: float = 0.0) -> str:
-    """Fetches live trading price with currency formatting defensively."""
-    try:
-        t = yf.Ticker(ticker)
-        fast_info = getattr(t, "fast_info", None)
-        price = getattr(fast_info, "last_price", None)
-        currency = getattr(fast_info, "currency", "INR") or "INR"
-        
-        if price is None or price <= 0:
-            hist = t.history(period="1d")
-            if not hist.empty and "Close" in hist:
-                price = float(hist["Close"].iloc[-1])
-                
-        if price is not None and price > 0:
-            symbol = "₹" if currency == "INR" else "$"
-            return f"{symbol}{price:,.2f}"
-    except Exception:
-        pass
-        
-    if fallback_price > 0:
-        return f"₹{fallback_price:,.2f}"
-    return "Price Unavailable"
+def fmt_cr(val: float) -> str:
+    """Formats values in ₹ Crores with comma separators."""
+    if val is None or val == 0.0:
+        return "₹ 0"
+    return f"₹ {val:,.2f} Cr" if val >= 100 else f"₹ {val:,.2f} Cr"
 
 
-# -------------------------------------------------------------------------
-# Helper: Synthesize Full Editorial Thesis from Pipeline Dossier
-# -------------------------------------------------------------------------
-def compile_editorial_thesis(dossier: Dict[str, Any]) -> str:
+def fmt_curr(val: float) -> str:
+    """Formats share price in ₹."""
+    if val is None or val == 0.0:
+        return "₹ 0.00"
+    return f"₹ {val:,.2f}"
+
+
+def fmt_pct(val: Optional[float]) -> str:
+    """Formats percentage or returns N/A."""
+    if val is None:
+        return "N/A"
+    return f"{val:+.1f} %" if val != 0 else "0.0 %"
+
+
+def build_screener_pl_html(pl_rows: list) -> str:
     """
-    Transforms the 7-agent deep institutional dossier into clean,
-    publication-grade editorial markdown matching the 4 key thesis sections:
-    1. Core Investment Summary
-    2. Structural Competitive Advantages
-    3. Growth Catalysts & CapEx Visibility
-    4. Critical Risks & What Could Break the Thesis
+    Constructs a Screener.in-style horizontal multi-year Profit & Loss HTML table
+    with Fiscal Years as columns and statement line items as rows.
     """
-    company_name = dossier.get("company_name", dossier.get("ticker", ""))
-    ticker = dossier.get("ticker", "")
-    rating = dossier.get("institutional_rating", "BUY / ACCUMULATE")
-    metrics = dossier.get("engine_metrics", {})
-    disclosures = dossier.get("primary_disclosures", {})
-    portfolio = disclosures.get("product_portfolio", {})
-    rating_info = disclosures.get("credit_rating", {})
-    concall_info = disclosures.get("concall_transcript", {})
-    val = dossier.get("agent_6", {})
-    moat = dossier.get("agent_1", {})
-    moat_md = dossier.get("moat_markdown", "")
-    forensic_md = dossier.get("forensics_markdown", "")
-    val_md = dossier.get("valuation_markdown", "")
-    is_bfsi = dossier.get("is_bfsi", False)
+    # Filter out empty zero years
+    valid_rows = [r for r in pl_rows if not (r.get("sales", 0.0) == 0.0 and r.get("net_profit", 0.0) == 0.0)]
+    if not valid_rows:
+        return "<p style='color: #94a3b8;'>Historical multi-year financial records not available.</p>"
 
-    # ---------------------------------------------------------
-    # 1. Core Investment Summary
-    # ---------------------------------------------------------
-    summary_paras = []
-    overview = portfolio.get("overview", "")
-    if overview and "is an active listed enterprise" not in overview:
-        summary_paras.append(overview.strip())
+    years = [str(r.get("year", "")) for r in valid_rows]
 
-    val_summary = val.get("summary", "")
-    if not val_summary and val_md:
-        val_summary = val_md.split("\n\n")[0].strip()
-    if val_summary:
-        summary_paras.append(val_summary)
-
-    # If concise, append reverse DCF / valuation context
-    hurdle = dossier.get("implied_growth_pct", "10.0%")
-    wacc_pct = metrics.get("wacc_pct") or dossier.get("wacc_pct") or 11.5
-    pe = metrics.get("pe_ratio") or dossier.get("trailing_pe", 0.0)
-    pe_str = f"trading at {pe:.1f}x trailing P/E" if pe and pe > 0 else "at current market levels"
-    summary_paras.append(
-        f"At current market valuations, the reverse DCF indicates an implied long-term free cash flow growth hurdle of **{hurdle}** against a dynamic WACC hurdle rate of **{wacc_pct:.2f}%**, reflecting high-probability execution across core product verticals and disciplined capital allocation."
-    )
-    core_summary = "\n\n".join(summary_paras)
-
-    # ---------------------------------------------------------
-    # 2. Structural Competitive Advantages
-    # ---------------------------------------------------------
-    advantages = []
-    dim_keys = [
-        "dimension_1", "dimension_2", "dimension_3", "dimension_4",
-        "dimension1_pricing_power", "dimension2_cost_advantage",
-        "dimension3_switching_costs", "dimension4_scale_network"
+    # Metrics definition: (Label, key, is_percentage, is_highlight)
+    metrics_def = [
+        ("Sales", "sales", False, False),
+        ("Expenses", "expenses", False, False),
+        ("Operating Profit", "op_profit", False, True),
+        ("OPM %", "opm_pct", True, False),
+        ("Interest", "interest", False, False),
+        ("Net Profit", "net_profit", False, True),
+        ("EPS in Rs", "eps", False, False),
     ]
-    for d_key in dim_keys:
-        dim = moat.get(d_key)
-        if isinstance(dim, dict):
-            name = dim.get("name") or dim.get("title") or d_key.replace("dimension_", "Pillar ").replace("_", " ").title()
-            body = dim.get("narrative_prose") or dim.get("trajectory_and_metrics") or dim.get("operational_mechanics_and_drivers") or ""
-            if body:
-                advantages.append(f"* **{name}:** {body[:320].strip()}...")
 
-    if not advantages and moat_md:
-        moat_paragraphs = [p.strip() for p in moat_md.split("\n\n") if len(p.strip()) > 80]
-        default_titles = [
-            "Feedstock Integration & Cost Leadership",
-            "Global Market Hegemony & Pricing Power",
-            "High Customer Switching Costs & Qualification Cycles",
-            "Capital Allocation Discipline & Economic Profit Spread"
-        ]
-        for i, p in enumerate(moat_paragraphs[:4]):
-            t = default_titles[i] if i < len(default_titles) else f"Competitive Moat Characteristic {i+1}"
-            advantages.append(f"* **{t}:** {p[:320].strip()}...")
+    header_cols = "".join([f"<th>{y}</th>" for y in years])
+    html = [
+        '<table class="screener-table">',
+        f"<thead><tr><th>Line Item (₹ Cr)</th>{header_cols}</tr></thead>",
+        "<tbody>"
+    ]
 
-    advantages_text = "\n".join(advantages) if advantages else "* **Market Leadership:** Sustained competitive dominance supported by high operating barriers."
-
-    # ---------------------------------------------------------
-    # 3. Growth Catalysts & CapEx Visibility
-    # ---------------------------------------------------------
-    catalysts = []
-    guidance = concall_info.get("guidance_points", [])
-    if guidance and guidance != ["Not Disclosed in Management Filings"]:
-        for g in guidance[:3]:
-            catalysts.append(f"* **Management Guidance:** {g.strip()}")
-
-    remarks = concall_info.get("management_remarks", "")
-    if remarks and remarks != "Not Disclosed in Management Filings":
-        # Extract clean paragraph without operator intro
-        clean_rem = re.sub(r"(?i)^.*?earnings\s+conference\s+call.*?(?:management:|remarks:)", "", remarks, flags=re.DOTALL).strip()
-        if not clean_rem:
-            clean_rem = remarks.strip()
-        catalysts.append(f"* **Concall Transcript Extract:** {clean_rem[:340].strip()}...")
-
-    announcements = disclosures.get("corporate_announcements", [])
-    for a in announcements[:2]:
-        caption = a.get("caption", "")
-        dt = a.get("date", "")
-        if caption:
-            catalysts.append(f"* **Regulatory Filing ({dt}):** {caption}")
-
-    if not catalysts:
-        catalysts.append(
-            "Commercialization of brownfield expansion projects and expansion into adjacent derivatives provide high revenue visibility heading into the subsequent operating cycles."
-        )
-
-    growth_text = "\n\n".join(catalysts)
-
-    # ---------------------------------------------------------
-    # 4. Critical Risks & What Could Break the Thesis
-    # ---------------------------------------------------------
-    risks = []
-    invalidation = val.get("invalidation_triggers", [])
-    if invalidation:
-        for inv in invalidation[:3]:
-            if isinstance(inv, dict):
-                trig = inv.get("trigger", "Operational Headwind")
-                cons = inv.get("consequence", "Thesis impairment")
-                risks.append(f"* **{trig}:** {cons}")
+    for label, key, is_pct, is_hl in metrics_def:
+        row_cls = "highlight-row" if is_hl else ""
+        row_cells = [f"<td>{label}</td>"]
+        for r in valid_rows:
+            val = r.get(key, 0.0)
+            if is_pct:
+                txt = f"{val:.1f}%"
+            elif key == "eps":
+                txt = f"{val:,.2f}"
             else:
-                risks.append(f"* **Key Risk Factor:** {str(inv)}")
+                txt = f"{val:,.1f}"
+            row_cells.append(f"<td>{txt}</td>")
+        html.append(f"<tr class='{row_cls}'>{''.join(row_cells)}</tr>")
 
-    if not risks and forensic_md:
-        forensic_paras = [p.strip() for p in forensic_md.split("\n\n") if len(p.strip()) > 80]
-        risk_titles = [
-            "Feedstock / Raw Material Price Volatility",
-            "Export Market Softness & Customer Concentration",
-            "Working Capital Cycle Elongation"
-        ]
-        for i, p in enumerate(forensic_paras[:3]):
-            t = risk_titles[i] if i < len(risk_titles) else f"Risk Consideration {i+1}"
-            risks.append(f"* **{t}:** {p[:280].strip()}...")
-
-    risks_text = "\n".join(risks) if risks else "* **Margin Volatility:** Sustained raw material cost inflation without pass-through clauses represents a primary thesis impairment risk."
-
-    # Assemble thesis document
-    return f"""## Core Investment Summary
-{core_summary}
-
-## Structural Competitive Advantages
-{advantages_text}
-
-## Growth Catalysts & CapEx Visibility
-{growth_text}
-
-## Critical Risks & What Could Break the Thesis
-{risks_text}"""
+    html.append("</tbody></table>")
+    return "\n".join(html)
 
 
 # -------------------------------------------------------------------------
 # Session State Initialization
 # -------------------------------------------------------------------------
-if "memo_data" not in st.session_state:
-    st.session_state["memo_data"] = None
+if "screener_data" not in st.session_state:
+    st.session_state["screener_data"] = None
+if "about_data" not in st.session_state:
+    st.session_state["about_data"] = None
+if "editorial_memo" not in st.session_state:
+    st.session_state["editorial_memo"] = None
+if "active_symbol" not in st.session_state:
+    st.session_state["active_symbol"] = ""
 
 
 # -------------------------------------------------------------------------
-# 1. Search Bar Interface
+# Search & Quick Benchmark Bar
 # -------------------------------------------------------------------------
-col1, col2 = st.columns([4, 1])
-with col1:
+st.markdown("### 📈 Research Beast — Screener Financial Intelligence")
+
+col_search, col_btn = st.columns([4, 1])
+with col_search:
     ticker_input = st.text_input(
-        "Enter Ticker (e.g., VINATIORGA.NS, HDFCBANK.NS)",
-        value="",
-        placeholder="TCS.NS, INFY.NS, CROMPTON, VINATIORGA..."
+        "Search Indian Stock / Ticker:",
+        value=st.session_state.get("active_symbol", ""),
+        placeholder="Enter symbol (e.g., VINATIORGA, TATAMOTORS, HDFCBANK, CROMPTON, RELIANCE)...",
+        label_visibility="collapsed"
     )
-with col2:
-    st.write("")  # Spacer
-    st.write("")
-    analyze_btn = st.button("Generate Memo", use_container_width=True)
+
+with col_btn:
+    analyze_click = st.button("Audit Stock", use_container_width=True, type="primary")
+
+# Quick Benchmark Chips
+st.markdown("<div style='font-size: 0.8rem; color: #64748b; margin-top: -0.4rem; margin-bottom: 1.2rem;'>Quick Select: "
+            "<strong>VINATIORGA</strong> • <strong>TATAMOTORS</strong> • <strong>HDFCBANK</strong> • <strong>CROMPTON</strong> • <strong>RELIANCE</strong> • <strong>INFY</strong></div>",
+            unsafe_allow_html=True)
 
 
 # -------------------------------------------------------------------------
-# Pipeline Orchestration & Memo Generation
+# Trigger Pipeline Analysis
 # -------------------------------------------------------------------------
-if analyze_btn and ticker_input.strip():
-    raw_input = ticker_input.strip()
-    clean_ticker = extract_pure_symbol(raw_input)
-    if not clean_ticker:
-        clean_ticker = f"{raw_input.upper().replace('.NS', '').replace('.BO', '')}.NS"
+target_symbol = None
+if analyze_click and ticker_input.strip():
+    target_symbol = ticker_input.strip()
+elif st.session_state.get("screener_data") is None and not ticker_input.strip():
+    # Default to VINATIORGA on initial fresh landing
+    target_symbol = "VINATIORGA.NS"
 
-    with st.spinner(f"Compiling institutional thesis for {clean_ticker}..."):
+if target_symbol:
+    clean_sym = extract_pure_symbol(target_symbol)
+    if not clean_sym:
+        clean_sym = f"{target_symbol.upper().replace('.NS', '').replace('.BO', '')}.NS"
+
+    st.session_state["active_symbol"] = clean_sym
+
+    with st.spinner(f"Extracting fundamentals and computing deterministic ratios for {clean_sym}..."):
         try:
-            # 1. Run 7-Agent Institutional Pipeline
-            dossier = run_deep_institutional_pipeline(clean_ticker, force_refresh=False)
-            
-            # 2. Extract Company Name & Live Price
-            company_name = dossier.get("company_name", clean_ticker)
-            price_fallback = dossier.get("current_price", 0.0)
-            price_display = get_clean_price(clean_ticker, fallback_price=price_fallback)
-            
-            # 3. Synthesize Editorial Thesis
-            thesis_markdown = compile_editorial_thesis(dossier)
-            
-            # 4. Rating & Verification Score
-            rating = dossier.get("institutional_rating", "BUY / ACCUMULATE")
-            audit_score = dossier.get("audit_score", 98.0)
-            
-            # Store in session state for persistence across re-renders
-            st.session_state["memo_data"] = {
-                "clean_ticker": clean_ticker,
-                "company_name": company_name,
-                "price_display": price_display,
-                "thesis_markdown": thesis_markdown,
-                "dossier": dossier,
-                "rating": rating,
-                "audit_score": audit_score
-            }
+            # 1. Deterministic Calculation
+            scr_data = ScreenerEngine.get_screener_data(clean_sym)
+            st.session_state["screener_data"] = scr_data
+
+            # 2. Screener "About the Company" Synthesis
+            agent = EditorialAgent()
+            about_data = agent.generate_screener_about(
+                summary_text=scr_data["raw_summary"],
+                company_name=scr_data["company_name"],
+                sector=scr_data["sector"],
+                industry=scr_data["industry"]
+            )
+            st.session_state["about_data"] = about_data
+
+            # 3. Qualitative Context-Locked Editorial Memo
+            memo = agent.generate_editorial_memo(scr_data)
+            st.session_state["editorial_memo"] = memo
+
         except Exception as exc:
-            st.error(f"Error compiling institutional thesis for {clean_ticker}: {str(exc)}")
-
-elif analyze_btn and not ticker_input.strip():
-    st.warning("Please enter an NSE/BSE ticker symbol (e.g. CROMPTON, VINATIORGA.NS, HDFCBANK.NS).")
+            st.error(f"Error computing financial models for {clean_sym}: {str(exc)}")
 
 
 # -------------------------------------------------------------------------
-# Display Active Investment Memo
+# Render Screener Dashboard View
 # -------------------------------------------------------------------------
-active_memo = st.session_state.get("memo_data")
+data = st.session_state.get("screener_data")
+about = st.session_state.get("about_data")
+memo = st.session_state.get("editorial_memo")
 
-if active_memo:
-    clean_ticker = active_memo["clean_ticker"]
-    company_name = active_memo["company_name"]
-    price_display = active_memo["price_display"]
-    thesis_markdown = active_memo["thesis_markdown"]
-    dossier = active_memo["dossier"]
-    rating = active_memo["rating"]
-    audit_score = active_memo["audit_score"]
-    
-    sector = dossier.get("sector", "")
-    metrics = dossier.get("engine_metrics", {})
+if data:
+    company_name = data.get("company_name", "Corporate Enterprise")
+    raw_sym = data.get("raw_symbol", "")
+    clean_sym = data.get("clean_symbol", "")
+    sector = data.get("sector", "")
+    industry = data.get("industry", "")
+    website = data.get("website", "")
+    bse_url = data.get("bse_url", "")
+    nse_url = data.get("nse_url", "")
 
-    # Rating Pill Color
-    rating_str = str(rating).upper()
-    pill_class = "rating-pill-green" if any(k in rating_str for k in ["BUY", "ACCUMULATE"]) else (
-        "rating-pill-red" if any(k in rating_str for k in ["AVOID", "TRIM", "SELL"]) else "rating-pill-yellow"
-    )
+    cmp = data.get("current_price", 0.0)
+    mcap_cr = data.get("market_cap_cr", 0.0)
+    high_52 = data.get("high_52w", 0.0)
+    low_52 = data.get("low_52w", 0.0)
 
-    # 2. Top Header: Script Name, Rating, & Price
+    # ---------------------------------------------------------------------
+    # 1. Screener Header: Company Name, Ticker, Live Price, 52W High/Low
+    # ---------------------------------------------------------------------
     st.markdown(f"""
-    <div class="memo-header">
+    <div class="company-header">
         <div>
-            <h1 class="company-title">{company_name}</h1>
-            <div class="company-sub">
-                <span style="font-weight: 600; color: #a0aec0;">{clean_ticker}</span>
-                {f" • <span>{sector}</span>" if sector else ""}
-                • <span class="rating-pill {pill_class}">{rating}</span>
+            <h1 class="company-name">{company_name}</h1>
+            <div class="company-badges">
+                <span class="badge-ticker">{clean_sym}</span>
+                {f'<span class="badge-sector">{sector}</span>' if sector else ''}
+                {f'<span class="badge-sector">{industry}</span>' if industry and industry != sector else ''}
             </div>
         </div>
-        <div>
-            <div class="price-tag">{price_display}</div>
-            <div class="price-sub">Live Market Price</div>
+        <div class="price-box">
+            <div class="live-price">{fmt_curr(cmp)}</div>
+            <div class="price-range">52W High / Low: <strong>{fmt_curr(high_52)}</strong> / <strong>{fmt_curr(low_52)}</strong></div>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-    # Verification Badge
+    # Verification Banner
     st.markdown(f"""
     <div class="audit-badge">
         <span>🛡️</span>
-        <span>Institutional Audit Score: <strong>{audit_score:.1f} / 100</strong></span>
+        <span>100% Deterministic Financial Engine</span>
         <span>•</span>
-        <span>Primary Source Grounded & Mathematically Verified</span>
+        <span>Zero Numerical Hallucinations</span>
+        <span>•</span>
+        <span>Primary Tabular Ingestion</span>
     </div>
     """, unsafe_allow_html=True)
 
-    # 3. Blog-Style Thesis Presentation
-    st.markdown(f'<div class="thesis-body">\n\n{thesis_markdown}\n\n</div>', unsafe_allow_html=True)
+    # ---------------------------------------------------------------------
+    # 2. Dedicated Screener "About the Company" Section
+    # Positioned directly beneath top header and above Key Ratios grid
+    # ---------------------------------------------------------------------
+    overview_text = about.get("overview", "") if about else data.get("raw_summary", "")
+    key_points = about.get("key_points", []) if about else []
+
+    # Format exchange & website links
+    links_html = []
+    if website:
+        links_html.append(f'<a class="exchange-link" href="{website}" target="_blank" rel="noopener noreferrer">🌐 Website ↗</a>')
+    if bse_url:
+        links_html.append(f'<a class="exchange-link" href="{bse_url}" target="_blank" rel="noopener noreferrer">🏛️ BSE ↗</a>')
+    if nse_url:
+        links_html.append(f'<a class="exchange-link" href="{nse_url}" target="_blank" rel="noopener noreferrer">🏛️ NSE ↗</a>')
+    links_bar = f'<div class="exchange-links">{"".join(links_html)}</div>'
+
+    # Format Key Business Points
+    kp_items_html = []
+    for cat, detail in key_points:
+        kp_items_html.append(
+            f'<li class="key-point-item">'
+            f'<span class="key-point-bullet">•</span>'
+            f'<span><span class="key-point-category">{cat}:</span> {detail}</span>'
+            f'</li>'
+        )
+    kp_list_html = f'<ul class="key-points-list">{"".join(kp_items_html)}</ul>' if kp_items_html else ""
+
+    st.markdown(f"""
+    <div class="about-card">
+        <div class="about-header">
+            <span class="about-title">About the Company</span>
+            {links_bar}
+        </div>
+        <div class="about-overview">{overview_text}</div>
+        {kp_list_html}
+    </div>
+    """, unsafe_allow_html=True)
 
     # ---------------------------------------------------------------------
-    # Institutional Additions: Quantitative Constants & PDF Export
+    # 3. Screener Key Ratios Grid (4x3 High-Density Cards)
+    # ---------------------------------------------------------------------
+    pe = data.get("pe_ratio", 0.0)
+    pb = data.get("pb_ratio", 0.0)
+    bv = data.get("book_value", 0.0)
+    div_y = data.get("dividend_yield_pct", 0.0)
+    roce = data.get("roce_pct", 0.0)
+    roe = data.get("roe_pct", 0.0)
+    fv = data.get("face_value", 1.0)
+    de = data.get("debt_to_equity", 0.0)
+    opm = data.get("opm_pct", 0.0)
+
+    st.markdown(f"""
+    <div class="ratio-grid">
+        <div class="ratio-card">
+            <span class="ratio-label">Market Cap</span>
+            <span class="ratio-value ratio-value-highlight">₹ {mcap_cr:,.1f} Cr</span>
+        </div>
+        <div class="ratio-card">
+            <span class="ratio-label">Current Price</span>
+            <span class="ratio-value ratio-value-green">₹ {cmp:,.2f}</span>
+        </div>
+        <div class="ratio-card">
+            <span class="ratio-label">High / Low</span>
+            <span class="ratio-value">₹ {high_52:,.0f} / {low_52:,.0f}</span>
+        </div>
+        <div class="ratio-card">
+            <span class="ratio-label">Stock P/E</span>
+            <span class="ratio-value">{pe:.1f}</span>
+        </div>
+        <div class="ratio-card">
+            <span class="ratio-label">Book Value</span>
+            <span class="ratio-value">₹ {bv:,.1f}</span>
+        </div>
+        <div class="ratio-card">
+            <span class="ratio-label">Dividend Yield</span>
+            <span class="ratio-value">{div_y:.2f} %</span>
+        </div>
+        <div class="ratio-card">
+            <span class="ratio-label">ROCE</span>
+            <span class="ratio-value ratio-value-green">{roce:.1f} %</span>
+        </div>
+        <div class="ratio-card">
+            <span class="ratio-label">ROE</span>
+            <span class="ratio-value ratio-value-green">{roe:.1f} %</span>
+        </div>
+        <div class="ratio-card">
+            <span class="ratio-label">Face Value</span>
+            <span class="ratio-value">₹ {fv:.1f}</span>
+        </div>
+        <div class="ratio-card">
+            <span class="ratio-label">Price to Book</span>
+            <span class="ratio-value">{pb:.2f}</span>
+        </div>
+        <div class="ratio-card">
+            <span class="ratio-label">Debt to Equity</span>
+            <span class="ratio-value">{de:.2f}</span>
+        </div>
+        <div class="ratio-card">
+            <span class="ratio-label">OPM</span>
+            <span class="ratio-value ratio-value-highlight">{opm:.1f} %</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ---------------------------------------------------------------------
+    # 4. Compounded Growth Rates (Sales & Profit)
+    # ---------------------------------------------------------------------
+    s_3y = data.get("sales_cagr_3y")
+    s_5y = data.get("sales_cagr_5y")
+    p_3y = data.get("profit_cagr_3y")
+    p_5y = data.get("profit_cagr_5y")
+
+    s_3y_cls = "growth-rate" if (s_3y and s_3y >= 0) else "growth-rate-neg"
+    s_5y_cls = "growth-rate" if (s_5y and s_5y >= 0) else "growth-rate-neg"
+    p_3y_cls = "growth-rate" if (p_3y and p_3y >= 0) else "growth-rate-neg"
+    p_5y_cls = "growth-rate" if (p_5y and p_5y >= 0) else "growth-rate-neg"
+
+    st.markdown(f"""
+    <div class="growth-container">
+        <div class="growth-card">
+            <div class="growth-header">Compounded Sales Growth</div>
+            <div class="growth-row">
+                <span>5 Years:</span>
+                <span class="{s_5y_cls}">{fmt_pct(s_5y)}</span>
+            </div>
+            <div class="growth-row">
+                <span>3 Years:</span>
+                <span class="{s_3y_cls}">{fmt_pct(s_3y)}</span>
+            </div>
+        </div>
+        <div class="growth-card">
+            <div class="growth-header">Compounded Profit Growth</div>
+            <div class="growth-row">
+                <span>5 Years:</span>
+                <span class="{p_5y_cls}">{fmt_pct(p_5y)}</span>
+            </div>
+            <div class="growth-row">
+                <span>3 Years:</span>
+                <span class="{p_3y_cls}">{fmt_pct(p_3y)}</span>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ---------------------------------------------------------------------
+    # 5. Multi-Year Historical Profit & Loss Statement
+    # ---------------------------------------------------------------------
+    st.markdown("""
+    <div class="section-title">
+        <span>Profit & Loss</span>
+        <span class="section-subtitle">Consolidated figures in ₹ Crores</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+    pl_html = build_screener_pl_html(data.get("pl_rows", []))
+    st.markdown(pl_html, unsafe_allow_html=True)
+
+    # Optional CSV download of raw tabular data
+    pl_df = data.get("pl_dataframe")
+    if pl_df is not None and not pl_df.empty:
+        csv_buffer = io.StringIO()
+        pl_df.to_csv(csv_buffer, index=False)
+        st.download_button(
+            label="📥 Download Profit & Loss CSV",
+            data=csv_buffer.getvalue(),
+            file_name=f"{raw_sym}_profit_and_loss.csv",
+            mime="text/csv",
+        )
+
+    # ---------------------------------------------------------------------
+    # 6. Qualitative Context-Locked Editorial Memo
+    # ---------------------------------------------------------------------
+    st.markdown("""
+    <div class="section-title">
+        <span>Editorial Investment Thesis & Institutional Analysis</span>
+        <span class="section-subtitle">Context-Locked Qualitative Synthesis</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+    if memo:
+        st.markdown(f'<div class="memo-card">\n\n{memo}\n\n</div>', unsafe_allow_html=True)
+
+    # ---------------------------------------------------------------------
+    # 7. Institutional Dossier & PDF Export
     # ---------------------------------------------------------------------
     st.write("")
     st.divider()
 
-    exp1, exp2 = st.columns([1, 1])
-    with exp1:
-        with st.expander("📊 Audited Mathematical Ratios"):
-            cfo_pat = metrics.get("cfo_to_pat_5y_pct", 0.0)
-            roic = metrics.get("roic_pct", 0.0)
-            roce = metrics.get("roce_pct", 0.0)
-            ccc = metrics.get("ccc_days", 0.0)
-            net_debt_ebitda = metrics.get("net_debt_to_ebitda", 0.0)
-            pledge = metrics.get("promoter_pledge_pct", 0.0)
-            wacc_val = metrics.get("wacc_pct") or dossier.get("wacc_pct", 11.5)
-            coe_val = metrics.get("cost_of_equity_pct", 12.5)
-            beta_val = metrics.get("beta", 1.0)
-            
-            st.markdown(f"""
-            - **Dynamic WACC Hurdle:** `{wacc_val:.2f}%` (Cost of Equity: `{coe_val:.2f}%`, Beta: `{beta_val:.2f}`)
-            - **5Y CFO/PAT Conversion:** `{cfo_pat:.1f}%`
-            - **ROIC / ROCE:** `{roic:.1f}%` / `{roce:.1f}%`
-            - **Cash Conversion Cycle:** `{ccc:.0f} days`
-            - **Net Debt to EBITDA:** `{net_debt_ebitda:.2f}x`
-            - **Promoter Pledge:** `{pledge:.2f}%`
-            """)
-
-    with exp2:
-        # PDF Generator Export Button
+    col_pdf, col_raw = st.columns([1, 1])
+    with col_pdf:
+        st.markdown("##### 📄 Export Research Dossier")
+        st.caption("Generate a publication-grade, SEBI-compliant institutional PDF report.")
         try:
             pdf_bytes = build_institutional_pdf(
-                ticker=clean_ticker,
+                ticker=clean_sym,
                 company_name=company_name,
-                metrics=metrics,
-                dossier_dict=dossier
+                metrics={
+                    "current_price": cmp,
+                    "market_cap_cr": mcap_cr,
+                    "pe_ratio": pe,
+                    "pb_ratio": pb,
+                    "roce_pct": roce,
+                    "roe_pct": roe,
+                    "debt_to_equity": de,
+                    "opm_pct": opm,
+                },
+                dossier_dict={
+                    "ticker": clean_sym,
+                    "company_name": company_name,
+                    "current_price": cmp,
+                    "sector": sector,
+                    "industry": industry,
+                    "screener_data": data,
+                    "memo": memo
+                }
             )
             st.download_button(
-                label="📥 Download Full Institutional Audit (PDF)",
+                label="📥 Download Publication PDF",
                 data=pdf_bytes,
-                file_name=f"{clean_ticker}_Institutional_Audit.pdf",
+                file_name=f"{raw_sym}_Institutional_Research.pdf",
                 mime="application/pdf",
                 use_container_width=True
             )
-        except Exception as pdf_err:
-            st.caption(f"PDF compilation notice: {pdf_err}")
+        except Exception as p_err:
+            st.caption(f"PDF exporter notice: {p_err}")
+
+    with col_raw:
+        st.markdown("##### 🔍 Verified Deterministic JSON Context")
+        st.caption("The exact mathematically pre-calculated context fed to LLMs to prevent hallucinations.")
+        with st.expander("View Numerical JSON"):
+            st.json(data.get("json_context", {}))
