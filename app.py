@@ -1,6 +1,6 @@
 """
 Research Beast — Investment Thesis
-Editorial publication format serving institutional-grade investment research memos.
+Clean editorial investment blog format serving institutional-grade research memos.
 Powered by the 7-Agent Autonomous Equity Analysis Engine.
 """
 
