@@ -155,11 +155,11 @@ class WebScraperService:
         ]
 
         macro_patterns = [
-            r"([A-Za-z0-9\s]+commodity[A-Za-z0-9\s,\.%-]+)",
+            r"([A-Za-z0-9\s]+commodity prices?[A-Za-z0-9\s,\.%-]+)",
             r"([A-Za-z0-9\s]+inflation[A-Za-z0-9\s,\.%-]+)",
-            r"([A-Za-z0-9\s]+demand[A-Za-z0-9\s,\.%-]+rural)",
-            r"([A-Za-z0-9\s]+raw material[A-Za-z0-9\s,\.%-]+)",
-            r"([A-Za-z0-9\s]+copper|aluminum|steel[A-Za-z0-9\s,\.%-]+)"
+            r"([A-Za-z0-9\s]+input costs?[A-Za-z0-9\s,\.%-]+)",
+            r"([A-Za-z0-9\s]+raw material costs?[A-Za-z0-9\s,\.%-]+)",
+            r"([A-Za-z0-9\s]+supply chain[A-Za-z0-9\s,\.%-]+)"
         ]
 
         for p in guidance_patterns:
@@ -183,22 +183,13 @@ class WebScraperService:
                 if len(cleaned) > 25 and cleaned not in macro_points:
                     macro_points.append(cleaned[:180])
 
-        # Generic baseline if search was thin or empty
+        # If web search returned zero verified points, enforce explicit non-disclosure rather than synthetic templates
         if not guidance_points:
-            guidance_points = [
-                f"Management targeting mid-to-high teen volume growth across core operational segments.",
-                "Strategic pricing adjustments implemented to preserve operating margin buffers amid input volatility."
-            ]
+            guidance_points = ["Not Disclosed in Management Filings"]
         if not capex_points:
-            capex_points = [
-                "Organic growth funded via internal cash flows; maintenance capex steady at 2-3% of annual revenue.",
-                "Digitalization and distribution network expansion underway."
-            ]
+            capex_points = ["Not Disclosed in Management Filings"]
         if not macro_points:
-            macro_points = [
-                "Domestic consumption resilience supporting top-line demand across urban centers.",
-                "Interest rate trajectories and inflationary pressures on input basket monitorable."
-            ]
+            macro_points = ["Not Disclosed in Management Filings"]
 
         return {
             "management_guidance": guidance_points[:4],

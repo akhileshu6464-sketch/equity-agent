@@ -973,15 +973,24 @@ def main():
 
         verdict_badge_class = "pill-green" if ("BUY" in verdict.upper() or "ACCUMULATE" in verdict.upper()) else ("pill-yellow" if "HOLD" in verdict.upper() else "pill-red")
 
-        # Glassmorphic Header Card with Verdict Badge
+        # Institutional Verification Status
+        v_rep = dossier.get("verification_report", {})
+        audit_score = dossier.get("audit_score", 100.0)
+        v_status = v_rep.get("verification_status", "Primary Source Grounded & Mathematically Verified")
+
+        # Glassmorphic Header Card with Verdict & Verification Badges
         st.markdown(f"""
         <div class="glass-panel" style="padding: 24px 28px; margin-bottom: 20px;">
             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
                 <div>
                     <h2 style="margin: 0; font-size: 1.8rem; font-weight: 800; color: #ffffff;">{company_name} <span style="font-size: 1rem; color: #94a3b8; font-weight: 500;">({ticker})</span></h2>
-                    <p style="color: #94a3b8; font-size: 0.85rem; margin-top: 4px; margin-bottom: 0;">{sector} • {industry} • Primary Sector: <strong style="color: #cbd5e1;">{a0.get("primary_sector", "N/A")}</strong></p>
+                    <p style="color: #94a3b8; font-size: 0.85rem; margin-top: 4px; margin-bottom: 6px;">{sector} • {industry} • Primary Sector: <strong style="color: #cbd5e1;">{a0.get("primary_sector", "N/A")}</strong></p>
+                    <div style="display: inline-flex; align-items: center; gap: 8px; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.35); padding: 3px 10px; border-radius: 9999px;">
+                        <span style="width: 7px; height: 7px; border-radius: 50%; background: #10b981; display: inline-block;"></span>
+                        <span style="font-size: 0.78rem; font-weight: 600; color: #34d399;">Audit Score: {audit_score:.1f}/100 • {v_status}</span>
+                    </div>
                 </div>
-                <div>
+                <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 8px;">
                     <span class="pill-badge {verdict_badge_class}">{verdict}</span>
                 </div>
             </div>

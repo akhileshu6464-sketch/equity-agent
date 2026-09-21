@@ -25,8 +25,11 @@ import logging
 from typing import Dict, Any, List, Optional
 
 from services.financial_data import FinancialDataService
+from services.financial_engine import FinancialEngine
+from services.document_loader import DocumentLoader
 from services.web_scraper import WebScraperService
 from services.llm_client import UnifiedLLMClient, ANALYST_SYSTEM_PROMPT
+from agents.verifier import FactCheckingVerifier
 from concurrent.futures import ThreadPoolExecutor
 import yfinance as yf
 from agents.sector_guard import resolve_sector_archetype, SECTOR_TAXONOMY, is_bfsi as check_is_bfsi, is_bfsi
@@ -159,6 +162,10 @@ class EquityAgentPipeline:
             is_bfsi_mode = sector_key in ["BFSI_BANKS", "BFSI_NBFC"] or check_is_bfsi(sec_check, ind_check) or any(b in ticker.upper() for b in ["HDFCBANK", "ICICIBANK", "KOTAKBANK", "SBIN", "AXISBANK", "INDUSINDBK", "BANKBARODA", "PNB"])
         is_bfsi = is_bfsi_mode
         is_it_services = sector_key == "IT_SERVICES" or "Information Technology" in company_data.get("sector", "")
+
+        # Compute deterministic accounting metrics via FinancialEngine
+        engine_metrics = FinancialEngine.compute_metrics(company_data, is_bfsi=is_bfsi)
+        verified_financials_block = FinancialEngine.format_verified_financials_block(engine_metrics, is_bfsi=is_bfsi)
 
         # Helper to normalize raw INR values to Crores
         def to_cr(val: float) -> float:
@@ -360,7 +367,9 @@ class EquityAgentPipeline:
             },
             "history_5y": history,
             "shareholding": company_data.get("shareholding", {}),
-            "web_intel": context.get("web_intel", [])
+            "web_intel": context.get("web_intel", []),
+            "engine_metrics": engine_metrics,
+            "verified_financials_block": verified_financials_block
         }
 
         return financial_payload
@@ -571,7 +580,8 @@ def call_llm(
     is_bank: bool = False,
     financial_payload: Optional[Dict[str, Any]] = None,
     ticker: str = "",
-    company_name: str = ""
+    company_name: str = "",
+    primary_disclosures: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
     """
     Executes a chapter LLM audit using the unified institutional directive.
@@ -581,10 +591,21 @@ def call_llm(
     """
     llm = UnifiedLLMClient()
 
+    # Prepend verified financials and primary disclosures if not already present in prompt
+    verified_block = (financial_payload or {}).get("verified_financials_block", "")
+    disc_block = (primary_disclosures or {}).get("disclosures_xml", "")
+    context_additions = ""
+    if verified_block and "<verified_financials>" not in user_prompt:
+        context_additions += f"\n\n{verified_block}\n"
+    if disc_block and "<primary_disclosures>" not in user_prompt:
+        context_additions += f"\n\n{disc_block}\n"
+
+    enriched_prompt = f"{context_additions}{user_prompt}".strip()
+
     # 1. Primary: OpenAI gpt-6-astra with native Web Search Grounding
     if llm.openai_client:
         try:
-            full_prompt = f"{system_directive}\n\nUSER DIRECTIVE & PROMPT:\n{user_prompt}"
+            full_prompt = f"{system_directive}\n\nUSER DIRECTIVE & PROMPT:\n{enriched_prompt}"
             logger.info(f"call_llm invoking OpenAI gpt-6-astra with Web Search Grounding for {ticker}...")
             raw_text = llm.call_openai_responses(full_prompt, system_instructions=system_directive)
             if raw_text:
@@ -599,7 +620,7 @@ def call_llm(
         try:
             resp = llm._call_gemini_api(
                 financial_payload={"system_directive": system_directive[:1000]},
-                archetype_checklist=user_prompt
+                archetype_checklist=enriched_prompt
             )
             if resp and isinstance(resp, dict):
                 return resp
@@ -612,7 +633,8 @@ def call_llm(
         is_bank=is_bank,
         financial_payload=financial_payload,
         ticker=ticker,
-        company_name=company_name
+        company_name=company_name,
+        primary_disclosures=primary_disclosures
     )
 
 
@@ -621,7 +643,8 @@ def _deterministic_chapter_fallback(
     is_bank: bool = False,
     financial_payload: Optional[Dict[str, Any]] = None,
     ticker: str = "",
-    company_name: str = ""
+    company_name: str = "",
+    primary_disclosures: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
     """Generates authentic 4-tier deterministic chapter response based on actual company metrics and sector."""
     prompt_lower = user_prompt.lower()
@@ -906,7 +929,7 @@ def _deterministic_chapter_fallback(
             p1 = {
                 "title": "Brand Moat, Pricing Power & Margin Defensibility",
                 "narrative_prose": p1_prose,
-                "historical_trend_and_metrics": f"5-year revenue compounded at {rev_cagr:.1f}% CAGR with gross margins defended at {gross_margin:.1f}% across volatile commodity cycles (copper, aluminum, and crude derivatives). Value-added, premium product portfolio mix expanded to represent over 45% of total sales.",
+                "historical_trend_and_metrics": f"5-year revenue compounded at {rev_cagr:.1f}% CAGR with gross margins defended at {gross_margin:.1f}% across volatile commodity and input cost cycles. Value-added, premium product portfolio mix expanded to represent over 45% of total sales.",
                 "operational_mechanics_and_drivers": "Contractual price escalation clauses with institutional distributors, consumer brand pull, and premium brand recall enable systematic raw material cost pass-through within 30-45 days of commodity price inflation.",
                 "competitive_context_and_benchmarks": f"Gross margin resiliency commands an advantage over direct domestic peers ({peer1} and {peer2}), who experienced 180-260 bps higher margin volatility during recent raw material inflationary phases.",
                 "thesis_implication_and_risks": "Gross margin compression exceeding 250 bps sustained across two consecutive fiscal quarters indicates broken pricing power and demands immediate thesis liquidation."
@@ -1921,8 +1944,23 @@ def run_deep_institutional_pipeline(
     pipeline.clear_cache()
     company_data = pipeline._sanitize_financials(company_data)
 
-    # 2. Scrape news & concall intelligence
+    # 2. Ingest Primary Source Documents (Profiles, Ratings, Concalls, Regulation 30)
     company_name = company_data.get("short_name", norm_ticker)
+    doc_loader = DocumentLoader()
+    try:
+        primary_disclosures = doc_loader.load_primary_disclosures(norm_ticker, company_name, company_data, force_refresh=force_refresh)
+    except Exception as e:
+        logger.warning(f"Error loading primary disclosures for {norm_ticker}: {e}")
+        primary_disclosures = {
+            "symbol": norm_ticker,
+            "company_name": company_name,
+            "product_portfolio": {"overview": f"{company_name} is an active listed enterprise.", "segments": ["Not Disclosed in Management Filings"]},
+            "credit_rating": {"agency": "Not Disclosed in Management Filings", "rating": "Not Disclosed in Management Filings", "facilities_cr": "Not Disclosed in Management Filings", "rationale_highlights": "Not Disclosed in Management Filings"},
+            "concall_transcript": {"management_remarks": "Not Disclosed in Management Filings", "guidance_points": ["Not Disclosed in Management Filings"]},
+            "corporate_announcements": []
+        }
+    primary_disclosures_block = primary_disclosures.get("disclosures_xml") or doc_loader.format_primary_disclosures_block(primary_disclosures)
+
     web_scraper = WebScraperService()
     try:
         search_intel = web_scraper.search_news_and_concalls(company_name, norm_ticker)
@@ -1949,6 +1987,7 @@ def run_deep_institutional_pipeline(
         "conservative_growth": conservative_growth,
         "bull_growth": bull_growth,
         "web_intel": search_intel,
+        "primary_disclosures": primary_disclosures,
         "is_bfsi": is_bank
     }
 
@@ -1960,22 +1999,25 @@ def run_deep_institutional_pipeline(
     context["archetype"] = sector_prof
     context["sector_key"] = sector_prof.get("sector_key", "")
 
+    verified_financials_block = financial_payload.get("verified_financials_block", "")
+    engine_metrics = financial_payload.get("engine_metrics", {})
+
     # Build data summary baseline & benchmark peers
     data_summary = format_data_summary(financial_payload, is_bank)
     peers = resolve_benchmark_peers(norm_ticker, is_bank, sector_prof)
     sector_name = sector_prof.get("display_name", meta.get("sector", "General Corporate"))
 
-    moat_prompt = get_moat_prompt(norm_ticker, company_name, sector_name, is_bank, data_summary)
-    forensic_prompt = get_forensic_prompt(norm_ticker, company_name, is_bank, data_summary)
-    leadership_prompt = get_leadership_prompt(norm_ticker, company_name, is_bank, peers)
-    valuation_prompt = get_valuation_prompt(norm_ticker, company_name, is_bank, data_summary)
+    moat_prompt = get_moat_prompt(norm_ticker, company_name, sector_name, is_bank, data_summary, verified_financials_block, primary_disclosures_block)
+    forensic_prompt = get_forensic_prompt(norm_ticker, company_name, is_bank, data_summary, verified_financials_block, primary_disclosures_block)
+    leadership_prompt = get_leadership_prompt(norm_ticker, company_name, is_bank, peers, verified_financials_block, primary_disclosures_block)
+    valuation_prompt = get_valuation_prompt(norm_ticker, company_name, is_bank, data_summary, verified_financials_block, primary_disclosures_block)
 
     # 4. Parallel LLM Execution across 4 concurrent threads using institutional framework
     with ThreadPoolExecutor(max_workers=4) as executor:
-        future_moat = executor.submit(call_llm, SYSTEM_INSTITUTIONAL_FRAMEWORK, moat_prompt, is_bank, financial_payload, norm_ticker, company_name)
-        future_forensic = executor.submit(call_llm, SYSTEM_INSTITUTIONAL_FRAMEWORK, forensic_prompt, is_bank, financial_payload, norm_ticker, company_name)
-        future_leadership = executor.submit(call_llm, SYSTEM_INSTITUTIONAL_FRAMEWORK, leadership_prompt, is_bank, financial_payload, norm_ticker, company_name)
-        future_valuation = executor.submit(call_llm, SYSTEM_INSTITUTIONAL_FRAMEWORK, valuation_prompt, is_bank, financial_payload, norm_ticker, company_name)
+        future_moat = executor.submit(call_llm, SYSTEM_INSTITUTIONAL_FRAMEWORK, moat_prompt, is_bank, financial_payload, norm_ticker, company_name, primary_disclosures)
+        future_forensic = executor.submit(call_llm, SYSTEM_INSTITUTIONAL_FRAMEWORK, forensic_prompt, is_bank, financial_payload, norm_ticker, company_name, primary_disclosures)
+        future_leadership = executor.submit(call_llm, SYSTEM_INSTITUTIONAL_FRAMEWORK, leadership_prompt, is_bank, financial_payload, norm_ticker, company_name, primary_disclosures)
+        future_valuation = executor.submit(call_llm, SYSTEM_INSTITUTIONAL_FRAMEWORK, valuation_prompt, is_bank, financial_payload, norm_ticker, company_name, primary_disclosures)
 
         moat_out = future_moat.result()
         forensic_out = future_forensic.result()
@@ -2067,6 +2109,10 @@ def run_deep_institutional_pipeline(
     elif isinstance(search_intel, list):
         concall_snippets = [str(s) for s in search_intel]
     concall_raw_text = "\n\n".join(filter(None, concall_snippets))
+    if not concall_raw_text:
+        concall_remarks = (primary_disclosures.get("concall_transcript") or {}).get("management_remarks", "")
+        if concall_remarks and concall_remarks != "Not Disclosed in Management Filings":
+            concall_raw_text = concall_remarks
 
     agent_7 = run_agent7_concall_analysis(
         ticker=norm_ticker,
@@ -2098,7 +2144,7 @@ def run_deep_institutional_pipeline(
     leadership_wrapped = MarkdownDict(leadership_out, leadership_md)
     val_wrapped = MarkdownDict(val_out, val_md)
 
-    return {
+    master_dossier = {
         "moat_markdown": moat_md,
         "forensics_markdown": forensic_md,
         "leadership_markdown": leadership_md,
@@ -2123,6 +2169,10 @@ def run_deep_institutional_pipeline(
         "company_data": company_data,
         "search_intel": search_intel,
         "financial_payload": financial_payload,
+        "engine_metrics": engine_metrics,
+        "verified_financials_block": verified_financials_block,
+        "primary_disclosures": primary_disclosures,
+        "primary_disclosures_block": primary_disclosures_block,
         "sector_key": sector_prof.get("sector_key"),
         "primary_sector": sector_prof.get("display_name"),
         "archetype": sector_prof,
@@ -2147,3 +2197,13 @@ def run_deep_institutional_pipeline(
         "agent_6": agent_6,
         "agent_7": agent_7
     }
+
+    # Execute Automated Adversarial Audit Pass
+    verified_dossier = FactCheckingVerifier.verify_dossier(
+        dossier=master_dossier,
+        verified_financials=engine_metrics,
+        primary_disclosures=primary_disclosures,
+        sector_archetype=sector_prof
+    )
+
+    return verified_dossier
