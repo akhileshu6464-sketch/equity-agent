@@ -25,7 +25,7 @@ import logging
 from typing import Dict, Any, List, Optional
 
 from services.financial_data import FinancialDataService
-from services.financial_engine import FinancialEngine
+from services.financial_engine import FinancialEngine, calculate_dynamic_wacc
 from services.document_loader import DocumentLoader
 from services.web_scraper import WebScraperService
 from services.llm_client import UnifiedLLMClient, ANALYST_SYSTEM_PROMPT
@@ -274,7 +274,11 @@ class EquityAgentPipeline:
         raw_invested_capital = max(raw_equity + raw_total_debt - raw_cash, 1.0)
         nopat = ebit_latest * 0.75  # 25% corporate tax rate
         roic_pct = round((nopat / raw_invested_capital) * 100, 2) if raw_invested_capital > 0 else 0.0
-        wacc_pct = round(float(context.get("wacc", 0.115)) * 100, 2)
+
+        dynamic_wacc = calculate_dynamic_wacc(company_data)
+        if not context.get("user_override_wacc") and (context.get("wacc") is None or context.get("wacc") == 0.115):
+            context["wacc"] = dynamic_wacc
+        wacc_pct = round(float(context.get("wacc", dynamic_wacc)) * 100, 2)
 
         # 5-Year CAGR
         num_years = max(len(history) - 1, 1)
@@ -1980,8 +1984,13 @@ def run_deep_institutional_pipeline(
     ind_str = str(info_yf.get('industry', '') or company_data.get('industry', '')).lower()
     is_bank = archetype_check.get("sector_key") in ["BFSI_BANKS", "BFSI_NBFC"] or check_is_bfsi(sec_str, ind_str) or any(b in norm_ticker.upper() for b in ["HDFCBANK", "ICICIBANK", "KOTAKBANK", "SBIN", "AXISBANK", "INDUSINDBK", "BANKBARODA", "PNB"])
 
+    dynamic_wacc = calculate_dynamic_wacc(company_data)
+    effective_wacc = dynamic_wacc if (wacc is None or wacc == 0.115) else wacc
+
     context = {
-        "wacc": wacc,
+        "wacc": effective_wacc,
+        "dynamic_wacc": dynamic_wacc,
+        "user_override_wacc": (wacc is not None and wacc != 0.115),
         "terminal_growth": terminal_growth,
         "base_growth": base_growth,
         "conservative_growth": conservative_growth,
@@ -2183,6 +2192,9 @@ def run_deep_institutional_pipeline(
         "institutional_rating": inst_rating,
         "rating_color": rating_color,
         "margin_of_safety_pct": 15.0,
+        "wacc": effective_wacc,
+        "wacc_pct": round(effective_wacc * 100, 2),
+        "dynamic_wacc": dynamic_wacc,
         "implied_growth_pct": val_out.get("implied_hurdle_rate", agent_6.get("implied_growth_pct", "10.0%")),
         "moat": moat_wrapped,
         "forensics": forensic_wrapped,

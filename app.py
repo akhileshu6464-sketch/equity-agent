@@ -244,10 +244,11 @@ def compile_editorial_thesis(dossier: Dict[str, Any]) -> str:
 
     # If concise, append reverse DCF / valuation context
     hurdle = dossier.get("implied_growth_pct", "10.0%")
+    wacc_pct = metrics.get("wacc_pct") or dossier.get("wacc_pct") or 11.5
     pe = metrics.get("pe_ratio") or dossier.get("trailing_pe", 0.0)
     pe_str = f"trading at {pe:.1f}x trailing P/E" if pe and pe > 0 else "at current market levels"
     summary_paras.append(
-        f"At current market valuations, the reverse DCF indicates an implied long-term free cash flow growth hurdle of **{hurdle}**, reflecting high-probability execution across core product verticals and disciplined capital allocation."
+        f"At current market valuations, the reverse DCF indicates an implied long-term free cash flow growth hurdle of **{hurdle}** against a dynamic WACC hurdle rate of **{wacc_pct:.2f}%**, reflecting high-probability execution across core product verticals and disciplined capital allocation."
     )
     core_summary = "\n\n".join(summary_paras)
 
@@ -489,8 +490,12 @@ if active_memo:
             ccc = metrics.get("ccc_days", 0.0)
             net_debt_ebitda = metrics.get("net_debt_to_ebitda", 0.0)
             pledge = metrics.get("promoter_pledge_pct", 0.0)
+            wacc_val = metrics.get("wacc_pct") or dossier.get("wacc_pct", 11.5)
+            coe_val = metrics.get("cost_of_equity_pct", 12.5)
+            beta_val = metrics.get("beta", 1.0)
             
             st.markdown(f"""
+            - **Dynamic WACC Hurdle:** `{wacc_val:.2f}%` (Cost of Equity: `{coe_val:.2f}%`, Beta: `{beta_val:.2f}`)
             - **5Y CFO/PAT Conversion:** `{cfo_pat:.1f}%`
             - **ROIC / ROCE:** `{roic:.1f}%` / `{roce:.1f}%`
             - **Cash Conversion Cycle:** `{ccc:.0f} days`

@@ -49,8 +49,99 @@ def _to_cr(val: float) -> float:
     return round(v, 2)
 
 
+def calculate_dynamic_wacc(ticker_data: Dict[str, Any]) -> float:
+    """
+    Computes dynamic Weighted Average Cost of Capital (WACC) using CAPM and capital structure.
+
+    1. Macro benchmarks (India G-Sec 10Y and ERP):
+       - Risk-free rate = 7.0% (0.070)
+       - Equity Risk Premium = 5.5% (0.055)
+       - Indian corporate tax rate = 25.17% (0.2517 under Section 115BAA)
+
+    2. Company-specific inputs:
+       - Beta from exchange filings or fallback 1.0
+       - Cost of Equity: Ke = Rf + Beta * ERP
+
+    3. Capital structure:
+       - Market Capitalization (E) and Total Debt (D)
+       - Weight of Equity: We = E / (E + D)
+       - Weight of Debt: Wd = D / (E + D)
+
+    4. Cost of Debt (Kd):
+       - Estimated from interest expense / total debt, or corporate lending rate fallback ~8.5%
+
+    5. Weighted Average:
+       - WACC = (We * Ke) + (Wd * Kd * (1 - TaxRate))
+       - Returns round(wacc, 4)
+    """
+    if not isinstance(ticker_data, dict):
+        return 0.115
+
+    # 1. Macro benchmarks (India G-Sec 10Y and ERP)
+    risk_free_rate = 0.070   # ~7.0%
+    equity_risk_premium = 0.055 # ~5.5%
+    tax_rate = 0.2517        # Indian standard corporate tax (25.17%)
+
+    # 2. Company-specific inputs
+    raw_info = ticker_data.get("raw_info") or {}
+    beta_val = ticker_data.get("beta")
+    if beta_val is None or _safe_float(beta_val) <= 0:
+        beta_val = raw_info.get("beta") or 1.0
+    beta = max(0.2, min(_safe_float(beta_val, 1.0), 3.0))
+    cost_of_equity = risk_free_rate + (beta * equity_risk_premium)
+
+    # 3. Capital structure
+    history = ticker_data.get("history_years", [])
+    latest_hist = history[-1] if history else {}
+
+    market_cap = (
+        _safe_float(ticker_data.get("marketCap")) or
+        _safe_float(ticker_data.get("market_cap")) or
+        (_safe_float(ticker_data.get("market_cap_cr")) * 1e7) or
+        _safe_float(raw_info.get("marketCap")) or
+        0.0
+    )
+    total_debt = (
+        _safe_float(ticker_data.get("totalDebt")) or
+        _safe_float(ticker_data.get("total_debt")) or
+        (_safe_float(ticker_data.get("total_debt_cr")) * 1e7) or
+        _safe_float(raw_info.get("totalDebt")) or
+        _safe_float(latest_hist.get("total_debt")) or
+        0.0
+    )
+    total_value = market_cap + total_debt
+
+    if total_value == 0:
+        return round(cost_of_equity, 4)
+
+    weight_equity = market_cap / total_value
+    weight_debt = total_debt / total_value
+
+    # 4. Cost of debt (estimated from interest expense or synthetic rating)
+    interest_expense = abs(
+        _safe_float(ticker_data.get("interestExpense")) or
+        _safe_float(ticker_data.get("interest_expense")) or
+        _safe_float(raw_info.get("interestExpense")) or
+        _safe_float(latest_hist.get("interest_expense")) or
+        0.0
+    )
+    if total_debt > 0 and interest_expense > 0:
+        cost_of_debt = interest_expense / total_debt
+        # Bound between realistic lending rates [4.5%, 20%]
+        if cost_of_debt > 0.20 or cost_of_debt < 0.045:
+            cost_of_debt = 0.085
+    else:
+        cost_of_debt = 0.085  # Fallback corporate lending rate ~8.5%
+
+    # 5. Weighted Average
+    wacc = (weight_equity * cost_of_equity) + (weight_debt * cost_of_debt * (1 - tax_rate))
+    return round(wacc, 4)
+
+
 class FinancialEngine:
     """Deterministic mathematical computation engine for financial and accounting ratios."""
+
+    calculate_dynamic_wacc = staticmethod(calculate_dynamic_wacc)
 
     @staticmethod
     def compute_metrics(company_data: Dict[str, Any], is_bfsi: bool = False) -> Dict[str, Any]:
@@ -244,6 +335,16 @@ class FinancialEngine:
             credit_cost_pct = 0.0
             casa_pct = 0.0
 
+        # Dynamic WACC and Cost of Equity (CAPM)
+        dynamic_wacc = calculate_dynamic_wacc(company_data)
+        wacc_pct = round(dynamic_wacc * 100, 2)
+        raw_info = company_data.get("raw_info") or {}
+        beta_val = company_data.get("beta")
+        if beta_val is None or _safe_float(beta_val) <= 0:
+            beta_val = raw_info.get("beta") or 1.0
+        beta = max(0.2, min(_safe_float(beta_val, 1.0), 3.0))
+        coe_pct = round((0.070 + (beta * 0.055)) * 100, 2)
+
         return {
             "symbol": company_data.get("symbol", ""),
             "company_name": company_data.get("short_name", ""),
@@ -253,6 +354,11 @@ class FinancialEngine:
             "pb_ratio": pb_ratio,
             "ev_to_ebitda": ev_to_ebitda,
             "shares_outstanding": shares_out,
+            # Dynamic WACC & Cost of Capital
+            "wacc": dynamic_wacc,
+            "wacc_pct": wacc_pct,
+            "cost_of_equity_pct": coe_pct,
+            "beta": round(beta, 2),
             # Growth CAGRs
             "rev_cagr_3y": rev_cagr_3y,
             "rev_cagr_5y": rev_cagr_5y,
@@ -350,6 +456,10 @@ class FinancialEngine:
 
         net_debt_desc = f"-₹{abs(net_debt):,.2f} Cr (Net Cash Positive)" if net_debt < 0 else f"₹{net_debt:,.2f} Cr"
 
+        wacc_p = metrics.get("wacc_pct", 11.5)
+        coe_p = metrics.get("cost_of_equity_pct", 12.5)
+        beta_val = metrics.get("beta", 1.0)
+
         lines = [
             "<verified_financials>",
             "<!-- HARD NUMERICAL TRUTH COMPUTED DIRECTLY FROM RAW FINANCIAL STATEMENTS -->",
@@ -359,6 +469,9 @@ class FinancialEngine:
             f"Trailing P/E Ratio: {pe:.1f}x",
             f"Price to Book (P/BV): {pb:.2f}x",
             f"EV/EBITDA: {ev_ebitda:.1f}x" if not is_bfsi else "EV/EBITDA: N/A (Financial Institution)",
+            f"Beta: {beta_val:.2f}",
+            f"Cost of Equity (CAPM: Rf 7.0% + Beta x ERP 5.5%): {coe_p:.2f}%",
+            f"Dynamic WACC Hurdle Rate: {wacc_p:.2f}%",
             "",
             "[HISTORICAL_GROWTH_CAGR]",
             f"3-Year Consolidated Revenue CAGR: {r3_str}",
