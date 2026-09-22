@@ -33,7 +33,7 @@ def resolve_ticker_info(user_input: str) -> Tuple[str, Optional[str]]:
     """
     cleaned = str(user_input or "").strip()
     if not cleaned:
-        return "VINATIORGA.NS", None
+        return "", None
 
     # 1. Check if already a clean ticker with exchange suffix and no spaces
     if "." in cleaned and " " not in cleaned:

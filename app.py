@@ -480,62 +480,70 @@ with col_btn:
     analyze_click = st.button("Audit Stock", use_container_width=True, type="primary")
 
 # Quick Benchmark Chips
-st.markdown("<div style='font-size: 0.8rem; color: #64748b; margin-top: -0.4rem; margin-bottom: 1.2rem;'>Quick Select: "
-            "<strong>VINATIORGA</strong> • <strong>TATAMOTORS</strong> • <strong>HDFCBANK</strong> • <strong>CROMPTON</strong> • <strong>RELIANCE</strong> • <strong>INFY</strong></div>",
-            unsafe_allow_html=True)
+st.markdown(
+    "<div style='font-size: 0.8rem; color: #64748b; margin-top: -0.4rem; margin-bottom: 0.4rem;'>"
+    "Quick Select:</div>",
+    unsafe_allow_html=True
+)
+qs_cols = st.columns(6)
+quick_tickers = ["VINATIORGA", "TATAMOTORS", "HDFCBANK", "CROMPTON", "RELIANCE", "INFY"]
+for idx, q_sym in enumerate(quick_tickers):
+    if qs_cols[idx].button(q_sym, key=f"qs_{q_sym}", use_container_width=True):
+        st.session_state["active_symbol"] = q_sym
+        st.rerun()
 
 
 # -------------------------------------------------------------------------
 # Trigger Pipeline Analysis with Auto-Symbol Resolution
+# (ONLY executes upon explicit 'Audit Stock' button click)
 # -------------------------------------------------------------------------
-target_symbol = None
-if analyze_click and ticker_input.strip():
-    target_symbol = ticker_input.strip()
-elif st.session_state.get("screener_data") is None and not ticker_input.strip():
-    # Default to VINATIORGA on initial fresh landing
-    target_symbol = "VINATIORGA.NS"
+if analyze_click:
+    raw_user_input = ticker_input.strip()
+    if raw_user_input:
+        resolved_sym, matched_name = resolve_ticker_info(raw_user_input)
+        clean_sym = extract_pure_symbol(resolved_sym) or resolved_sym
 
-if target_symbol:
-    raw_user_input = target_symbol.strip()
-    resolved_sym, matched_name = resolve_ticker_info(raw_user_input)
-    clean_sym = extract_pure_symbol(resolved_sym) or resolved_sym
+        if clean_sym:
+            st.session_state["active_symbol"] = clean_sym
+            is_resolved = clean_sym.upper() != raw_user_input.upper()
+            st.session_state["resolved_from"] = raw_user_input if is_resolved else ""
 
-    st.session_state["active_symbol"] = clean_sym
-    is_resolved = clean_sym.upper() != raw_user_input.upper()
-    st.session_state["resolved_from"] = raw_user_input if is_resolved else ""
+            # Display clean status message indicating security matching
+            if is_resolved:
+                status_msg = f"Analyzing {clean_sym} (resolved from '{raw_user_input}')..."
+            else:
+                status_msg = f"Extracting fundamentals and computing deterministic ratios for {clean_sym}..."
 
-    # Display clean status message indicating security matching
-    if is_resolved:
-        status_msg = f"Analyzing {clean_sym} (resolved from '{raw_user_input}')..."
+            with st.spinner(status_msg):
+                try:
+                    # 1. Deterministic Calculation
+                    scr_data = ScreenerEngine.get_screener_data(clean_sym)
+                    st.session_state["screener_data"] = scr_data
+
+                    # 2. Screener "About the Company" Synthesis
+                    agent = EditorialAgent()
+                    about_data = agent.generate_screener_about(
+                        summary_text=scr_data["raw_summary"],
+                        company_name=scr_data["company_name"],
+                        sector=scr_data["sector"],
+                        industry=scr_data["industry"]
+                    )
+                    st.session_state["about_data"] = about_data
+
+                    # 3. Qualitative Context-Locked Editorial Memo
+                    memo = agent.generate_editorial_memo(scr_data)
+                    st.session_state["editorial_memo"] = memo
+
+                except Exception as exc:
+                    st.error(f"Error computing financial models for {clean_sym}: {str(exc)}")
+        else:
+            st.error(f"Could not resolve a valid stock symbol for '{raw_user_input}'.")
     else:
-        status_msg = f"Extracting fundamentals and computing deterministic ratios for {clean_sym}..."
-
-    with st.spinner(status_msg):
-        try:
-            # 1. Deterministic Calculation
-            scr_data = ScreenerEngine.get_screener_data(clean_sym)
-            st.session_state["screener_data"] = scr_data
-
-            # 2. Screener "About the Company" Synthesis
-            agent = EditorialAgent()
-            about_data = agent.generate_screener_about(
-                summary_text=scr_data["raw_summary"],
-                company_name=scr_data["company_name"],
-                sector=scr_data["sector"],
-                industry=scr_data["industry"]
-            )
-            st.session_state["about_data"] = about_data
-
-            # 3. Qualitative Context-Locked Editorial Memo
-            memo = agent.generate_editorial_memo(scr_data)
-            st.session_state["editorial_memo"] = memo
-
-        except Exception as exc:
-            st.error(f"Error computing financial models for {clean_sym}: {str(exc)}")
+        st.warning("Please enter a company name or stock symbol before clicking 'Audit Stock'.")
 
 
 # -------------------------------------------------------------------------
-# Render Screener Dashboard View
+# Render Screener Dashboard View (Only when audit data exists)
 # -------------------------------------------------------------------------
 data = st.session_state.get("screener_data")
 about = st.session_state.get("about_data")
