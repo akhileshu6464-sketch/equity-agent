@@ -18,7 +18,6 @@ from services.financial_data import extract_pure_symbol
 from services.screener_engine import ScreenerEngine
 from agents.editorial_agent import EditorialAgent
 from utils.symbol_resolver import resolve_ticker, resolve_ticker_info
-from pdf_generator import build_institutional_pdf
 
 # -------------------------------------------------------------------------
 # Page Configuration
@@ -787,53 +786,3 @@ if data:
 
     if memo:
         st.markdown(f'<div class="memo-card">\n\n{memo}\n\n</div>', unsafe_allow_html=True)
-
-    # ---------------------------------------------------------------------
-    # 7. Institutional Dossier & PDF Export
-    # ---------------------------------------------------------------------
-    st.write("")
-    st.divider()
-
-    col_pdf, col_raw = st.columns([1, 1])
-    with col_pdf:
-        st.markdown("##### 📄 Export Research Dossier")
-        st.caption("Generate a publication-grade, SEBI-compliant institutional PDF report.")
-        try:
-            pdf_bytes = build_institutional_pdf(
-                ticker=clean_sym,
-                company_name=company_name,
-                metrics={
-                    "current_price": cmp,
-                    "market_cap_cr": mcap_cr,
-                    "pe_ratio": pe,
-                    "pb_ratio": pb,
-                    "roce_pct": roce,
-                    "roe_pct": roe,
-                    "debt_to_equity": de,
-                    "opm_pct": opm,
-                },
-                dossier_dict={
-                    "ticker": clean_sym,
-                    "company_name": company_name,
-                    "current_price": cmp,
-                    "sector": sector,
-                    "industry": industry,
-                    "screener_data": data,
-                    "memo": memo
-                }
-            )
-            st.download_button(
-                label="📥 Download Publication PDF",
-                data=pdf_bytes,
-                file_name=f"{raw_sym}_Institutional_Research.pdf",
-                mime="application/pdf",
-                use_container_width=True
-            )
-        except Exception as p_err:
-            st.caption(f"PDF exporter notice: {p_err}")
-
-    with col_raw:
-        st.markdown("##### 🔍 Verified Deterministic JSON Context")
-        st.caption("The exact mathematically pre-calculated context fed to LLMs to prevent hallucinations.")
-        with st.expander("View Numerical JSON"):
-            st.json(data.get("json_context", {}))
