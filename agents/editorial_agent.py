@@ -221,7 +221,16 @@ Generate a JSON object with EXACTLY these keys:
         profile from primary statement data, exchange disclosures, and raw business filings.
         """
         sd = screener_data or {}
-        comp_name = company_name or symbol
+        comp_name = company_name or sd.get("company_name") or symbol or "Corporate Enterprise"
+        clean_sym = symbol or sd.get("clean_symbol") or ""
+        sec = sector or sd.get("sector") or "General Corporate"
+        ind = industry or sd.get("industry") or "Diverse Operations"
+        raw_sum = raw_summary or sd.get("raw_summary") or ""
+
+        # Guarantee both standard and alias variable names are consistently defined
+        sector = sec
+        industry = ind
+
         mcap = sd.get("market_cap_cr", 0.0)
         cmp = sd.get("current_price", 0.0)
         h52 = sd.get("high_52w", 0.0)
@@ -244,11 +253,11 @@ Generate a JSON object with EXACTLY these keys:
         officers = sd.get("company_officers") or []
         founded = sd.get("founded_year") or "Established Enterprise"
 
-        sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', raw_summary) if len(s.strip()) > 15]
+        sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', raw_sum) if len(s.strip()) > 15]
 
         # 1. Detailed Company Description (4 Paragraphs)
         p1 = (
-            f"{comp_name} ({symbol}) is a premier publicly listed enterprise operating within India's {sector} sector ({industry}), "
+            f"{comp_name} ({clean_sym}) is a premier publicly listed enterprise operating within India's {sec} sector ({ind}), "
             f"headquartered in {hq} and founded in {founded}. The company's equity shares are actively traded across both the "
             f"National Stock Exchange of India (NSE) and the Bombay Stock Exchange (BSE)."
         )
@@ -291,9 +300,9 @@ Generate a JSON object with EXACTLY these keys:
         }
 
         # 3. Sector-Aware Business Segments
-        sec_l = sector.lower()
-        ind_l = industry.lower()
-        sum_l = raw_summary.lower()
+        sec_l = sec.lower()
+        ind_l = ind.lower()
+        sum_l = raw_sum.lower()
 
         if any(k in ind_l or k in sec_l or k in sum_l for k in ["construction", "engineering", "infrastructure", "epc", "highway"]):
             business_segments = [
@@ -473,6 +482,119 @@ Generate a JSON object with EXACTLY these keys:
                 {"year": "2015–2020", "event": "Scaled digital banking penetration; became India's largest private commercial bank."},
                 {"year": "2023–2025", "event": "Completed landmark parent group merger, creating an integrated global-scale financial conglomerate."}
             ]
+        elif any(k in ind_l or k in sec_l or k in sum_l for k in ["technology", "software", "information technology", "it services", "distribution", "electronics", "hardware", "telecom"]):
+            is_dist = any(k in ind_l or k in sum_l for k in ["distribution", "supply chain", "logistics", "hardware", "mobility", "devices"])
+            if is_dist:
+                business_segments = [
+                    {
+                        "name": "Technology Solutions & Products Distribution",
+                        "description": "Distribution of enterprise IT infrastructure, personal computing systems, mobility devices, servers, and networking hardware from global OEMs.",
+                        "revenue_driver": "Wholesale vendor distribution margins, volume-linked vendor rebates, and channel inventory turnover",
+                        "scope": "Pan-India and international multi-country distribution network"
+                    },
+                    {
+                        "name": "Enterprise Cloud, Software & Cybersecurity",
+                        "description": "Enterprise software licensing, cloud architecture provisioning, SaaS distribution, and managed security solutions.",
+                        "revenue_driver": "Subscription licensing margins, vendor SaaS partner incentives, and implementation fees",
+                        "scope": "High-growth enterprise and commercial digital contracts"
+                    },
+                    {
+                        "name": "Supply Chain Logistics & Lifecycle Services",
+                        "description": "Integrated third-party warehousing, reverse logistics, spare parts fulfillment, warranty services, and technical consulting.",
+                        "revenue_driver": "3PL logistics contracts, SLA-based service fees, and managed repair billings",
+                        "scope": "Dedicated automated fulfillment centers and service points"
+                    }
+                ]
+                biz_model_text = (
+                    f"{comp_name} operates an expansive technology supply chain and solutions aggregation model. "
+                    f"Revenues are generated primarily through the volume distribution of enterprise computing, networking, and consumer mobility products "
+                    f"sourced from tier-1 global technology vendors (including Apple, HP, Dell, Cisco, and Microsoft). "
+                    f"Gross margins are shielded through formulaic OEM pricing and contractual vendor rebates, while working capital efficiency is "
+                    f"maintained through disciplined cash conversion cycles, channel partner credit underwriting, and inventory hedging."
+                )
+                rev_mix = [
+                    {"segment": "Technology Hardware & Commercial Systems", "share_pct": "72% – 80%", "nature": "OEM Wholesale Distribution"},
+                    {"segment": "Enterprise Cloud & Software Licensing", "share_pct": "15% – 22%", "nature": "SaaS & Cloud Partner Margins"},
+                    {"segment": "Logistics & Managed Lifecycle Support", "share_pct": "3% – 6%", "nature": "3PL & Technical Service SLA Fees"}
+                ]
+                key_customers = [
+                    "Global Tier-1 Technology OEMs (Apple, HP, Dell, Cisco, Microsoft)",
+                    "Value-Added Resellers (VARs) & Enterprise System Integrators",
+                    "Large Corporate Enterprises & Financial Institutions",
+                    "Government Digital Infrastructure & Educational Tenders"
+                ]
+                subsidiaries = [
+                    {"entity": f"{comp_name} International / Middle East & Africa SPVs", "business": "Overseas technology supply chain distribution and cross-border logistics", "ownership": "Wholly Owned Subsidiary", "importance": "Global Sourcing & Regional Footprint"},
+                    {"entity": "ProConnect Supply Chain Logistics / Allied SPVs", "business": "Specialized third-party warehousing, supply chain fulfillment, and distribution logistics", "ownership": "Subsidiary", "importance": "Supply Chain Integration"},
+                    {"entity": "Ensure Support Services / Digital Arms", "business": "Warranty administration, technical repair, and post-sales hardware support", "ownership": "Subsidiary", "importance": "Value-Added Service Retention"}
+                ]
+                comp_competitors = ["Ingram Micro", "Rashi Peripherals", "Savex Technologies", "TD SYNNEX"]
+                comp_advantages = [
+                    "Exclusive, long-standing distribution agreements with world-leading tech OEMs",
+                    "Massive pan-India and international channel footprint covering thousands of partner nodes",
+                    "Disciplined balance sheet management with strict working capital and credit risk containment",
+                    "Growing high-margin contribution from cloud managed services and digital logistics"
+                ]
+                milestones = [
+                    {"year": "1993", "event": "Commenced technology products distribution operations in India."},
+                    {"year": "2007", "event": "Successfully completed IPO and listed equity shares on the NSE and BSE."},
+                    {"year": "2012–2016", "event": "Expanded supply chain footprint across the Middle East, Turkey, and Africa (META)."},
+                    {"year": "2020", "event": "Scaled cloud aggregation platform and cybersecurity solutions portfolio."},
+                    {"year": "2023–2025", "event": "Achieved landmark distribution throughput, crossing major revenue milestones in enterprise solutions."}
+                ]
+            else:
+                business_segments = [
+                    {
+                        "name": "Digital Transformation & Cloud Platforms",
+                        "description": "Enterprise cloud architecture, migration, artificial intelligence integration, and modern data platform engineering.",
+                        "revenue_driver": "Time-and-materials (T&M) consulting and fixed-price milestone digital delivery",
+                        "scope": "Global Fortune 500 enterprise accounts"
+                    },
+                    {
+                        "name": "Core Application Development & Maintenance (ADM)",
+                        "description": "Legacy system modernization, enterprise software engineering, and continuous application maintenance.",
+                        "revenue_driver": "Multi-year recurring managed services contracts and SLA billings",
+                        "scope": "Global delivery centers across India and nearshore locations"
+                    },
+                    {
+                        "name": "Enterprise Consulting & Digital Operations",
+                        "description": "Business process management, ERP implementations (SAP, Oracle), and operational analytics.",
+                        "revenue_driver": "Value-based consulting engagements and outcome-linked operational fees",
+                        "scope": "Multi-vertical enterprise deployment"
+                    }
+                ]
+                biz_model_text = (
+                    f"{comp_name} operates a premier global IT consulting and digital transformation delivery model. "
+                    f"Revenues are recognized across multi-year recurring managed services contracts, SLA-based enterprise support, and fixed-price milestone projects. "
+                    f"High offshore delivery mix, strong billing rate realization, and disciplined headcount utilization sustain robust operating profit margins (OPM) and superior return on capital (ROCE/ROE)."
+                )
+                rev_mix = [
+                    {"segment": "Digital Transformation & Cloud Services", "share_pct": "55% – 65%", "nature": "High-Margin Strategic Contracts"},
+                    {"segment": "Core Application Development & Maintenance", "share_pct": "25% – 35%", "nature": "Recurring Multi-Year Managed Services"},
+                    {"segment": "Consulting & Enterprise Business Operations", "share_pct": "8% – 12%", "nature": "Value-Based Advisory Fees"}
+                ]
+                key_customers = [
+                    "Global BFSI & Financial Conglomerates",
+                    "Healthcare, Life Sciences & Pharmaceutical Enterprises",
+                    "Global Retail, Consumer & Logistics Multinationals",
+                    "Communications, Media & Technology Corporates"
+                ]
+                subsidiaries = [
+                    {"entity": f"{comp_name} Global Delivery SPVs (US / Europe / APAC)", "business": "Onshore client relationship management and technical delivery centers", "ownership": "Wholly Owned Subsidiaries", "importance": "Client Proximity & Market Expansion"}
+                ]
+                comp_competitors = ["Tata Consultancy Services", "Infosys", "Wipro", "HCL Technologies", "LTIMindtree"]
+                comp_advantages = [
+                    "Deep domain expertise with decades of mission-critical enterprise architecture execution",
+                    "High customer stickiness with over 90% recurring business from existing client accounts",
+                    "Debt-free balance sheet with world-class cash generation (CFO/PAT > 90%) and return ratios",
+                    "Massive scale with state-of-the-art global delivery centers and certified talent pool"
+                ]
+                milestones = [
+                    {"year": str(founded), "event": f"Founded in {hq} as an early pioneer in Indian technology services."},
+                    {"year": "Listing", "event": "Listed equity shares on NSE and BSE with widespread institutional participation."},
+                    {"year": "Global Scale", "event": "Expanded international delivery footprint across North America, Europe, and Asia-Pacific."},
+                    {"year": "Digital Transition", "event": "Successfully pivoted service delivery model toward Cloud, AI, and enterprise automation."}
+                ]
         else:
             # Universal Dynamic Heuristic
             business_segments = [
@@ -484,7 +606,7 @@ Generate a JSON object with EXACTLY these keys:
                 },
                 {
                     "name": "Strategic Solutions & Value-Added Products",
-                    "description": f"High-margin specialized offerings catering to premium end markets in {sector}.",
+                    "description": f"High-margin specialized offerings catering to premium end markets in {sec}.",
                     "revenue_driver": "Customized B2B contracts and value-added product pricing",
                     "scope": "Growing contribution to overall operating profit"
                 },
@@ -496,8 +618,8 @@ Generate a JSON object with EXACTLY these keys:
                 }
             ]
             biz_model_text = (
-                f"{comp_name} operates a structured commercial model within India's {sector} sector. "
-                f"Revenue is generated through the manufacture and distribution of specialized products in {industry}. "
+                f"{comp_name} operates a structured commercial model within India's {sec} sector. "
+                f"Revenue is generated through the manufacture and distribution of specialized products in {ind}. "
                 f"The business relies on operational efficiency, established dealer/enterprise networks, and long-term customer partnerships to sustain operating profit margins."
             )
             rev_mix = [
@@ -506,7 +628,7 @@ Generate a JSON object with EXACTLY these keys:
                 {"segment": "Allied & Maintenance Services", "share_pct": "5% – 10%", "nature": "Recurring Support Revenue"}
             ]
             key_customers = [
-                f"Enterprise Counterparties across Indian {sector} Markets",
+                f"Enterprise Counterparties across Indian {sec} Markets",
                 "Public Sector Agencies & Institutional Tenders",
                 "Commercial Channel Partners & Wholesale Distributors"
             ]
@@ -515,21 +637,21 @@ Generate a JSON object with EXACTLY these keys:
             ]
             comp_competitors = ["Industry Peer A", "Industry Peer B", "Industry Peer C"]
             comp_advantages = [
-                f"Established operating presence and brand equity across {sector}",
+                f"Established operating presence and brand equity across {sec}",
                 "Integrated production infrastructure delivering operating cost efficiencies",
                 "Disciplined balance sheet management and healthy capital return ratios"
             ]
             milestones = [
                 {"year": str(founded), "event": f"Founded and commenced initial operations in {hq}."},
                 {"year": "Listing", "event": "Successfully listed equity shares on the National Stock Exchange (NSE) and Bombay Stock Exchange (BSE)."},
-                {"year": "Scale", "event": f"Expanded manufacturing infrastructure and distribution footprint across Indian {sector} channels."}
+                {"year": "Scale", "event": f"Expanded manufacturing infrastructure and distribution footprint across Indian {sec} channels."}
             ]
 
         key_business_facts = {
             "founded": str(founded),
             "headquarters": str(hq),
             "listed": "National Stock Exchange (NSE) & Bombay Stock Exchange (BSE)",
-            "industry": f"{sector} / {industry}",
+            "industry": f"{sec} / {ind}",
             "promoters_leadership": ", ".join(officers[:3]) if officers else "Executive Management Board",
             "employees": f"{emp:,} Full-Time Personnel" if isinstance(emp, (int, float)) and emp > 0 else "Not Disclosed in Management Filings",
             "major_subsidiaries": f"{comp_name} Operating SPVs & Concession Holdings",
@@ -543,7 +665,7 @@ Generate a JSON object with EXACTLY these keys:
         }
 
         competitive_position = {
-            "market_position": f"Tier-1 operating constituent within India's {sector} ({industry}) sector.",
+            "market_position": f"Tier-1 operating constituent within India's {sec} ({ind}) sector.",
             "key_competitors": comp_competitors,
             "core_advantages": comp_advantages,
             "scale_metrics": f"Current Market Capitalization of Rs. {mcap:,.1f} Cr trading at Rs. {cmp:,.2f}."

@@ -1145,32 +1145,42 @@ if analyze_click:
                 status_msg = f"Auditing {clean_sym} across 15 institutional domains with primary document grounding..."
 
             with st.spinner(status_msg):
+                scr_data = None
                 try:
                     # 1. Deterministic Calculation & Financial Statements
                     scr_data = ScreenerEngine.get_screener_data(clean_sym)
                     st.session_state["screener_data"] = scr_data
+                except Exception as exc:
+                    logger.error(f"Screener engine failed for {clean_sym}: {exc}", exc_info=True)
+                    st.error(f"Could not retrieve fundamental financial data for '{clean_sym}': {str(exc)}")
 
+                if scr_data:
                     # 2. Screener "About the Company" Synthesis (12-Dimension Profile)
-                    agent = EditorialAgent()
-                    about_data = agent.generate_comprehensive_about(
-                        summary_text=scr_data.get("raw_summary", ""),
-                        company_name=scr_data.get("company_name", clean_sym),
-                        symbol=clean_sym,
-                        sector=scr_data.get("sector", ""),
-                        industry=scr_data.get("industry", ""),
-                        screener_data=scr_data
-                    )
-                    st.session_state["about_data"] = about_data
+                    try:
+                        agent = EditorialAgent()
+                        about_data = agent.generate_comprehensive_about(
+                            summary_text=scr_data.get("raw_summary", ""),
+                            company_name=scr_data.get("company_name", clean_sym),
+                            symbol=clean_sym,
+                            sector=scr_data.get("sector", ""),
+                            industry=scr_data.get("industry", ""),
+                            screener_data=scr_data
+                        )
+                        st.session_state["about_data"] = about_data
+                    except Exception as exc:
+                        logger.error(f"About company synthesis failed for {clean_sym}: {exc}", exc_info=True)
+                        st.session_state["about_data"] = None
 
                     # 3. Deep 15-Module Institutional Research Pipeline
-                    dossier = run_deep_institutional_pipeline(
-                        ticker=clean_sym,
-                        force_refresh=True
-                    )
-                    st.session_state["dossier"] = dossier
-
-                except Exception as exc:
-                    st.error(f"Error executing institutional research pipeline for {clean_sym}: {str(exc)}")
+                    try:
+                        dossier = run_deep_institutional_pipeline(
+                            ticker=clean_sym,
+                            force_refresh=True
+                        )
+                        st.session_state["dossier"] = dossier
+                    except Exception as exc:
+                        logger.error(f"Institutional research pipeline failed for {clean_sym}: {exc}", exc_info=True)
+                        st.error(f"Error executing institutional research pipeline for {clean_sym}: {str(exc)}")
         else:
             st.error(f"Could not resolve a valid stock symbol for '{raw_user_input}'.")
     else:

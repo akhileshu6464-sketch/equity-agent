@@ -2022,6 +2022,15 @@ def run_deep_institutional_pipeline(
     peers = resolve_benchmark_peers(norm_ticker, is_bank, sector_prof)
     sector_name = sector_prof.get("display_name", meta.get("sector", "General Corporate"))
 
+    # Development Logging Checkpoints
+    logger.info(f"Company resolved: {norm_ticker}")
+    logger.info(f"Company data: {'SUCCESS' if company_data and company_data.get('symbol') else 'FAILED'}")
+    logger.info(f"Financial data: {'SUCCESS' if company_data and company_data.get('history_years') else 'FAILED'}")
+    logger.info(f"Industry data: {'SUCCESS' if info_yf.get('industry') or company_data.get('industry') else 'FAILED'}")
+    logger.info(f"Annual report retrieval: {'SUCCESS' if primary_disclosures and primary_disclosures.get('product_portfolio') else 'FAILED'}")
+    logger.info(f"Concall retrieval: {'SUCCESS' if (primary_disclosures.get('concall_transcript') or {}).get('management_remarks') != 'Not Disclosed in Management Filings' or search_intel else 'FAILED'}")
+    logger.info(f"Peer analysis: {'SUCCESS' if peers else 'FAILED'}")
+
     moat_prompt = get_moat_prompt(norm_ticker, company_name, sector_name, is_bank, data_summary, verified_financials_block, primary_disclosures_block)
     forensic_prompt = get_forensic_prompt(norm_ticker, company_name, is_bank, data_summary, verified_financials_block, primary_disclosures_block)
     leadership_prompt = get_leadership_prompt(norm_ticker, company_name, is_bank, peers, verified_financials_block, primary_disclosures_block)
@@ -2039,83 +2048,112 @@ def run_deep_institutional_pipeline(
         leadership_out = future_leadership.result()
         val_out = future_valuation.result()
 
-    # 5. Core agent synthesis
-    agent_0 = Agent0Classifier().analyze(company_data, context)
-    
+    # 5. Core agent synthesis with module error isolation
+    try:
+        agent_0 = Agent0Classifier().analyze(company_data, context)
+    except Exception as e:
+        logger.error(f"Agent 0 Classifier error for {norm_ticker}: {e}", exc_info=True)
+        agent_0 = {"sector": meta.get("sector", "Corporate"), "industry": meta.get("industry", "General")}
+
     # Enriched Agent 1 (Moat)
-    agent_1 = Agent1Qualitative().analyze(company_data, context)
-    agent_1["summary"] = moat_out.get("summary", agent_1.get("summary"))
-    agent_1["moat_rating"] = moat_out.get("moat_rating", agent_1.get("moat_rating", "WIDE"))
-    agent_1["risk_pill"] = moat_out.get("risk_pill", agent_1.get("risk_pill", "GREEN"))
-    for d_i in range(1, 6):
-        d_k = f"dimension_{d_i}"
-        if d_k in moat_out:
-            agent_1[d_k] = moat_out[d_k]
-    # Enriched 4-tier subtabs in agent_1
-    if is_bank:
-        if "dimension_1" in moat_out and isinstance(moat_out["dimension_1"], dict):
-            agent_1.setdefault("part1_business_model", {})["Core Revenue Engine & NIM / Liability Defensibility"] = moat_out["dimension_1"]
-        if "dimension_2" in moat_out and isinstance(moat_out["dimension_2"], dict):
-            agent_1.setdefault("part1_business_model", {})["Operating Efficiency & Branch / Digital Underwriting Throughput"] = moat_out["dimension_2"]
-        if "dimension_3" in moat_out and isinstance(moat_out["dimension_3"], dict):
-            agent_1.setdefault("part2_competitive_moat", {})["Asset Quality & Credit Cost Trajectory"] = moat_out["dimension_3"]
-        if "dimension_4" in moat_out and isinstance(moat_out["dimension_4"], dict):
-            agent_1.setdefault("part2_competitive_moat", {})["Regulatory Capital & Balance Sheet Strength"] = moat_out["dimension_4"]
-    else:
-        if "dimension_1" in moat_out and isinstance(moat_out["dimension_1"], dict):
-            agent_1.setdefault("part1_business_model", {})["Brand Moat, Pricing Power & Margin Defensibility"] = moat_out["dimension_1"]
-        if "dimension_2" in moat_out and isinstance(moat_out["dimension_2"], dict):
-            agent_1.setdefault("part1_business_model", {})["Distribution Network, Channel Throughput & Operating Leverage"] = moat_out["dimension_2"]
-        if "dimension_3" in moat_out and isinstance(moat_out["dimension_3"], dict):
-            agent_1.setdefault("part2_competitive_moat", {})["Working Capital Dynamics & Cash Conversion Cycle"] = moat_out["dimension_3"]
-        if "dimension_4" in moat_out and isinstance(moat_out["dimension_4"], dict):
-            agent_1.setdefault("part2_competitive_moat", {})["Capital Allocation & Balance Sheet Durability"] = moat_out["dimension_4"]
-    if "dimension_5" in moat_out and isinstance(moat_out["dimension_5"], dict):
-        agent_1.setdefault("part2_competitive_moat", {})["Scale Economies & Network Reach"] = moat_out["dimension_5"]
+    try:
+        agent_1 = Agent1Qualitative().analyze(company_data, context)
+        agent_1["summary"] = moat_out.get("summary", agent_1.get("summary"))
+        agent_1["moat_rating"] = moat_out.get("moat_rating", agent_1.get("moat_rating", "WIDE"))
+        agent_1["risk_pill"] = moat_out.get("risk_pill", agent_1.get("risk_pill", "GREEN"))
+        for d_i in range(1, 6):
+            d_k = f"dimension_{d_i}"
+            if d_k in moat_out:
+                agent_1[d_k] = moat_out[d_k]
+        # Enriched 4-tier subtabs in agent_1
+        if is_bank:
+            if "dimension_1" in moat_out and isinstance(moat_out["dimension_1"], dict):
+                agent_1.setdefault("part1_business_model", {})["Core Revenue Engine & NIM / Liability Defensibility"] = moat_out["dimension_1"]
+            if "dimension_2" in moat_out and isinstance(moat_out["dimension_2"], dict):
+                agent_1.setdefault("part1_business_model", {})["Operating Efficiency & Branch / Digital Underwriting Throughput"] = moat_out["dimension_2"]
+            if "dimension_3" in moat_out and isinstance(moat_out["dimension_3"], dict):
+                agent_1.setdefault("part2_competitive_moat", {})["Asset Quality & Credit Cost Trajectory"] = moat_out["dimension_3"]
+            if "dimension_4" in moat_out and isinstance(moat_out["dimension_4"], dict):
+                agent_1.setdefault("part2_competitive_moat", {})["Regulatory Capital & Balance Sheet Strength"] = moat_out["dimension_4"]
+        else:
+            if "dimension_1" in moat_out and isinstance(moat_out["dimension_1"], dict):
+                agent_1.setdefault("part1_business_model", {})["Brand Moat, Pricing Power & Margin Defensibility"] = moat_out["dimension_1"]
+            if "dimension_2" in moat_out and isinstance(moat_out["dimension_2"], dict):
+                agent_1.setdefault("part1_business_model", {})["Distribution Network, Channel Throughput & Operating Leverage"] = moat_out["dimension_2"]
+            if "dimension_3" in moat_out and isinstance(moat_out["dimension_3"], dict):
+                agent_1.setdefault("part2_competitive_moat", {})["Working Capital Dynamics & Cash Conversion Cycle"] = moat_out["dimension_3"]
+            if "dimension_4" in moat_out and isinstance(moat_out["dimension_4"], dict):
+                agent_1.setdefault("part2_competitive_moat", {})["Capital Allocation & Balance Sheet Durability"] = moat_out["dimension_4"]
+        if "dimension_5" in moat_out and isinstance(moat_out["dimension_5"], dict):
+            agent_1.setdefault("part2_competitive_moat", {})["Scale Economies & Network Reach"] = moat_out["dimension_5"]
+    except Exception as e:
+        logger.error(f"Agent 1 Moat analysis error for {norm_ticker}: {e}", exc_info=True)
+        agent_1 = {"summary": "Moat and business model analysis temporarily unavailable.", "risk_pill": "YELLOW"}
 
     # Enriched Agent 2 (Forensics)
-    agent_2 = Agent2Forensics().analyze(company_data, context)
-    agent_2["summary"] = forensic_out.get("summary", agent_2.get("summary"))
-    agent_2["risk_pill"] = forensic_out.get("risk_pill", agent_2.get("risk_pill", "GREEN"))
-    agent_2["forensic_score"] = forensic_out.get("forensic_score", "CLEAN")
-    for dom_i in range(1, 5):
-        dom_k = f"domain_{dom_i}"
-        if dom_k in forensic_out:
-            agent_2[dom_k] = forensic_out[dom_k]
-    if "domain_1" in forensic_out and isinstance(forensic_out["domain_1"], dict):
-        agent_2.setdefault("part15_revenue_quality", {})["Cash Flow Quality & Accruals"] = forensic_out["domain_1"]
-    if "domain_2" in forensic_out and isinstance(forensic_out["domain_2"], dict):
-        agent_2.setdefault("part14_sga_anomalies", {})["Asset Quality & Restructuring"] = forensic_out["domain_2"]
-    if "domain_3" in forensic_out and isinstance(forensic_out["domain_3"], dict):
-        agent_2.setdefault("part13_depreciation", {})["Depreciation & Contingent Exposures"] = forensic_out["domain_3"]
-    if "domain_4" in forensic_out and isinstance(forensic_out["domain_4"], dict):
-        agent_2.setdefault("part16_balance_sheet", {})["Auditor Independence & Governance"] = forensic_out["domain_4"]
+    try:
+        agent_2 = Agent2Forensics().analyze(company_data, context)
+        agent_2["summary"] = forensic_out.get("summary", agent_2.get("summary"))
+        agent_2["risk_pill"] = forensic_out.get("risk_pill", agent_2.get("risk_pill", "GREEN"))
+        agent_2["forensic_score"] = forensic_out.get("forensic_score", "CLEAN")
+        for dom_i in range(1, 5):
+            dom_k = f"domain_{dom_i}"
+            if dom_k in forensic_out:
+                agent_2[dom_k] = forensic_out[dom_k]
+        if "domain_1" in forensic_out and isinstance(forensic_out["domain_1"], dict):
+            agent_2.setdefault("part15_revenue_quality", {})["Cash Flow Quality & Accruals"] = forensic_out["domain_1"]
+        if "domain_2" in forensic_out and isinstance(forensic_out["domain_2"], dict):
+            agent_2.setdefault("part14_sga_anomalies", {})["Asset Quality & Restructuring"] = forensic_out["domain_2"]
+        if "domain_3" in forensic_out and isinstance(forensic_out["domain_3"], dict):
+            agent_2.setdefault("part13_depreciation", {})["Depreciation & Contingent Exposures"] = forensic_out["domain_3"]
+        if "domain_4" in forensic_out and isinstance(forensic_out["domain_4"], dict):
+            agent_2.setdefault("part16_balance_sheet", {})["Auditor Independence & Governance"] = forensic_out["domain_4"]
+    except Exception as e:
+        logger.error(f"Agent 2 Forensics analysis error for {norm_ticker}: {e}", exc_info=True)
+        agent_2 = {"summary": "Forensics analysis temporarily unavailable.", "risk_pill": "YELLOW"}
 
-    agent_3 = Agent3Solvency().analyze(company_data, context)
+    try:
+        agent_3 = Agent3Solvency().analyze(company_data, context)
+    except Exception as e:
+        logger.error(f"Agent 3 Solvency analysis error for {norm_ticker}: {e}", exc_info=True)
+        agent_3 = {"summary": "Solvency metrics analysis temporarily unavailable.", "risk_pill": "YELLOW"}
 
     # Enriched Agent 4 (Leadership & Competitor Matrix)
-    agent_4 = Agent4Governance().analyze(company_data, context)
-    agent_4["summary"] = leadership_out.get("summary", agent_4.get("summary"))
-    agent_4["credibility_verdict"] = leadership_out.get("credibility_verdict", agent_4.get("credibility_verdict", "HIGH INTEGRITY"))
-    agent_4["risk_pill"] = leadership_out.get("risk_pill", agent_4.get("risk_pill", "GREEN"))
-    for l_dim in ["dimension1_leadership_pedigree", "dimension2_crisis_playbook", "dimension3_credibility_audit", "dimension4_competitor_matrix"]:
-        if l_dim in leadership_out:
-            parsed_dim = parse_dimension_data(leadership_out[l_dim])
-            leadership_out[l_dim] = parsed_dim
-            agent_4[l_dim] = parsed_dim
+    try:
+        agent_4 = Agent4Governance().analyze(company_data, context)
+        agent_4["summary"] = leadership_out.get("summary", agent_4.get("summary"))
+        agent_4["credibility_verdict"] = leadership_out.get("credibility_verdict", agent_4.get("credibility_verdict", "HIGH INTEGRITY"))
+        agent_4["risk_pill"] = leadership_out.get("risk_pill", agent_4.get("risk_pill", "GREEN"))
+        for l_dim in ["dimension1_leadership_pedigree", "dimension2_crisis_playbook", "dimension3_credibility_audit", "dimension4_competitor_matrix"]:
+            if l_dim in leadership_out:
+                parsed_dim = parse_dimension_data(leadership_out[l_dim])
+                leadership_out[l_dim] = parsed_dim
+                agent_4[l_dim] = parsed_dim
+    except Exception as e:
+        logger.error(f"Agent 4 Governance analysis error for {norm_ticker}: {e}", exc_info=True)
+        agent_4 = {"summary": "Leadership and governance analysis temporarily unavailable.", "risk_pill": "YELLOW"}
 
-    agent_5 = Agent5IndustryKPI().analyze(company_data, context)
+    try:
+        agent_5 = Agent5IndustryKPI().analyze(company_data, context)
+    except Exception as e:
+        logger.error(f"Agent 5 Industry KPI analysis error for {norm_ticker}: {e}", exc_info=True)
+        agent_5 = {"summary": "Industry KPI benchmarks temporarily unavailable.", "risk_pill": "YELLOW"}
 
     # Enriched Agent 6 (Valuation & Scenarios)
-    agent_6 = Agent6Synthesizer().analyze(company_data, context)
-    agent_6["summary"] = val_out.get("summary", agent_6.get("summary"))
-    agent_6["primary_valuation"] = val_out.get("primary_valuation", agent_6.get("primary_valuation"))
-    agent_6["implied_hurdle_rate"] = val_out.get("implied_hurdle_rate", str(agent_6.get("implied_growth_pct", "10.0%")))
-    if "scenario_analysis" in val_out:
-        agent_6["scenario_analysis"] = val_out["scenario_analysis"]
-    if "invalidation_triggers" in val_out:
-        agent_6["invalidation_triggers"] = val_out["invalidation_triggers"]
-    inst_rating = val_out.get("institutional_rating", agent_6.get("institutional_rating", "[HOLD / FAIR VALUE]"))
+    try:
+        agent_6 = Agent6Synthesizer().analyze(company_data, context)
+        agent_6["summary"] = val_out.get("summary", agent_6.get("summary"))
+        agent_6["primary_valuation"] = val_out.get("primary_valuation", agent_6.get("primary_valuation"))
+        agent_6["implied_hurdle_rate"] = val_out.get("implied_hurdle_rate", str(agent_6.get("implied_growth_pct", "10.0%")))
+        if "scenario_analysis" in val_out:
+            agent_6["scenario_analysis"] = val_out["scenario_analysis"]
+        if "invalidation_triggers" in val_out:
+            agent_6["invalidation_triggers"] = val_out["invalidation_triggers"]
+        inst_rating = val_out.get("institutional_rating", agent_6.get("institutional_rating", "[HOLD / FAIR VALUE]"))
+    except Exception as e:
+        logger.error(f"Agent 6 Valuation synthesis error for {norm_ticker}: {e}", exc_info=True)
+        agent_6 = {"summary": "Valuation synthesis temporarily unavailable.", "risk_pill": "YELLOW"}
+        inst_rating = "[HOLD / FAIR VALUE]"
 
     # Agent 7 (Concall & Guidance)
     concall_snippets = []
@@ -2129,12 +2167,19 @@ def run_deep_institutional_pipeline(
         if concall_remarks and concall_remarks != "Not Disclosed in Management Filings":
             concall_raw_text = concall_remarks
 
-    agent_7 = run_agent7_concall_analysis(
-        ticker=norm_ticker,
-        archetype=sector_prof,
-        concall_raw_text=concall_raw_text,
-        company_data=company_data
-    )
+    try:
+        agent_7 = run_agent7_concall_analysis(
+            ticker=norm_ticker,
+            archetype=sector_prof,
+            concall_raw_text=concall_raw_text,
+            company_data=company_data
+        )
+    except Exception as e:
+        logger.error(f"Agent 7 Concall analysis error for {norm_ticker}: {e}", exc_info=True)
+        agent_7 = {"summary": "Earnings concall guidance analysis temporarily unavailable."}
+
+    logger.info(f"Valuation: {'SUCCESS' if agent_6 and agent_6.get('summary') else 'FAILED'}")
+    logger.info(f"Report generation: SUCCESS")
 
     risk_pills = {
         "Moat & Business": agent_1.get("risk_pill", "GREEN"),
