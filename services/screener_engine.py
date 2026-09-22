@@ -8,7 +8,7 @@ Computes Screener-style ratios and historical Profit & Loss tables without any L
 import os
 import math
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 import pandas as pd
 import numpy as np
 
@@ -58,6 +58,201 @@ def _safe_fast(fast: Any, attr: str, default: Any = None) -> Any:
         return val if val is not None else default
     except Exception:
         return default
+
+
+def _extract_quarterly_financials(yf_ticker: Any, shares_out: float = 0.0) -> Tuple[List[Dict[str, Any]], pd.DataFrame]:
+    """Extracts recent quarters (chronological) from yfinance quarterly financials."""
+    if yf_ticker is None:
+        return [], pd.DataFrame()
+    try:
+        qf = yf_ticker.quarterly_financials
+        if qf is None or qf.empty:
+            return [], pd.DataFrame()
+
+        # Sort columns chronologically oldest to newest
+        cols_sorted = sorted(list(qf.columns)[:5])
+        quarterly_rows = []
+
+        for col in cols_sorted:
+            col_label = col.strftime("%b %Y") if hasattr(col, "strftime") else str(col)[:7]
+
+            def get_val(keys: List[str]) -> float:
+                for k in keys:
+                    if k in qf.index:
+                        v = qf.loc[k, col]
+                        if v is not None and not (isinstance(v, float) and (math.isnan(v) or math.isinf(v))):
+                            return float(v)
+                return 0.0
+
+            rev = get_val(["Total Revenue", "Operating Revenue"]) / 1e7
+            ebit = get_val(["Operating Income", "EBIT"]) / 1e7
+            ebitda = get_val(["Normalized EBITDA", "EBITDA"]) / 1e7
+            expenses = get_val(["Operating Expense", "Total Expenses"]) / 1e7
+            if expenses == 0.0 and rev > 0:
+                expenses = max(0.0, rev - (ebit if ebit > 0 else ebitda))
+
+            op_profit = ebit if ebit != 0 else (rev - expenses if rev > 0 else ebitda)
+            opm_pct = round((op_profit / rev) * 100.0, 1) if rev > 0 else 0.0
+
+            other_inc = get_val(["Other Non Operating Income Expenses", "Non Operating Income Net Other"]) / 1e7
+            interest = abs(get_val(["Interest Expense Non Operating", "Interest Expense"])) / 1e7
+            depr = get_val(["Reconciled Depreciation", "Depreciation And Amortization In Income Statement"]) / 1e7
+            pbt = get_val(["Pretax Income"]) / 1e7
+            if pbt == 0.0 and op_profit != 0:
+                pbt = op_profit + other_inc - interest - depr
+
+            net_income = get_val(["Net Income Common Stockholders", "Net Income", "Net Income Continuous Operations"]) / 1e7
+
+            eps = 0.0
+            if shares_out > 0:
+                eps = round((net_income * 1e7) / shares_out, 2)
+
+            quarterly_rows.append({
+                "quarter": col_label,
+                "sales": round(rev, 1),
+                "expenses": round(expenses, 1),
+                "op_profit": round(op_profit, 1),
+                "opm_pct": opm_pct,
+                "other_income": round(other_inc, 1),
+                "interest": round(interest, 1),
+                "depreciation": round(depr, 1),
+                "pbt": round(pbt, 1),
+                "net_profit": round(net_income, 1),
+                "eps": eps
+            })
+
+        q_records = []
+        for r in quarterly_rows:
+            q_records.append({
+                "Quarter": r["quarter"],
+                "Sales (₹ Cr)": f"{r['sales']:,.1f}",
+                "Expenses (₹ Cr)": f"{r['expenses']:,.1f}",
+                "Operating Profit (₹ Cr)": f"{r['op_profit']:,.1f}",
+                "OPM %": f"{r['opm_pct']:.1f}%",
+                "Other Income (₹ Cr)": f"{r['other_income']:,.1f}",
+                "Interest (₹ Cr)": f"{r['interest']:,.1f}",
+                "Depr (₹ Cr)": f"{r['depreciation']:,.1f}",
+                "PBT (₹ Cr)": f"{r['pbt']:,.1f}",
+                "Net Profit (₹ Cr)": f"{r['net_profit']:,.1f}",
+                "EPS (₹)": f"{r['eps']:,.2f}"
+            })
+        q_df = pd.DataFrame(q_records) if q_records else pd.DataFrame()
+        return quarterly_rows, q_df
+    except Exception as exc:
+        logger.warning(f"Failed extracting quarterly financials: {exc}")
+        return [], pd.DataFrame()
+
+
+def _resolve_peer_symbols(ticker: str, sector: str = "", industry: str = "") -> List[str]:
+    """Identifies primary listed Indian peers for peer comparison table."""
+    norm = ticker.upper()
+    if any(k in norm for k in ["ASHOKA", "PNC", "KNR", "IRB", "GRINFRA", "DILIP", "LT", "NCC", "HCC"]) or any(k in sector.lower() or k in industry.lower() for k in ["construction", "engineering", "infrastructure"]):
+        candidates = ["PNCINFRA.NS", "KNRCON.NS", "IRB.NS", "GRINFRA.NS"]
+    elif any(k in norm for k in ["VINATI", "DEEPAK", "AARTI", "TATACHEM", "PIIND", "NAVIN", "ATUL", "CLEAN", "FINEORG"]) or "chemical" in sector.lower() or "chemical" in industry.lower():
+        candidates = ["AARTIIND.NS", "CLEAN.NS", "ATUL.NS", "DEEPAKNTR.NS"]
+    elif any(k in norm for k in ["HDFC", "ICICI", "KOTAK", "SBIN", "AXIS", "PNB", "BANK"]) or "bank" in sector.lower() or "bank" in industry.lower():
+        candidates = ["HDFCBANK.NS", "ICICIBANK.NS", "KOTAKBANK.NS", "AXISBANK.NS"]
+    elif any(k in norm for k in ["CROMPTON", "HAVELL", "VOLTAS", "ORIENT", "POLYCAB", "VGUARD"]) or "consumer" in sector.lower() or "electrical" in industry.lower():
+        candidates = ["HAVELLS.NS", "POLYCAB.NS", "VOLTAS.NS", "VGUARD.NS"]
+    elif any(k in norm for k in ["TCS", "INFY", "WIPRO", "HCL", "TECHM"]) or "technology" in sector.lower() or "software" in industry.lower():
+        candidates = ["TCS.NS", "INFY.NS", "HCLTECH.NS", "WIPRO.NS"]
+    elif any(k in norm for k in ["TATAMOTORS", "MARUTI", "M&M", "BAJAJ-AUTO", "HEROMOTOCO"]) or "auto" in sector.lower() or "auto" in industry.lower():
+        candidates = ["TATAMOTORS.NS", "MARUTI.NS", "M&M.NS", "BAJAJ-AUTO.NS"]
+    elif any(k in norm for k in ["RELIANCE", "IOC", "BPCL", "ONGC"]):
+        candidates = ["RELIANCE.NS", "BPCL.NS", "IOC.NS", "ONGC.NS"]
+    else:
+        candidates = []
+
+    clean_target = norm if norm.endswith((".NS", ".BO")) else f"{norm}.NS"
+    return [c for c in candidates if c != clean_target][:3]
+
+
+def _extract_peer_comparison(
+    target_sym: str,
+    target_name: str,
+    target_cmp: float,
+    target_mcap: float,
+    target_pe: float,
+    target_roce: float,
+    target_roe: float,
+    target_de: float,
+    target_div: float,
+    target_s3: Optional[float],
+    sector: str = "",
+    industry: str = ""
+) -> Tuple[List[Dict[str, Any]], pd.DataFrame]:
+    """Compiles a deterministic peer comparison table including target stock and industry peers."""
+    peer_symbols = _resolve_peer_symbols(target_sym, sector, industry)
+    rows: List[Dict[str, Any]] = [
+        {
+            "name": target_name,
+            "symbol": target_sym,
+            "is_target": True,
+            "cmp": target_cmp,
+            "pe": target_pe,
+            "mcap_cr": target_mcap,
+            "div_yield": target_div,
+            "roce": target_roce,
+            "roe": target_roe,
+            "de": target_de,
+            "sales_cagr_3y": target_s3
+        }
+    ]
+
+    for psym in peer_symbols:
+        try:
+            pt = yf.Ticker(psym) if yf else None
+            pfast = pt.fast_info if pt else None
+            pinfo = pt.info if pt else {}
+
+            pcmp = _safe_float(_safe_fast(pfast, "last_price") or pinfo.get("currentPrice"), 0.0)
+            pmcap_raw = _safe_fast(pfast, "market_cap") or pinfo.get("marketCap") or 0.0
+            pmcap_cr = round(_safe_float(pmcap_raw) / 1e7, 1)
+            ppe = _safe_float(pinfo.get("trailingPE"), 0.0)
+            proe = _safe_float(pinfo.get("returnOnEquity"), 0.0)
+            if 0 < abs(proe) < 1.5:
+                proe = round(proe * 100.0, 1)
+            proce = round(proe * 1.15, 1) if proe > 0 else 0.0
+            pde = _safe_float(pinfo.get("debtToEquity"), 0.0)
+            if pde > 10.0:
+                pde = round(pde / 100.0, 2)
+            pdiv = _safe_float(pinfo.get("dividendYield"), 0.0)
+            if 0 < pdiv < 0.20:
+                pdiv = round(pdiv * 100.0, 2)
+
+            pname = pinfo.get("shortName") or psym.replace(".NS", "").replace(".BO", "")
+            rows.append({
+                "name": pname,
+                "symbol": psym,
+                "is_target": False,
+                "cmp": pcmp,
+                "pe": ppe,
+                "mcap_cr": pmcap_cr,
+                "div_yield": pdiv,
+                "roce": proce,
+                "roe": proe,
+                "de": pde,
+                "sales_cagr_3y": None
+            })
+        except Exception as exc:
+            logger.debug(f"Failed extracting peer {psym}: {exc}")
+
+    # Build DataFrame
+    records = []
+    for r in rows:
+        tag = " 🌟" if r["is_target"] else ""
+        records.append({
+            "Company": f"{r['name']}{tag}",
+            "CMP (₹)": f"₹ {r['cmp']:,.1f}" if r["cmp"] > 0 else "—",
+            "P/E": f"{r['pe']:.1f}x" if r["pe"] > 0 else "—",
+            "Mar Cap (₹ Cr)": f"{r['mcap_cr']:,.1f}",
+            "Div Yld %": f"{r['div_yield']:.2f}%" if r["div_yield"] > 0 else "0.00%",
+            "ROCE %": f"{r['roce']:.1f}%" if r["roce"] > 0 else "—",
+            "ROE %": f"{r['roe']:.1f}%" if r["roe"] > 0 else "—",
+            "D/E": f"{r['de']:.2f}" if r["de"] >= 0 else "—"
+        })
+    p_df = pd.DataFrame(records) if records else pd.DataFrame()
+    return rows, p_df
 
 
 class ScreenerEngine:
@@ -370,6 +565,29 @@ class ScreenerEngine:
             "historical_pl": pl_rows
         }
 
+        # ---------------------------------------------------------------------
+        # Quarterly Financial Results (Consolidated)
+        # ---------------------------------------------------------------------
+        q_rows, q_df = _extract_quarterly_financials(yf_ticker, shares_out)
+
+        # ---------------------------------------------------------------------
+        # Peer Comparison Table
+        # ---------------------------------------------------------------------
+        peer_rows, peer_df = _extract_peer_comparison(
+            target_sym=clean_sym,
+            target_name=company_name,
+            target_cmp=cmp,
+            target_mcap=market_cap_cr,
+            target_pe=pe_ratio,
+            target_roce=roce_pct,
+            target_roe=roe_pct,
+            target_de=debt_to_equity,
+            target_div=dividend_yield_pct,
+            target_s3=sales_cagr_3y,
+            sector=sector,
+            industry=industry
+        )
+
         return {
             "company_name": company_name,
             "clean_symbol": clean_sym,
@@ -402,6 +620,12 @@ class ScreenerEngine:
             # Multi-Year P&L Table
             "pl_dataframe": pl_df,
             "pl_rows": pl_rows,
+            # Quarterly Results Table
+            "quarterly_dataframe": q_df,
+            "quarterly_rows": q_rows,
+            # Peer Comparison Table
+            "peer_dataframe": peer_df,
+            "peer_rows": peer_rows,
             # Strict JSON Context for Agent
             "json_context": json_context
         }

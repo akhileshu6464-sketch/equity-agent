@@ -1738,6 +1738,12 @@ def resolve_benchmark_peers(ticker: str, is_bank: bool, sector_prof: Dict[str, A
     if is_bank or "HDFC" in norm or "ICICI" in norm or "KOTAK" in norm or "SBIN" in norm or "AXIS" in norm:
         candidates = ["ICICI Bank", "Kotak Mahindra Bank", "Axis Bank", "State Bank of India"]
         return [p for p in candidates if not any(w in norm for w in p.upper().split())][:3]
+    elif any(k in norm for k in ["ASHOKA", "PNC", "KNR", "IRB", "GRINFRA", "DILIP", "LT", "NCC", "HCC"]):
+        candidates = ["PNC Infratech", "KNR Constructions", "IRB Infrastructure", "GR Infraprojects", "Larsen & Toubro"]
+        return [p for p in candidates if not any(w in norm for w in p.upper().split())][:3]
+    elif any(k in norm for k in ["TATAMOTORS", "MARUTI", "M&M", "BAJAJ", "HEROMOTO"]):
+        candidates = ["Maruti Suzuki", "Mahindra & Mahindra", "Bajaj Auto", "Tata Motors"]
+        return [p for p in candidates if not any(w in norm for w in p.upper().split())][:3]
     elif any(k in norm for k in ["VINATI", "DEEPAK", "AARTI", "TATACHEM", "PIIND", "NAVIN", "FLUORO", "ATUL", "CLEAN", "FINEORG", "ALKYL"]):
         candidates = ["Aarti Industries", "Clean Science and Technology", "Atul Ltd", "Deepak Nitrite"]
         return [p for p in candidates if not any(w in norm for w in p.upper().split())][:3]
