@@ -6,6 +6,7 @@ Computes Screener-style ratios and historical Profit & Loss tables without any L
 """
 
 import os
+import re
 import math
 import logging
 from typing import Dict, Any, List, Optional, Tuple
@@ -515,6 +516,49 @@ class ScreenerEngine:
             profit_cagr_3y = _calculate_cagr(pl_rows[0]["net_profit"], pl_rows[-1]["net_profit"], n_span)
 
         # ---------------------------------------------------------------------
+        # Comprehensive Snapshot Fundamentals
+        # ---------------------------------------------------------------------
+        total_debt_cr = round(_safe_float(info.get("totalDebt", 0.0)) / 1e7, 1)
+        if total_debt_cr <= 0:
+            total_debt_cr = latest_total_debt
+
+        total_cash_cr = round(_safe_float(info.get("totalCash", 0.0)) / 1e7, 1)
+        if total_cash_cr <= 0:
+            total_cash_cr = round(_safe_float(comp_data.get("latest_cash", 0.0)), 1)
+
+        prom_raw = _safe_float(info.get("heldPercentInsiders", 0.0))
+        if prom_raw > 0:
+            promoter_holding_pct = round(prom_raw * 100.0, 2)
+        else:
+            promoter_holding_pct = round(_safe_float((comp_data.get("shareholding") or {}).get("promoter", 0.0)), 2)
+
+        inst_raw = _safe_float(info.get("heldPercentInstitutions", 0.0))
+        if inst_raw > 0:
+            institutional_holding_pct = round(inst_raw * 100.0, 2)
+        else:
+            sh = comp_data.get("shareholding") or {}
+            institutional_holding_pct = round(_safe_float(sh.get("fii", 0.0)) + _safe_float(sh.get("dii", 0.0)), 2)
+
+        city = str(info.get("city") or comp_data.get("city") or "").strip()
+        state = str(info.get("state") or "").strip()
+        country = str(info.get("country") or "India").strip()
+        hq_parts = [p for p in [city, state, country] if p and p.lower() != "none"]
+        headquarters = ", ".join(hq_parts) or "India"
+
+        employees = info.get("fullTimeEmployees") or comp_data.get("employees")
+
+        raw_officers = info.get("companyOfficers", []) or []
+        company_officers = []
+        for o in raw_officers[:4]:
+            if isinstance(o, dict) and o.get("name"):
+                title = (o.get("title") or "").split("–")[0].split("-")[0].strip()
+                clean_title = re.sub(r'[^a-zA-Z\s,]', '', title).strip()
+                company_officers.append(f"{o.get('name')}" + (f" ({clean_title})" if clean_title else ""))
+
+        m_found = re.search(r'(?:founded|incorporated|established)\s+(?:in|back\s+in)\s+(\d{4})', raw_summary, re.IGNORECASE)
+        founded_year = m_found.group(1) if m_found else ("1990s" if "199" in raw_summary else "Established Enterprise")
+
+        # ---------------------------------------------------------------------
         # Multi-Year P&L Statement DataFrame Formatting
         # ---------------------------------------------------------------------
         pl_records = []
@@ -598,7 +642,7 @@ class ScreenerEngine:
             "bse_url": bse_url,
             "nse_url": nse_url,
             "raw_summary": raw_summary,
-            # Ratios
+            # Ratios & Snapshot Fundamentals
             "market_cap_cr": market_cap_cr,
             "current_price": cmp,
             "high_52w": high_52w,
@@ -612,6 +656,15 @@ class ScreenerEngine:
             "debt_to_equity": debt_to_equity,
             "opm_pct": opm_pct,
             "face_value": face_value,
+            "total_debt_cr": total_debt_cr,
+            "total_cash_cr": total_cash_cr,
+            "promoter_holding_pct": promoter_holding_pct,
+            "institutional_holding_pct": institutional_holding_pct,
+            "headquarters": headquarters,
+            "employees": employees,
+            "company_officers": company_officers,
+            "founded_year": founded_year,
+            "listing_info": "NSE & BSE Listed",
             # CAGRs
             "sales_cagr_3y": sales_cagr_3y,
             "sales_cagr_5y": sales_cagr_5y,

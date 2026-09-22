@@ -145,30 +145,33 @@ st.markdown("""
         margin-top: 0.2rem;
     }
 
-    /* Screener "About the Company" Box */
+    /* Screener 12-Dimension "About the Company" Platform */
     .about-card {
         background: #0f172a;
         border: 1px solid #1e293b;
         border-radius: 8px;
-        padding: 1.35rem 1.6rem;
+        padding: 1.5rem 1.75rem;
         margin-bottom: 1.75rem;
     }
     .about-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 0.85rem;
+        margin-bottom: 1rem;
         border-bottom: 1px solid #1e293b;
-        padding-bottom: 0.6rem;
+        padding-bottom: 0.75rem;
         flex-wrap: wrap;
-        gap: 0.5rem;
+        gap: 0.75rem;
     }
     .about-title {
-        font-size: 0.88rem;
+        font-size: 0.95rem;
         font-weight: 700;
         letter-spacing: 0.08em;
         text-transform: uppercase;
         color: #94a3b8;
+        display: flex;
+        align-items: center;
+        gap: 8px;
     }
     .exchange-links {
         display: flex;
@@ -190,11 +193,249 @@ st.markdown("""
         color: #7dd3fc;
         text-decoration: none;
     }
-    .about-overview {
-        font-size: 0.94rem;
-        line-height: 1.65;
+    .about-desc-box {
+        font-size: 0.93rem;
+        line-height: 1.7;
+        color: #cbd5e1;
+        margin-bottom: 1.35rem;
+    }
+    .about-desc-box p {
+        margin-bottom: 0.75rem;
+    }
+    .about-desc-box p:last-child {
+        margin-bottom: 0;
+    }
+
+    /* Fundamental Snapshot Grid (14 metrics) */
+    .about-subhead {
+        font-size: 0.82rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: #64748b;
+        margin-top: 1.25rem;
+        margin-bottom: 0.65rem;
+    }
+    .snapshot-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 0.55rem;
+        margin-bottom: 1.25rem;
+    }
+    @media (max-width: 1200px) {
+        .snapshot-grid {
+            grid-template-columns: repeat(4, 1fr);
+        }
+    }
+    @media (max-width: 768px) {
+        .snapshot-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+    .snapshot-box {
+        background: rgba(15, 23, 42, 0.85);
+        border: 1px solid #1e293b;
+        border-radius: 6px;
+        padding: 0.55rem 0.75rem;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+    .snapshot-lbl {
+        font-size: 0.68rem;
+        font-weight: 600;
+        color: #94a3b8;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        margin-bottom: 0.2rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .snapshot-val {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.95rem;
+        font-weight: 700;
+        color: #f8fafc;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .val-accent { color: #38bdf8; }
+    .val-green { color: #4ade80; }
+
+    /* Core Business Operating Segments */
+    .segments-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.85rem;
+        margin-bottom: 0.75rem;
+    }
+    @media (max-width: 768px) {
+        .segments-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+    .about-seg-card {
+        background: rgba(30, 41, 59, 0.35);
+        border: 1px solid #1e293b;
+        border-left: 3px solid #38bdf8;
+        border-radius: 6px;
+        padding: 0.9rem 1.1rem;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+    }
+    .about-seg-title {
+        font-size: 0.92rem;
+        font-weight: 700;
+        color: #f1f5f9;
+        margin-bottom: 0.4rem;
+    }
+    .about-seg-desc {
+        font-size: 0.85rem;
+        line-height: 1.55;
+        color: #cbd5e1;
+        margin-bottom: 0.65rem;
+    }
+    .about-seg-meta {
+        display: flex;
+        flex-direction: column;
+        gap: 0.3rem;
+        font-size: 0.8rem;
+    }
+    .about-seg-pill {
+        background: rgba(15, 23, 42, 0.6);
+        border: 1px solid rgba(51, 65, 85, 0.5);
+        border-radius: 4px;
+        padding: 0.25rem 0.5rem;
+        color: #94a3b8;
+    }
+    .about-seg-pill strong {
         color: #e2e8f0;
-        margin-bottom: 1rem;
+    }
+
+    /* Key Corporate Facts Grid */
+    .facts-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0.75rem;
+        margin-bottom: 1.25rem;
+    }
+    @media (max-width: 992px) {
+        .facts-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+    @media (max-width: 576px) {
+        .facts-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+    .fact-card {
+        background: rgba(30, 41, 59, 0.25);
+        border: 1px solid #1e293b;
+        border-radius: 6px;
+        padding: 0.75rem 0.95rem;
+    }
+    .fact-label {
+        font-size: 0.72rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: #64748b;
+        margin-bottom: 0.25rem;
+    }
+    .fact-value {
+        font-size: 0.88rem;
+        font-weight: 600;
+        color: #f1f5f9;
+        line-height: 1.4;
+    }
+
+    /* Milestones Timeline */
+    .milestones-timeline {
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
+        margin-top: 0.5rem;
+    }
+    .milestone-item {
+        display: flex;
+        align-items: baseline;
+        gap: 0.85rem;
+        padding: 0.55rem 0.85rem;
+        background: rgba(30, 41, 59, 0.25);
+        border: 1px solid #1e293b;
+        border-radius: 6px;
+    }
+    .milestone-year {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: #38bdf8;
+        background: rgba(56, 189, 248, 0.1);
+        border: 1px solid rgba(56, 189, 248, 0.2);
+        padding: 2px 8px;
+        border-radius: 4px;
+        white-space: nowrap;
+    }
+    .milestone-text {
+        font-size: 0.87rem;
+        color: #cbd5e1;
+        line-height: 1.5;
+    }
+
+    /* Moats & Citations */
+    .moats-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        margin-top: 0.5rem;
+    }
+    .moat-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.6rem;
+        font-size: 0.88rem;
+        line-height: 1.5;
+        color: #cbd5e1;
+        background: rgba(34, 197, 94, 0.04);
+        border: 1px solid rgba(34, 197, 94, 0.15);
+        border-radius: 6px;
+        padding: 0.55rem 0.85rem;
+    }
+    .moat-icon {
+        color: #4ade80;
+        font-weight: 700;
+    }
+    .peer-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-top: 0.5rem;
+    }
+    .peer-chip {
+        background: rgba(56, 189, 248, 0.08);
+        border: 1px solid rgba(56, 189, 248, 0.25);
+        color: #7dd3fc;
+        font-size: 0.82rem;
+        font-weight: 600;
+        padding: 3px 10px;
+        border-radius: 4px;
+    }
+    .sources-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+        margin-top: 0.5rem;
+    }
+    .source-item {
+        font-size: 0.82rem;
+        color: #94a3b8;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
     }
     .key-points-list {
         list-style: none;
@@ -670,6 +911,172 @@ def render_audit_item(title: str, item: Any):
         """, unsafe_allow_html=True)
 
 
+def build_about_snapshot_html(metrics: Dict[str, Any]) -> str:
+    """Builds the 14-metric fundamental snapshot grid HTML."""
+    if not metrics:
+        return ""
+    mcap = metrics.get("market_cap_cr", 0.0)
+    cmp = metrics.get("current_price", 0.0)
+    h52 = metrics.get("high_52w", 0.0)
+    l52 = metrics.get("low_52w", 0.0)
+    pe = metrics.get("pe_ratio", 0.0)
+    bv = metrics.get("book_value", 0.0)
+    div = metrics.get("dividend_yield_pct", 0.0)
+    roce = metrics.get("roce_pct", 0.0)
+    roe = metrics.get("roe_pct", 0.0)
+    fv = metrics.get("face_value", 1.0)
+    debt = metrics.get("total_debt_cr", 0.0)
+    cash = metrics.get("total_cash_cr", 0.0)
+    prom = metrics.get("promoter_holding_pct", 0.0)
+    inst = metrics.get("institutional_holding_pct", 0.0)
+    de = metrics.get("debt_to_equity", 0.0)
+
+    items = [
+        ("Market Cap", f"₹ {mcap:,.1f} Cr", "val-accent"),
+        ("Current Price", f"₹ {cmp:,.2f}", "val-green"),
+        ("52W High / Low", f"₹ {h52:,.0f} / {l52:,.0f}", ""),
+        ("Stock P/E", f"{pe:.1f}x" if pe > 0 else "—", ""),
+        ("Book Value", f"₹ {bv:,.1f}", ""),
+        ("Div Yield", f"{div:.2f}%", ""),
+        ("ROCE", f"{roce:.1f}%", "val-green" if roce > 15 else ""),
+        ("ROE", f"{roe:.1f}%", "val-green" if roe > 15 else ""),
+        ("Face Value", f"₹ {fv:.1f}", ""),
+        ("Total Debt", f"₹ {debt:,.1f} Cr", ""),
+        ("Cash & Equiv", f"₹ {cash:,.1f} Cr", "val-green" if cash > debt else ""),
+        ("Promoter Hold", f"{prom:.1f}%", ""),
+        ("Inst. Holding", f"{inst:.1f}%", ""),
+        ("Debt to Equity", f"{de:.2f}x", "val-green" if de < 0.5 else ("val-accent" if de < 1.0 else "")),
+    ]
+
+    boxes_html = "".join([
+        f'<div class="snapshot-box">'
+        f'<span class="snapshot-lbl">{lbl}</span>'
+        f'<span class="snapshot-val {cls}">{val}</span>'
+        f'</div>'
+        for lbl, val, cls in items
+    ])
+
+    return f'<div class="snapshot-grid">{boxes_html}</div>'
+
+
+def build_about_segments_html(segments: List[Dict[str, Any]]) -> str:
+    """Builds the cards grid for core business segments."""
+    if not segments:
+        return ""
+    cards = []
+    for seg in segments:
+        name = seg.get("name", "Business Segment")
+        desc = seg.get("description", "")
+        driver = seg.get("revenue_driver", "Contractual delivery")
+        scope = seg.get("scope", "Operational scope")
+        cards.append(
+            f'<div class="about-seg-card">'
+            f'<div>'
+            f'<div class="about-seg-title"><span style="color: #38bdf8;">🔷</span> {name}</div>'
+            f'<div class="about-seg-desc">{desc}</div>'
+            f'</div>'
+            f'<div class="about-seg-meta">'
+            f'<div class="about-seg-pill">🎯 <strong>Driver:</strong> {driver}</div>'
+            f'<div class="about-seg-pill">📦 <strong>Scope:</strong> {scope}</div>'
+            f'</div>'
+            f'</div>'
+        )
+    return f'<div class="segments-grid">{"".join(cards)}</div>'
+
+
+def build_about_facts_html(facts: Dict[str, Any]) -> str:
+    """Builds 4x2 grid of key corporate facts."""
+    if not facts:
+        return ""
+    fact_items = [
+        ("Founded Year", facts.get("founded", "Established Enterprise")),
+        ("Headquarters", facts.get("headquarters", "India")),
+        ("Listed On", facts.get("listed", "NSE / BSE")),
+        ("Industry / Sector", facts.get("industry", "Diverse")),
+        ("Promoters & Leadership", facts.get("promoters_leadership", "Executive Board")),
+        ("Number of Employees", facts.get("employees", "Not Disclosed")),
+        ("Major Subsidiaries", facts.get("major_subsidiaries", "Operating SPVs")),
+        ("Geographic Presence", facts.get("geographic_presence", "Pan-India & International")),
+    ]
+    cards = "".join([
+        f'<div class="fact-card">'
+        f'<div class="fact-label">{lbl}</div>'
+        f'<div class="fact-value">{val}</div>'
+        f'</div>'
+        for lbl, val in fact_items
+    ])
+    return f'<div class="facts-grid">{cards}</div>'
+
+
+def build_about_revenue_mix_html(rev_mix: List[Dict[str, Any]]) -> str:
+    """Builds the revenue mix breakdown table."""
+    if not rev_mix:
+        return "<p style='color: #94a3b8;'>Segment revenue breakdown not separately disclosed in primary summary.</p>"
+    rows = []
+    for r in rev_mix:
+        seg = r.get("segment", "Core Operations")
+        share = r.get("share_pct", "—")
+        nature = r.get("nature", "Operating Revenue")
+        rows.append(
+            f'<tr>'
+            f'<td>{seg}</td>'
+            f'<td style="font-family: \'JetBrains Mono\', monospace; font-weight: 700; color: #38bdf8;">{share}</td>'
+            f'<td>{nature}</td>'
+            f'</tr>'
+        )
+    return (
+        '<div class="screener-table-container">'
+        '<table class="screener-table">'
+        '<thead><tr><th>Operating Segment / Revenue Stream</th><th>Contribution / Share %</th><th>Nature of Revenue</th></tr></thead>'
+        f'<tbody>{"".join(rows)}</tbody>'
+        '</table></div>'
+    )
+
+
+def build_about_subsidiaries_html(subs: List[Dict[str, Any]]) -> str:
+    """Builds the subsidiaries and joint ventures table."""
+    if not subs:
+        return "<p style='color: #94a3b8;'>Subsidiaries and joint ventures not separately disclosed.</p>"
+    rows = []
+    for s in subs:
+        entity = s.get("entity", "Operating Entity")
+        ownership = s.get("ownership", "Subsidiary")
+        biz = s.get("business", "Operating Activity")
+        importance = s.get("importance", "Core Operating Arm")
+        rows.append(
+            f'<tr>'
+            f'<td><strong>{entity}</strong></td>'
+            f'<td style="font-family: \'JetBrains Mono\', monospace; color: #4ade80;">{ownership}</td>'
+            f'<td>{biz}</td>'
+            f'<td>{importance}</td>'
+            f'</tr>'
+        )
+    return (
+        '<div class="screener-table-container">'
+        '<table class="screener-table">'
+        '<thead><tr><th>Entity Name</th><th>Ownership / Holding</th><th>Business Activity</th><th>Strategic Role</th></tr></thead>'
+        f'<tbody>{"".join(rows)}</tbody>'
+        '</table></div>'
+    )
+
+
+def build_about_milestones_html(milestones: List[Dict[str, Any]]) -> str:
+    """Builds the chronological company milestones timeline."""
+    if not milestones:
+        return ""
+    items = []
+    for m in milestones:
+        yr = m.get("year", "Milestone")
+        ev = m.get("event", "")
+        items.append(
+            f'<div class="milestone-item">'
+            f'<span class="milestone-year">{yr}</span>'
+            f'<span class="milestone-text">{ev}</span>'
+            f'</div>'
+        )
+    return f'<div class="milestones-timeline">{"".join(items)}</div>'
+
+
 # -------------------------------------------------------------------------
 # Session State Initialization
 # -------------------------------------------------------------------------
@@ -743,13 +1150,15 @@ if analyze_click:
                     scr_data = ScreenerEngine.get_screener_data(clean_sym)
                     st.session_state["screener_data"] = scr_data
 
-                    # 2. Screener "About the Company" Synthesis
+                    # 2. Screener "About the Company" Synthesis (12-Dimension Profile)
                     agent = EditorialAgent()
-                    about_data = agent.generate_screener_about(
-                        summary_text=scr_data["raw_summary"],
-                        company_name=scr_data["company_name"],
-                        sector=scr_data["sector"],
-                        industry=scr_data["industry"]
+                    about_data = agent.generate_comprehensive_about(
+                        summary_text=scr_data.get("raw_summary", ""),
+                        company_name=scr_data.get("company_name", clean_sym),
+                        symbol=clean_sym,
+                        sector=scr_data.get("sector", ""),
+                        industry=scr_data.get("industry", ""),
+                        screener_data=scr_data
                     )
                     st.session_state["about_data"] = about_data
 
@@ -853,10 +1262,46 @@ if data and dossier:
     """, unsafe_allow_html=True)
 
     # ---------------------------------------------------------------------
-    # 2. Dedicated Screener "About the Company" Section
+    # 2. Comprehensive 12-Dimension Screener "About the Company" Platform
     # ---------------------------------------------------------------------
-    overview_text = about.get("overview", "") if about else data.get("raw_summary", "")
-    key_points = about.get("key_points", []) if about else []
+    if not about or not about.get("company_description"):
+        agent = EditorialAgent()
+        about = agent.generate_comprehensive_about(
+            summary_text=data.get("raw_summary", ""),
+            company_name=company_name,
+            symbol=clean_sym,
+            sector=sector,
+            industry=industry,
+            screener_data=data
+        )
+        st.session_state["about_data"] = about
+
+    comp_desc = about.get("company_description", data.get("raw_summary", ""))
+    desc_paras = [p.strip() for p in comp_desc.split("\n\n") if p.strip()]
+    desc_html = "".join([f"<p>{p}</p>" for p in desc_paras])
+
+    snap_metrics = about.get("snapshot_metrics", {})
+    if not snap_metrics:
+        snap_metrics = {
+            "market_cap_cr": mcap_cr,
+            "current_price": cmp,
+            "high_52w": high_52,
+            "low_52w": low_52,
+            "pe_ratio": data.get("pe_ratio", 0.0),
+            "book_value": data.get("book_value", 0.0),
+            "dividend_yield_pct": data.get("dividend_yield_pct", 0.0),
+            "roce_pct": data.get("roce_pct", 0.0),
+            "roe_pct": data.get("roe_pct", 0.0),
+            "face_value": data.get("face_value", 1.0),
+            "total_debt_cr": data.get("total_debt_cr", 0.0),
+            "total_cash_cr": data.get("total_cash_cr", 0.0),
+            "promoter_holding_pct": data.get("promoter_holding_pct", 0.0),
+            "institutional_holding_pct": data.get("institutional_holding_pct", 0.0),
+            "debt_to_equity": data.get("debt_to_equity", 0.0)
+        }
+
+    snapshot_grid_html = build_about_snapshot_html(snap_metrics)
+    segments_html = build_about_segments_html(about.get("business_segments", []))
 
     links_html = []
     if website:
@@ -867,26 +1312,114 @@ if data and dossier:
         links_html.append(f'<a class="exchange-link" href="{nse_url}" target="_blank" rel="noopener noreferrer">🏛️ NSE ↗</a>')
     links_bar = f'<div class="exchange-links">{"".join(links_html)}</div>'
 
-    kp_items_html = []
-    for cat, detail in key_points:
-        kp_items_html.append(
-            f'<li class="key-point-item">'
-            f'<span class="key-point-bullet">•</span>'
-            f'<span><span class="key-point-category">{cat}:</span> {detail}</span>'
-            f'</li>'
-        )
-    kp_list_html = f'<ul class="key-points-list">{"".join(kp_items_html)}</ul>' if kp_items_html else ""
-
+    # Default View: Description + Snapshot Metrics + Core Business Segments
     st.markdown(f"""
     <div class="about-card">
         <div class="about-header">
-            <span class="about-title">About the Company</span>
+            <span class="about-title">🏢 About the Company — Fundamental Profile</span>
             {links_bar}
         </div>
-        <div class="about-overview">{overview_text}</div>
-        {kp_list_html}
+        <div class="about-desc-box">
+            {desc_html}
+        </div>
+        <div class="about-subhead">📊 Company Fundamental Snapshot</div>
+        {snapshot_grid_html}
+        <div class="about-subhead">📦 Core Business Operating Segments</div>
+        {segments_html}
     </div>
     """, unsafe_allow_html=True)
+
+    # 4 Structured Sub-Tabs for Deeper Company Dimensions
+    tab_biz, tab_gov, tab_market, tab_comp = st.tabs([
+        "🏢 Business Model & Revenue Mix",
+        "📋 Corporate Facts & Governance",
+        "🌍 Markets & Footprint",
+        "🏆 Competitive Moat & Milestones"
+    ])
+
+    with tab_biz:
+        biz_model_text = about.get("business_model", "")
+        if biz_model_text:
+            st.markdown(f"""
+            <div class="inst-card">
+                <div class="inst-card-title">💡 Revenue Generation & Contracting Model</div>
+                <div class="inst-prose"><p>{biz_model_text}</p></div>
+            </div>
+            """, unsafe_allow_html=True)
+        st.markdown("<div class='about-subhead'>📊 Segment Revenue Mix & Contribution</div>", unsafe_allow_html=True)
+        st.markdown(build_about_revenue_mix_html(about.get("revenue_mix", [])), unsafe_allow_html=True)
+
+    with tab_gov:
+        st.markdown("<div class='about-subhead'>📋 Key Corporate Facts</div>", unsafe_allow_html=True)
+        st.markdown(build_about_facts_html(about.get("key_business_facts", {})), unsafe_allow_html=True)
+        st.markdown("<div class='about-subhead' style='margin-top: 1rem;'>🏢 Major Subsidiaries & Concession SPVs</div>", unsafe_allow_html=True)
+        st.markdown(build_about_subsidiaries_html(about.get("subsidiaries_jvs", [])), unsafe_allow_html=True)
+
+    with tab_market:
+        geo = about.get("geographic_presence", {})
+        dom_text = geo.get("domestic", "Established domestic operations across major state clusters.")
+        intl_text = geo.get("international", "Export presence and global client channels where disclosed.")
+        geo_summary = geo.get("summary", "")
+
+        col_dom, col_intl = st.columns(2)
+        with col_dom:
+            st.markdown(f"""
+            <div class="inst-card">
+                <div class="inst-card-title">🇮🇳 Domestic Operations & Clusters</div>
+                <div class="inst-prose"><p>{dom_text}</p></div>
+            </div>
+            """, unsafe_allow_html=True)
+        with col_intl:
+            st.markdown(f"""
+            <div class="inst-card">
+                <div class="inst-card-title">🌐 International & Export Reach</div>
+                <div class="inst-prose"><p>{intl_text}</p></div>
+            </div>
+            """, unsafe_allow_html=True)
+        if geo_summary:
+            st.markdown(f"<div style='font-size: 0.85rem; color: #94a3b8; margin-top: -0.5rem; margin-bottom: 1rem;'>📍 <em>{geo_summary}</em></div>", unsafe_allow_html=True)
+
+        st.markdown("<div class='about-subhead'>👥 Key Customer Base & Primary Counterparties</div>", unsafe_allow_html=True)
+        cust_list = about.get("key_customers", [])
+        if cust_list:
+            cust_items = "".join([f"<li class='key-point-item'><span class='key-point-bullet'>✓</span><span>{c}</span></li>" for c in cust_list])
+            st.markdown(f"<ul class='key-points-list'>{cust_items}</ul>", unsafe_allow_html=True)
+
+    with tab_comp:
+        comp = about.get("competitive_position", {})
+        mkt_pos = comp.get("market_position", f"Established market position in {sector}.")
+        scale_m = comp.get("scale_metrics", "")
+        peers = comp.get("key_competitors", [])
+        moats = comp.get("core_advantages", [])
+
+        st.markdown(f"""
+        <div class="inst-card">
+            <div class="inst-card-title">🏆 Market Position & Defensibility</div>
+            <div class="inst-prose">
+                <p><strong>Standing:</strong> {mkt_pos}</p>
+                {f'<p><strong>Scale Metric:</strong> {scale_m}</p>' if scale_m else ''}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        if peers:
+            peer_chips_html = "".join([f"<span class='peer-chip'>{p}</span>" for p in peers])
+            st.markdown(f"<div class='about-subhead'>🥊 Benchmark Competitors & Peers</div><div class='peer-chips'>{peer_chips_html}</div>", unsafe_allow_html=True)
+
+        if moats:
+            moat_items_html = "".join([
+                f"<div class='moat-item'><span class='moat-icon'>🛡️</span><span>{m}</span></div>"
+                for m in moats
+            ])
+            st.markdown(f"<div class='about-subhead' style='margin-top: 1rem;'>🏰 Core Competitive Advantages / Moats</div><div class='moats-list'>{moat_items_html}</div>", unsafe_allow_html=True)
+
+        st.markdown("<div class='about-subhead' style='margin-top: 1.25rem;'>📅 Company History & Key Milestones</div>", unsafe_allow_html=True)
+        st.markdown(build_about_milestones_html(about.get("milestones", [])), unsafe_allow_html=True)
+
+        sources = about.get("sources", [])
+        if sources:
+            src_items = "".join([f"<div class='source-item'><span>📄</span> {s}</div>" for s in sources])
+            st.markdown(f"<div class='about-subhead' style='margin-top: 1.25rem;'>📑 Source Citations & Regulatory Filings</div><div class='sources-list'>{src_items}</div>", unsafe_allow_html=True)
 
     # ---------------------------------------------------------------------
     # 3. Screener Key Ratios Grid (4x3 High-Density Cards)
