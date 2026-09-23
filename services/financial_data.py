@@ -27,6 +27,14 @@ try:
 except ImportError:
     yf = None
 
+from core.company_identity import resolve_canonical_identity, CompanyIdentity
+from core.research_context import (
+    ResearchRunContext,
+    assert_company_boundary,
+    DataContaminationError,
+    EntityRole
+)
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
@@ -191,66 +199,154 @@ class FinancialDataService:
         self._init_db()
 
     def _init_db(self) -> None:
-        """Initializes the SQLite cache table if not already present."""
+        """Initializes the SQLite cache table if not already present, migrating schema if needed."""
         conn = None
         try:
             os.makedirs(os.path.dirname(self._db_path), exist_ok=True)
             conn = sqlite3.connect(self._db_path)
+            cursor = conn.execute("PRAGMA table_info(financial_cache)")
+            cols = [row[1] for row in cursor.fetchall()]
+            if cols and "company_id" not in cols:
+                conn.execute("DROP TABLE financial_cache")
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS financial_cache (
-                    symbol TEXT PRIMARY KEY,
+                    company_id TEXT PRIMARY KEY,
+                    symbol TEXT NOT NULL,
                     data_json TEXT NOT NULL,
                     cached_at REAL NOT NULL
                 )
             """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS fundamental_datapoints (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    company_id TEXT NOT NULL,
+                    ticker TEXT NOT NULL,
+                    isin TEXT,
+                    metric TEXT NOT NULL,
+                    period TEXT NOT NULL,
+                    period_type TEXT NOT NULL,
+                    value REAL,
+                    unit TEXT NOT NULL,
+                    statement_scope TEXT NOT NULL DEFAULT 'CONSOLIDATED',
+                    value_type TEXT NOT NULL DEFAULT 'REPORTED',
+                    source_tier TEXT NOT NULL DEFAULT 'TIER_1_REGULATORY',
+                    source TEXT,
+                    source_date TEXT,
+                    document TEXT,
+                    page_or_section TEXT,
+                    created_at REAL NOT NULL,
+                    UNIQUE(company_id, metric, period, period_type, statement_scope)
+                )
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_fund_dp_lookup 
+                ON fundamental_datapoints (company_id, metric, period, statement_scope)
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS filing_documents (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    company_id TEXT NOT NULL,
+                    document_name TEXT NOT NULL,
+                    filing_type TEXT NOT NULL,
+                    period TEXT NOT NULL,
+                    source_tier TEXT NOT NULL DEFAULT 'TIER_1_REGULATORY',
+                    file_path TEXT,
+                    url TEXT,
+                    ingested_at REAL NOT NULL,
+                    UNIQUE(company_id, document_name, period)
+                )
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_filing_docs_company 
+                ON filing_documents (company_id)
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS claim_verifications (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    company_id TEXT NOT NULL,
+                    claim_text TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    evidence TEXT,
+                    source_id TEXT,
+                    page_number INTEGER,
+                    verified_at REAL NOT NULL
+                )
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_claim_verif_company 
+                ON claim_verifications (company_id, status)
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS calculation_audit_records (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    company_id TEXT NOT NULL,
+                    metric TEXT NOT NULL,
+                    period TEXT NOT NULL,
+                    statement_scope TEXT NOT NULL DEFAULT 'CONSOLIDATED',
+                    formula TEXT NOT NULL,
+                    inputs_json TEXT NOT NULL,
+                    result REAL,
+                    formatted_result TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'VALID',
+                    source_ids_json TEXT NOT NULL,
+                    calculated_at TEXT NOT NULL,
+                    engine_version TEXT NOT NULL DEFAULT '2.0',
+                    notes TEXT,
+                    UNIQUE(company_id, metric, period, statement_scope)
+                )
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_calc_audit_lookup 
+                ON calculation_audit_records (company_id, metric, period)
+            """)
             conn.commit()
         except Exception as e:
-            logger.warning(f"Could not initialize SQLite financial cache: {e}")
+            logger.warning(f"Could not initialize SQLite financial cache tables: {e}")
         finally:
             if conn:
                 conn.close()
 
-    def _get_from_sqlite(self, symbol: str) -> Optional[Dict[str, Any]]:
-        """Retrieves cached company data from SQLite if within the 24-hour TTL."""
+    def _get_from_sqlite(self, company_id: str) -> Optional[Dict[str, Any]]:
+        """Retrieves cached company data from SQLite strictly by company_id if within the 24-hour TTL."""
         conn = None
         try:
             conn = sqlite3.connect(self._db_path)
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT data_json, cached_at FROM financial_cache WHERE symbol = ?",
-                (symbol,)
+                "SELECT data_json, cached_at FROM financial_cache WHERE company_id = ?",
+                (company_id,)
             )
             row = cursor.fetchone()
             if row:
                 data_json, cached_at = row
                 age_seconds = time.time() - cached_at
                 if age_seconds < self._ttl_seconds:
-                    logger.info(f"SQLite financial cache HIT for {symbol} (age: {age_seconds / 3600:.1f}h)")
+                    logger.info(f"SQLite financial cache HIT for {company_id} (age: {age_seconds / 3600:.1f}h)")
                     return json.loads(data_json)
                 else:
-                    logger.info(f"SQLite financial cache EXPIRED for {symbol} (age: {age_seconds / 3600:.1f}h > {self._ttl_seconds / 3600:.1f}h)")
+                    logger.info(f"SQLite financial cache EXPIRED for {company_id} (age: {age_seconds / 3600:.1f}h > {self._ttl_seconds / 3600:.1f}h)")
         except Exception as e:
-            logger.warning(f"Error reading SQLite financial cache for {symbol}: {e}")
+            logger.warning(f"Error reading SQLite financial cache for {company_id}: {e}")
         finally:
             if conn:
                 conn.close()
         return None
 
-    def _save_to_sqlite(self, symbol: str, data: Dict[str, Any]) -> None:
-        """Stores company data into SQLite with current timestamp."""
+    def _save_to_sqlite(self, company_id: str, symbol: str, data: Dict[str, Any]) -> None:
+        """Stores company data into SQLite with company_id key."""
         conn = None
         try:
             sanitized = _sanitize_for_storage(data)
             data_json = json.dumps(sanitized, ensure_ascii=False)
             conn = sqlite3.connect(self._db_path)
             conn.execute(
-                "INSERT OR REPLACE INTO financial_cache (symbol, data_json, cached_at) VALUES (?, ?, ?)",
-                (symbol, data_json, time.time())
+                "INSERT OR REPLACE INTO financial_cache (company_id, symbol, data_json, cached_at) VALUES (?, ?, ?, ?)",
+                (company_id, symbol, data_json, time.time())
             )
             conn.commit()
-            logger.info(f"Saved financial data for {symbol} to SQLite cache (TTL: 24h).")
+            logger.info(f"Saved financial data for {company_id} ({symbol}) to SQLite cache (TTL: 24h).")
         except Exception as e:
-            logger.warning(f"Error writing to SQLite financial cache for {symbol}: {e}")
+            logger.warning(f"Error writing to SQLite financial cache for {company_id}: {e}")
         finally:
             if conn:
                 conn.close()
@@ -305,9 +401,10 @@ class FinancialDataService:
         if not clean:
             return ""
 
-        # Step 2: Legacy alias mapping
-        if clean in ["TATAMOTORS", "TATAMOTORS.NS"]:
-            return "TMCV.NS"
+        # Step 2: Check canonical alias map
+        from core.company_identity import CANONICAL_ALIASES
+        if clean in CANONICAL_ALIASES:
+            clean = CANONICAL_ALIASES[clean]
 
         # Step 3: Check internal lookup dictionary
         _load_master_dictionaries()
@@ -321,22 +418,48 @@ class FinancialDataService:
         # Step 5: Default Indian equity exchange suffix: NSE (.NS)
         return f"{clean}.NS"
 
-    def get_company_data(self, ticker: str, force_refresh: bool = False) -> Dict[str, Any]:
+    def get_company_data(self, ticker: str, force_refresh: bool = False, run_context: Optional[Any] = None) -> Dict[str, Any]:
         """
         Fetches verified company data, historical financial statements, and current market metrics.
-        Uses yfinance with real browser headers; automatically falls back to live Screener.in data
-        if Yahoo Finance blocks or returns empty data.
+        Strictly bound to canonical company_id to enforce database and cache isolation.
         Raises an explicit ValueError if data is completely unavailable.
         """
-        symbol = self.normalize_ticker(ticker)
-        if not force_refresh and symbol in self._cache:
-            return self._cache[symbol]
+        if run_context is not None and hasattr(run_context, "company_id"):
+            cid = run_context.company_id
+            identity = CompanyIdentity(
+                company_id=run_context.company_id,
+                legal_name=getattr(run_context, "legal_name", None) or run_context.company_name,
+                display_name=getattr(run_context, "display_name", None) or run_context.company_name,
+                isin=getattr(run_context, "isin", ""),
+                primary_exchange=getattr(run_context, "exchange", "NSE"),
+                primary_symbol=getattr(run_context, "nse_symbol", "") or getattr(run_context, "ticker", "").replace(".NS", ""),
+                nse_symbol=getattr(run_context, "nse_symbol", ""),
+                bse_code=getattr(run_context, "bse_code", ""),
+                yahoo_symbol=run_context.ticker,
+                entity_role="PRIMARY_COMPANY"
+            )
+        else:
+            try:
+                identity = resolve_canonical_identity(ticker)
+            except Exception:
+                clean_sym = self.normalize_ticker(ticker)
+                identity = resolve_canonical_identity(clean_sym)
 
-        # SQLite persistent cache check (24h TTL)
+        cid = identity.company_id
+        symbol = identity.primary_ticker
+
+        if run_context is not None and hasattr(run_context, "assert_same_company"):
+            run_context.assert_same_company(cid, caller_module="FinancialDataService")
+
+        if not force_refresh and cid in self._cache:
+            return self._cache[cid]
+
+        # SQLite persistent cache check strictly by company_id (24h TTL)
         if not force_refresh:
-            cached_data = self._get_from_sqlite(symbol)
+            cached_data = self._get_from_sqlite(cid)
             if cached_data is not None:
-                self._cache[symbol] = cached_data
+                assert_company_boundary(cached_data, cid, caller_module="FinancialDataService.Cache")
+                self._cache[cid] = cached_data
                 return cached_data
 
         data = None
@@ -367,8 +490,33 @@ class FinancialDataService:
             logger.error(f"Real-time fundamental data unavailable for {symbol} from all verified providers.")
             raise ValueError(f"Real-time fundamental data unavailable for {symbol}")
 
-        self._save_to_sqlite(symbol, data)
-        self._cache[symbol] = data
+        # Bind verified canonical identity and period isolation metadata
+        data["company_id"] = cid
+        data["ticker"] = symbol
+        data["isin"] = identity.isin
+        data["company_name"] = identity.company_name
+        data["legal_name"] = identity.legal_name
+        data["display_name"] = identity.display_name
+        data["entity_role"] = "PRIMARY_COMPANY"
+        data["statement_scope"] = "CONSOLIDATED"
+
+        for y in data.get("history_years", []):
+            y["company_id"] = cid
+            y["isin"] = identity.isin
+            y["entity_role"] = "PRIMARY_COMPANY"
+            y["statement_scope"] = "CONSOLIDATED"
+            if "year" in y and not y.get("period"):
+                y["period"] = f"FY{y['year']}"
+            if not y.get("period_type"):
+                y["period_type"] = "ANNUAL"
+            if not y.get("unit"):
+                y["unit"] = "INR_CRORES"
+            if not y.get("source"):
+                y["source"] = "Consolidated Audited Annual Statements"
+
+        assert_company_boundary(data, cid, caller_module="FinancialDataService")
+        self._save_to_sqlite(cid, symbol, data)
+        self._cache[cid] = data
         return data
 
     def _fetch_from_yfinance(self, symbol: str) -> Optional[Dict[str, Any]]:

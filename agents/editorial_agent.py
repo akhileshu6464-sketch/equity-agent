@@ -75,7 +75,9 @@ class EditorialAgent:
         sector: str = "",
         industry: str = "",
         screener_data: Optional[Dict[str, Any]] = None,
-        primary_disclosures: Optional[Dict[str, Any]] = None
+        primary_disclosures: Optional[Dict[str, Any]] = None,
+        run_context: Optional[Any] = None,
+        **kwargs
     ) -> Dict[str, Any]:
         """
         Builds an exhaustive, Screener.in-style structured company overview across 12 fundamental dimensions:
@@ -299,363 +301,140 @@ Generate a JSON object with EXACTLY these keys:
             "debt_to_equity": de
         }
 
-        # 3. Sector-Aware Business Segments
-        sec_l = sec.lower()
-        ind_l = ind.lower()
-        sum_l = raw_sum.lower()
+        # 3. Dynamic Company-Grounded Business Segments
+        business_segments = []
 
-        if any(k in ind_l or k in sec_l or k in sum_l for k in ["construction", "engineering", "infrastructure", "epc", "highway"]):
-            business_segments = [
-                {
-                    "name": "EPC & Civil Construction",
-                    "description": "Turnkey engineering, procurement, and construction delivery across national highways, expressways, bridges, power distribution, and railways.",
-                    "revenue_driver": "Milestone-based contract execution and percentage-of-completion billing",
-                    "scope": "Multi-year order book across central and state authorities"
-                },
-                {
-                    "name": "HAM & Annuity Road Concessions",
-                    "description": "Hybrid Annuity Model road assets developed under concession agreements with NHAI where 40% capex is funded during construction and 60% recovered through annuities.",
-                    "revenue_driver": "Bi-annual annuity receipts with interest linked to RBI bank rate",
-                    "scope": "Portfolio of operational and under-construction road assets"
-                },
-                {
-                    "name": "BOT (Build-Operate-Transfer) Toll Assets",
-                    "description": "Toll highway assets operating under multi-decade concession rights providing direct user-fee monetization.",
-                    "revenue_driver": "Daily vehicular toll collections from commercial highway traffic",
-                    "scope": "Strategic high-density freight and passenger corridors"
-                },
-                {
-                    "name": "Ready Mix Concrete (RMC) & Allied Goods",
-                    "description": "Commercial and captive manufacturing of high-grade ready-mix concrete, bitumen mixes, and select property development.",
-                    "revenue_driver": "Commercial sales to infrastructure, industrial, and real estate developers",
-                    "scope": "Regional manufacturing plants and batching units"
-                }
+        # Check primary disclosures product offerings
+        p_portfolio = {}
+        if primary_disclosures:
+            p_portfolio = primary_disclosures.get("product_offerings") or primary_disclosures.get("product_portfolio") or {}
+        raw_segs = p_portfolio.get("segments", []) if isinstance(p_portfolio, dict) else []
+
+        if raw_segs and raw_segs != ["Not Disclosed in Management Filings"]:
+            for item in raw_segs[:5]:
+                if isinstance(item, dict):
+                    business_segments.append({
+                        "name": item.get("name", "Operating Segment"),
+                        "description": item.get("description", "Commercial product line and operational delivery."),
+                        "revenue_driver": item.get("revenue_driver", "Verified information unavailable."),
+                        "scope": item.get("scope", "Verified information unavailable.")
+                    })
+                elif isinstance(item, str) and len(item.strip()) > 5:
+                    parts = item.split(":", 1) if ":" in item else item.split(" - ", 1)
+                    s_name = parts[0].strip()
+                    s_desc = parts[1].strip() if len(parts) > 1 else item.strip()
+                    business_segments.append({
+                        "name": s_name[:50],
+                        "description": s_desc,
+                        "revenue_driver": "Verified information unavailable.",
+                        "scope": "Operating business division"
+                    })
+
+        # Fallback: extract distinct operating sentences from company's verified raw summary
+        if not business_segments:
+            seg_sentences = [
+                s for s in sentences
+                if any(w in s.lower() for w in ["operates through", "manufactures", "provides", "offers", "division", "segment", "solutions", "services", "products"])
             ]
-            biz_model_text = (
-                f"{comp_name} generates the majority of its revenues through EPC contract execution for government and institutional infrastructure developers. "
-                f"Contract revenues are recognized on a percentage-of-completion basis as physical engineering milestones are certified by project engineers. "
-                f"Additionally, the company derives predictable long-term cash flows from Hybrid Annuity Model (HAM) concessions—where NHAI provides bi-annual annuities "
-                f"with inflation-indexed O&M payouts—and commercial toll collections on operating BOT highway corridors. Allied revenues are generated through the "
-                f"commercial sale of ready-mix concrete (RMC) to third-party developers."
-            )
-            rev_mix = [
-                {"segment": "EPC Construction & Infrastructure", "share_pct": "75% – 85%", "nature": "Milestone Contractual Execution"},
-                {"segment": "BOT Toll & HAM Annuity Collections", "share_pct": "12% – 20%", "nature": "Long-Term Concession Payouts"},
-                {"segment": "Ready Mix Concrete (RMC) & Allied", "share_pct": "3% – 5%", "nature": "Commercial Material Supply"}
-            ]
-            key_customers = [
-                "National Highways Authority of India (NHAI)",
-                "Ministry of Road Transport and Highways (MoRTH)",
-                "State Road Development Corporations (MSRDC, BSRDCL)",
-                "Rail Vikas Nigam Limited (RVNL) & Indian Railways",
-                "Private Commercial Developers & Industrial Contractors"
-            ]
-            subsidiaries = [
-                {"entity": "Ashoka Concessions Limited (ACL)", "business": "Holding entity for road assets and highway concession SPVs", "ownership": "Major Subsidiary", "importance": "Core Concession Engine"},
-                {"entity": "Project-Specific Tollway SPVs", "business": "Special Purpose Vehicles executing BOT and HAM highway packages", "ownership": "100% / Majority Owned", "importance": "Ring-Fenced Concession Rights"},
-                {"entity": "Ashoka Technologies / Power EPC", "business": "Specialized power distribution and transmission line construction", "ownership": "Subsidiary", "importance": "Non-Road EPC Diversification"}
-            ]
-            comp_competitors = ["PNC Infratech", "KNR Constructions", "IRB Infrastructure", "GR Infraprojects", "Larsen & Toubro"]
-            comp_advantages = [
-                "Over 40 years of proven civil execution track record across complex terrain",
-                "Extensive captive fleet of heavy earthmoving machinery and batching plants",
-                "High pre-qualification credentials allowing solo bidding on mega-packages (>Rs. 1,500 Cr)",
-                "Track record of completing road packages ahead of scheduled timelines earning bonus annuities"
-            ]
-            milestones = [
-                {"year": "1976", "event": "Founded as a partnership civil contracting firm in Nashik by Mr. Ashok Katariya."},
-                {"year": "1993", "event": "Incorporated as a corporate entity; pioneered early toll bridge construction in India."},
-                {"year": "2002", "event": "Executed first major 4-laning BOT highway project under NHAI's national highway development program."},
-                {"year": "2010", "event": "Successfully completed Initial Public Offering (IPO) and listed equity on NSE and BSE."},
-                {"year": "2018", "event": "Expanded into Hybrid Annuity Model (HAM) projects and diversified into Railways and Power EPC."},
-                {"year": "2023–2025", "event": "Executed strategic monetization of operational road assets to de-lever balance sheet and redeploy capital."}
-            ]
-        elif any(k in ind_l or k in sec_l or k in sum_l for k in ["chemical", "specialty", "organic", "polymer", "monomer"]):
-            business_segments = [
-                {
-                    "name": "Specialty Monomers (ATBS & Functional Polymers)",
-                    "description": "High-purity monomers including 2-acrylamido 2-methylpropane sulphonic acid used in water treatment, oilfield recovery, and polymer synthesis.",
-                    "revenue_driver": "Long-term export contracts with global chemical and oilfield multinationals",
-                    "scope": "Global market leadership position (>65% market share)"
-                },
-                {
-                    "name": "Specialty Aromatics (IBB & Intermediates)",
-                    "description": "Isobutyl Benzene and related aromatic compounds used as key active starting materials for pharmaceutical synthesis (ibuprofen) and perfumery.",
-                    "revenue_driver": "Bulk B2B supply agreements with major pharmaceutical manufacturers",
-                    "scope": "World's largest manufacturing scale (>60% market share)"
-                },
-                {
-                    "name": "Butyl Phenols & Performance Additives",
-                    "description": "Ortho tertiary butyl phenol, para tertiary butyl phenol, and antioxidants used in resins, plasticizers, and industrial coatings.",
-                    "revenue_driver": "Contract manufacturing and domestic industrial sales",
-                    "scope": "Integrated domestic production facilities"
-                }
-            ]
-            biz_model_text = (
-                f"{comp_name} operates on a high-entry-barrier B2B specialty chemical manufacturing model. "
-                f"Revenues are generated via contractual supply to leading global pharmaceutical, water treatment, and petrochemical conglomerates. "
-                f"Pricing incorporates formulaic raw material cost pass-through mechanisms, shielding gross margins against petrochemical feedstock volatility. "
-                f"High capacity utilization, backward integration, and proprietary synthesis processes maintain world-leading cost advantages."
-            )
-            rev_mix = [
-                {"segment": "ATBS & Specialty Monomers", "share_pct": "45% – 52%", "nature": "Global Export Contracts"},
-                {"segment": "Isobutyl Benzene (IBB)", "share_pct": "18% – 24%", "nature": "Pharma Raw Material Supply"},
-                {"segment": "Butyl Phenols & Specialty Additives", "share_pct": "25% – 32%", "nature": "Domestic & Export Industrial Supply"}
-            ]
-            key_customers = [
-                "Global Water Treatment & Oilfield Chemical Multinationals (BASF, Dow, Ecolab, SNF)",
-                "Leading Pharmaceutical Manufacturers (Generic Ibuprofen Synthesizers)",
-                "Polymer, Resin & Industrial Coating Formulators",
-                "International Agrochemical & Flavor Fragrance Houses"
-            ]
-            subsidiaries = [
-                {"entity": "Veeral Organics Private Limited", "business": "Wholly owned subsidiary manufacturing downstream specialty chemical intermediaries", "ownership": "100% Subsidiary", "importance": "Value-Added Integration"},
-                {"entity": "Veeral Additives Private Limited", "business": "Antioxidant and polymer additive manufacturing facilities", "ownership": "Merged / Subsidiary", "importance": "Downstream Expansion"}
-            ]
-            comp_competitors = ["Clean Science and Technology", "Aarti Industries", "Atul Ltd", "Deepak Nitrite", "Navin Fluorine"]
-            comp_advantages = [
-                "Global cost leadership with >65% global market share in ATBS and >60% in IBB",
-                "Fully backward-integrated manufacturing from isobutylene and basic feedstocks",
-                "Decade-long sticky customer relationships with rigorous qualification audits",
-                "Zero-debt balance sheet with superior return on capital (ROCE > 20%)"
-            ]
-            milestones = [
-                {"year": "1989", "event": "Incorporated with French technical collaboration to manufacture Isobutyl Benzene."},
-                {"year": "1991", "event": "Commissioned manufacturing facility at Mahad, Maharashtra; listed on exchanges."},
-                {"year": "2002", "event": "Pioneered commercial synthesis of ATBS in India; initiated global export scaling."},
-                {"year": "2010–2015", "event": "Expanded ATBS capacity to become world's single largest manufacturer."},
-                {"year": "2020", "event": "Commissioned greenfield Butyl Phenols facility at Lote Parshuram, Maharashtra."},
-                {"year": "2022–2024", "event": "Integrated Veeral Organics to expand portfolio into downstream specialty additives."}
-            ]
-        elif any(k in ind_l or k in sec_l or k in sum_l for k in ["bank", "financial", "lending", "nbfc"]):
-            business_segments = [
-                {
-                    "name": "Retail Banking",
-                    "description": "Granular lending products including home loans, auto loans, personal credit, credit cards, and retail savings/term deposits.",
-                    "revenue_driver": "Net interest margin (NIM) and consumer processing fee income",
-                    "scope": "Extensive pan-India branch and digital network"
-                },
-                {
-                    "name": "Wholesale & Corporate Banking",
-                    "description": "Term financing, working capital lines, trade finance, structured credit, and syndicated loans for corporate enterprises.",
-                    "revenue_driver": "Lending spreads, syndication fees, and transaction banking commissions",
-                    "scope": "Top Indian conglomerates and mid-market corporates"
-                },
-                {
-                    "name": "Treasury & Global Markets",
-                    "description": "Statutory reserve management (CRR/SLR), sovereign bond portfolios, interest rate derivatives, and foreign exchange trading.",
-                    "revenue_driver": "Interest yields on government securities and proprietary trading gains",
-                    "scope": "Centralized treasury desk operations"
-                }
-            ]
-            biz_model_text = (
-                f"{comp_name} operates as a licensed commercial banking franchise, generating revenue through financial intermediation. "
-                f"The primary income engine is Net Interest Income (NII)—the spread between interest earned on advances/investments and interest paid on customer deposits. "
-                f"This is complemented by non-interest revenue including wealth management fees, payment interchange commissions, trade finance guarantees, and forex dealing."
-            )
-            rev_mix = [
-                {"segment": "Net Interest Income (NII)", "share_pct": "70% – 76%", "nature": "Core Lending Spread"},
-                {"segment": "Fee & Commission Income", "share_pct": "18% – 22%", "nature": "Transaction Banking & Wealth Distribution"},
-                {"segment": "Treasury & Forex Income", "share_pct": "5% – 8%", "nature": "Securities Yield & Trading"}
-            ]
-            key_customers = [
-                "Millions of Granular Retail Depositors & Household Borrowers",
-                "Small, Medium & Micro Enterprises (MSMEs)",
-                "Leading Indian Corporate Conglomerates & Multinationals",
-                "Agricultural & Rural Banking Counterparties"
-            ]
-            subsidiaries = [
-                {"entity": "Securities & Broking Arm", "business": "Retail and institutional equity brokerage and capital markets", "ownership": "Subsidiary", "importance": "Fee Diversification"},
-                {"entity": "Asset Management & Life Insurance SPVs", "business": "Wealth management, mutual funds, and life insurance underwriting", "ownership": "Subsidiary / Group", "importance": "Non-Bank Cross-Sell"}
-            ]
-            comp_competitors = ["ICICI Bank", "Kotak Mahindra Bank", "Axis Bank", "State Bank of India"]
-            comp_advantages = [
-                "Unrivaled low-cost CASA deposit franchise providing structural funding advantage",
-                "Superior asset quality with lowest cycle-average Net NPA ratios",
-                "Massive physical branch network paired with market-leading digital banking STP",
-                "Consistently superior capital adequacy (CRAR / Tier-1 CET-1) exceeding RBI mandates"
-            ]
-            milestones = [
-                {"year": "1994", "event": "Incorporated following RBI's liberalization of private sector banking in India."},
-                {"year": "1995", "event": "Successfully completed IPO and commenced commercial banking operations."},
-                {"year": "2000–2008", "event": "Executed strategic bank mergers to accelerate branch distribution and retail deposit reach."},
-                {"year": "2015–2020", "event": "Scaled digital banking penetration; became India's largest private commercial bank."},
-                {"year": "2023–2025", "event": "Completed landmark parent group merger, creating an integrated global-scale financial conglomerate."}
-            ]
-        elif any(k in ind_l or k in sec_l or k in sum_l for k in ["technology", "software", "information technology", "it services", "distribution", "electronics", "hardware", "telecom"]):
-            is_dist = any(k in ind_l or k in sum_l for k in ["distribution", "supply chain", "logistics", "hardware", "mobility", "devices"])
-            if is_dist:
-                business_segments = [
-                    {
-                        "name": "Technology Solutions & Products Distribution",
-                        "description": "Distribution of enterprise IT infrastructure, personal computing systems, mobility devices, servers, and networking hardware from global OEMs.",
-                        "revenue_driver": "Wholesale vendor distribution margins, volume-linked vendor rebates, and channel inventory turnover",
-                        "scope": "Pan-India and international multi-country distribution network"
-                    },
-                    {
-                        "name": "Enterprise Cloud, Software & Cybersecurity",
-                        "description": "Enterprise software licensing, cloud architecture provisioning, SaaS distribution, and managed security solutions.",
-                        "revenue_driver": "Subscription licensing margins, vendor SaaS partner incentives, and implementation fees",
-                        "scope": "High-growth enterprise and commercial digital contracts"
-                    },
-                    {
-                        "name": "Supply Chain Logistics & Lifecycle Services",
-                        "description": "Integrated third-party warehousing, reverse logistics, spare parts fulfillment, warranty services, and technical consulting.",
-                        "revenue_driver": "3PL logistics contracts, SLA-based service fees, and managed repair billings",
-                        "scope": "Dedicated automated fulfillment centers and service points"
-                    }
-                ]
-                biz_model_text = (
-                    f"{comp_name} operates an expansive technology supply chain and solutions aggregation model. "
-                    f"Revenues are generated primarily through the volume distribution of enterprise computing, networking, and consumer mobility products "
-                    f"sourced from tier-1 global technology vendors (including Apple, HP, Dell, Cisco, and Microsoft). "
-                    f"Gross margins are shielded through formulaic OEM pricing and contractual vendor rebates, while working capital efficiency is "
-                    f"maintained through disciplined cash conversion cycles, channel partner credit underwriting, and inventory hedging."
-                )
-                rev_mix = [
-                    {"segment": "Technology Hardware & Commercial Systems", "share_pct": "72% – 80%", "nature": "OEM Wholesale Distribution"},
-                    {"segment": "Enterprise Cloud & Software Licensing", "share_pct": "15% – 22%", "nature": "SaaS & Cloud Partner Margins"},
-                    {"segment": "Logistics & Managed Lifecycle Support", "share_pct": "3% – 6%", "nature": "3PL & Technical Service SLA Fees"}
-                ]
-                key_customers = [
-                    "Global Tier-1 Technology OEMs (Apple, HP, Dell, Cisco, Microsoft)",
-                    "Value-Added Resellers (VARs) & Enterprise System Integrators",
-                    "Large Corporate Enterprises & Financial Institutions",
-                    "Government Digital Infrastructure & Educational Tenders"
-                ]
-                subsidiaries = [
-                    {"entity": f"{comp_name} International / Middle East & Africa SPVs", "business": "Overseas technology supply chain distribution and cross-border logistics", "ownership": "Wholly Owned Subsidiary", "importance": "Global Sourcing & Regional Footprint"},
-                    {"entity": "ProConnect Supply Chain Logistics / Allied SPVs", "business": "Specialized third-party warehousing, supply chain fulfillment, and distribution logistics", "ownership": "Subsidiary", "importance": "Supply Chain Integration"},
-                    {"entity": "Ensure Support Services / Digital Arms", "business": "Warranty administration, technical repair, and post-sales hardware support", "ownership": "Subsidiary", "importance": "Value-Added Service Retention"}
-                ]
-                comp_competitors = ["Ingram Micro", "Rashi Peripherals", "Savex Technologies", "TD SYNNEX"]
-                comp_advantages = [
-                    "Exclusive, long-standing distribution agreements with world-leading tech OEMs",
-                    "Massive pan-India and international channel footprint covering thousands of partner nodes",
-                    "Disciplined balance sheet management with strict working capital and credit risk containment",
-                    "Growing high-margin contribution from cloud managed services and digital logistics"
-                ]
-                milestones = [
-                    {"year": "1993", "event": "Commenced technology products distribution operations in India."},
-                    {"year": "2007", "event": "Successfully completed IPO and listed equity shares on the NSE and BSE."},
-                    {"year": "2012–2016", "event": "Expanded supply chain footprint across the Middle East, Turkey, and Africa (META)."},
-                    {"year": "2020", "event": "Scaled cloud aggregation platform and cybersecurity solutions portfolio."},
-                    {"year": "2023–2025", "event": "Achieved landmark distribution throughput, crossing major revenue milestones in enterprise solutions."}
-                ]
+            if seg_sentences:
+                for idx, s in enumerate(seg_sentences[:4]):
+                    parts = s.split("offers", 1) if "offers" in s else (s.split("provides", 1) if "provides" in s else s.split("operates through", 1))
+                    seg_title = f"Division {idx + 1}: " + (parts[0].strip()[:35] if len(parts) > 1 and len(parts[0].strip()) < 35 else f"Core Business Line {idx + 1}")
+                    business_segments.append({
+                        "name": seg_title,
+                        "description": s,
+                        "revenue_driver": "Verified information unavailable.",
+                        "scope": "Operating division"
+                    })
+            elif sentences:
+                for idx, s in enumerate(sentences[:3]):
+                    business_segments.append({
+                        "name": f"Core Operation {idx + 1}",
+                        "description": s,
+                        "revenue_driver": "Verified information unavailable.",
+                        "scope": "Verified information unavailable."
+                    })
             else:
                 business_segments = [
                     {
-                        "name": "Digital Transformation & Cloud Platforms",
-                        "description": "Enterprise cloud architecture, migration, artificial intelligence integration, and modern data platform engineering.",
-                        "revenue_driver": "Time-and-materials (T&M) consulting and fixed-price milestone digital delivery",
-                        "scope": "Global Fortune 500 enterprise accounts"
-                    },
-                    {
-                        "name": "Core Application Development & Maintenance (ADM)",
-                        "description": "Legacy system modernization, enterprise software engineering, and continuous application maintenance.",
-                        "revenue_driver": "Multi-year recurring managed services contracts and SLA billings",
-                        "scope": "Global delivery centers across India and nearshore locations"
-                    },
-                    {
-                        "name": "Enterprise Consulting & Digital Operations",
-                        "description": "Business process management, ERP implementations (SAP, Oracle), and operational analytics.",
-                        "revenue_driver": "Value-based consulting engagements and outcome-linked operational fees",
-                        "scope": "Multi-vertical enterprise deployment"
+                        "name": "Core Commercial Operations",
+                        "description": f"{comp_name} operates within India's {sec} sector ({ind}). Specific segment breakdown is not separately itemized.",
+                        "revenue_driver": "Verified information unavailable.",
+                        "scope": "Verified information unavailable."
                     }
                 ]
-                biz_model_text = (
-                    f"{comp_name} operates a premier global IT consulting and digital transformation delivery model. "
-                    f"Revenues are recognized across multi-year recurring managed services contracts, SLA-based enterprise support, and fixed-price milestone projects. "
-                    f"High offshore delivery mix, strong billing rate realization, and disciplined headcount utilization sustain robust operating profit margins (OPM) and superior return on capital (ROCE/ROE)."
-                )
-                rev_mix = [
-                    {"segment": "Digital Transformation & Cloud Services", "share_pct": "55% – 65%", "nature": "High-Margin Strategic Contracts"},
-                    {"segment": "Core Application Development & Maintenance", "share_pct": "25% – 35%", "nature": "Recurring Multi-Year Managed Services"},
-                    {"segment": "Consulting & Enterprise Business Operations", "share_pct": "8% – 12%", "nature": "Value-Based Advisory Fees"}
-                ]
-                key_customers = [
-                    "Global BFSI & Financial Conglomerates",
-                    "Healthcare, Life Sciences & Pharmaceutical Enterprises",
-                    "Global Retail, Consumer & Logistics Multinationals",
-                    "Communications, Media & Technology Corporates"
-                ]
-                subsidiaries = [
-                    {"entity": f"{comp_name} Global Delivery SPVs (US / Europe / APAC)", "business": "Onshore client relationship management and technical delivery centers", "ownership": "Wholly Owned Subsidiaries", "importance": "Client Proximity & Market Expansion"}
-                ]
-                comp_competitors = ["Tata Consultancy Services", "Infosys", "Wipro", "HCL Technologies", "LTIMindtree"]
-                comp_advantages = [
-                    "Deep domain expertise with decades of mission-critical enterprise architecture execution",
-                    "High customer stickiness with over 90% recurring business from existing client accounts",
-                    "Debt-free balance sheet with world-class cash generation (CFO/PAT > 90%) and return ratios",
-                    "Massive scale with state-of-the-art global delivery centers and certified talent pool"
-                ]
-                milestones = [
-                    {"year": str(founded), "event": f"Founded in {hq} as an early pioneer in Indian technology services."},
-                    {"year": "Listing", "event": "Listed equity shares on NSE and BSE with widespread institutional participation."},
-                    {"year": "Global Scale", "event": "Expanded international delivery footprint across North America, Europe, and Asia-Pacific."},
-                    {"year": "Digital Transition", "event": "Successfully pivoted service delivery model toward Cloud, AI, and enterprise automation."}
-                ]
-        else:
-            # Universal Dynamic Heuristic
-            business_segments = [
-                {
-                    "name": "Core Manufacturing & Operational Delivery",
-                    "description": f"Primary production and commercial delivery of specialized products and services within the {ind} space.",
-                    "revenue_driver": "Enterprise sales contracts and recurring commercial supply",
-                    "scope": "Established domestic and enterprise distribution reach"
-                },
-                {
-                    "name": "Strategic Solutions & Value-Added Products",
-                    "description": f"High-margin specialized offerings catering to premium end markets in {sec}.",
-                    "revenue_driver": "Customized B2B contracts and value-added product pricing",
-                    "scope": "Growing contribution to overall operating profit"
-                },
-                {
-                    "name": "Allied Operations & Aftermarket Services",
-                    "description": "Ancillary support services, spare parts supply, and operational maintenance contracts.",
-                    "revenue_driver": "Recurring service fees and commercial parts replacement",
-                    "scope": "Captive customer installed base"
-                }
-            ]
+
+        # 4. Factual Business Model Narrative (Grounded strictly in target company summary)
+        if sentences:
             biz_model_text = (
-                f"{comp_name} operates a structured commercial model within India's {sec} sector. "
-                f"Revenue is generated through the manufacture and distribution of specialized products in {ind}. "
-                f"The business relies on operational efficiency, established dealer/enterprise networks, and long-term customer partnerships to sustain operating profit margins."
+                f"{comp_name} operates as a commercial enterprise within India's {sec} sector ({ind}). "
+                f"{sentences[0]} "
+                f"Revenue realization, operating margins, and working capital cycles are governed by customer contracts and execution in {ind}."
             )
-            rev_mix = [
-                {"segment": "Core Primary Operations", "share_pct": "65% – 75%", "nature": "Commercial Product Delivery"},
-                {"segment": "Value-Added & Specialized Lines", "share_pct": "20% – 25%", "nature": "High-Margin Contracts"},
-                {"segment": "Allied & Maintenance Services", "share_pct": "5% – 10%", "nature": "Recurring Support Revenue"}
-            ]
-            key_customers = [
-                f"Enterprise Counterparties across Indian {sec} Markets",
-                "Public Sector Agencies & Institutional Tenders",
-                "Commercial Channel Partners & Wholesale Distributors"
-            ]
-            subsidiaries = [
-                {"entity": f"{comp_name} Operating Subsidiaries", "business": f"Specialized operational facilities supporting {ind} execution", "ownership": "Wholly Owned / Majority", "importance": "Core Capacity Extension"}
-            ]
-            comp_competitors = ["Industry Peer A", "Industry Peer B", "Industry Peer C"]
-            comp_advantages = [
-                f"Established operating presence and brand equity across {sec}",
-                "Integrated production infrastructure delivering operating cost efficiencies",
-                "Disciplined balance sheet management and healthy capital return ratios"
-            ]
-            milestones = [
-                {"year": str(founded), "event": f"Founded and commenced initial operations in {hq}."},
-                {"year": "Listing", "event": "Successfully listed equity shares on the National Stock Exchange (NSE) and Bombay Stock Exchange (BSE)."},
-                {"year": "Scale", "event": f"Expanded manufacturing infrastructure and distribution footprint across Indian {sec} channels."}
-            ]
+        else:
+            biz_model_text = (
+                f"{comp_name} operates within India's {sec} ({ind}) sector. "
+                f"Verified information unavailable for detailed contractual mechanics."
+            )
+
+        # 5. Segment Revenue Mix (Zero fabrication of unverified percentages)
+        rev_mix = [
+            {
+                "segment": seg.get("name", "Core Operations"),
+                "share_pct": "Verified information unavailable.",
+                "nature": "Operational Revenue"
+            }
+            for seg in business_segments[:4]
+        ]
+
+        # 6. Key Customers & Counterparties (Never invent unverified customer names)
+        key_customers = ["Verified information unavailable."]
+
+        # 7. Subsidiaries & Joint Ventures (Never invent unverified entities)
+        subsidiaries = [
+            {
+                "entity": "Verified information unavailable.",
+                "business": "Verified information unavailable.",
+                "ownership": "Verified information unavailable.",
+                "importance": "Verified information unavailable."
+            }
+        ]
+
+        # 8. Competitors & Advantages (Only factual calculated metrics)
+        comp_competitors = ["Verified information unavailable."]
+        comp_advantages = [
+            f"Financial scale with Market Capitalization of Rs. {mcap:,.1f} Cr and Net Book Value of Rs. {bv:,.1f} per share.",
+            f"Operating return profile delivering ROCE of {roce:.1f}% and ROE of {roe:.1f}%.",
+            f"Balance sheet structure with Net Debt to Equity of {de:.2f}x."
+        ]
+
+        # 9. Milestones (Only verified incorporation and exchange listing)
+        milestones = []
+        try:
+            f_year = int(str(founded).strip())
+            if 1800 <= f_year <= 2026:
+                milestones.append({"year": str(f_year), "event": f"{comp_name} established / incorporated."})
+        except Exception:
+            pass
+
+        milestones.append({
+            "year": "Exchange Listing",
+            "event": f"{comp_name} listed equity shares on the National Stock Exchange of India (NSE) and Bombay Stock Exchange (BSE)."
+        })
+        milestones.append({
+            "year": "Statutory Filings",
+            "event": "Historical operational track record maintained through continuous statutory exchange filings."
+        })
 
         key_business_facts = {
-            "founded": str(founded),
+            "founded": str(founded) if founded and str(founded) not in ["None", "0"] else "Verified information unavailable.",
             "headquarters": str(hq),
             "listed": "National Stock Exchange (NSE) & Bombay Stock Exchange (BSE)",
             "industry": f"{sec} / {ind}",
             "promoters_leadership": ", ".join(officers[:3]) if officers else "Executive Management Board",
             "employees": f"{emp:,} Full-Time Personnel" if isinstance(emp, (int, float)) and emp > 0 else "Not Disclosed in Management Filings",
-            "major_subsidiaries": f"{comp_name} Operating SPVs & Concession Holdings",
-            "geographic_presence": f"Pan-India Operations ({hq} Central Hub) with Regional Cluster Footprint"
+            "major_subsidiaries": "Verified information unavailable.",
+            "geographic_presence": f"Headquartered in {hq} with operations and distribution channels as disclosed in regulatory filings."
         }
 
         geographic_presence = {

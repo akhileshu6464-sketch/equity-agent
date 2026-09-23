@@ -32,7 +32,7 @@ MANDATORY WRITING & FORMATTING RULES:
 3. NATURAL PROSE WEAVING: You must weave all quantitative metrics (CAGR, margins, spreads, working capital days), operational drivers, competitive benchmarking against top listed peers, and downside thesis invalidation thresholds directly into natural, flowing prose transitions within each paragraph.
 4. SECTOR DISCIPLINE & ZERO CROSS-SECTOR CONTAMINATION:
    - For Banks/BFSI: Focus strictly on NIM, CASA ratio, Gross/Net NPAs, PCR, Cost of Funds, C/D ratio, and Tier-1 CET-1 capital. Strictly NEVER mention factories, plant capex, raw material inflation, or inventory.
-   - For Specialty Chemicals / Advanced Materials: Focus strictly on verified product lines (e.g. ATBS, IBB, Veeral Organics butyl phenols / antioxidants), formula-indexed feedstock pass-through, customer qualification moats, and continuous-flow synthesis. Strictly NEVER mention retail dealer agreements, appliances, copper, or steel.
+   - For Specialty Chemicals / Advanced Materials: Focus strictly on verified product lines from primary company disclosures, formula-indexed feedstock pass-through, customer qualification moats, and continuous-flow synthesis. Strictly NEVER mention retail dealer agreements, appliances, copper, or steel.
    - For IT Services: Focus strictly on deal TCV, book-to-bill, offshore/onsite mix, attrition, digital transformation contracts. Strictly NEVER mention dealer networks, factories, or inventory.
    - For Non-Financials: Focus strictly on Gross Margins, Raw Material Pass-through, Brand Equity, Distribution Reach, Cash Conversion Cycle (DIO/DSO/DPO), ROCE, and ROIC vs WACC. Strictly NEVER mention 'CASA', 'NIM', 'CET-1', 'CRAR', 'deposits', 'loan book', 'branches', 'slippages', 'PCR', or banking peers.
 """
@@ -69,15 +69,22 @@ def get_moat_prompt(
         p3_focus = "Asset Quality & Credit Cost Trajectory (GNPA, NNPA, PCR, slippage ratio)"
         p4_focus = "Regulatory Capital & Balance Sheet Strength (CET-1, CRAR, LCR, RBI stress-testing buffers)"
     elif is_chemicals:
+        is_vinati = (clean_sym == "VINATIORGA")
+        chem_focus = "Proprietary chemistry lines (e.g. ATBS, IBB, Veeral Organics butyl phenols / antioxidants)" if is_vinati else "Target company verified specialty chemistry lines and niche intermediates"
         sector_rules = (
             "SECTOR: SPECIALTY CHEMICALS / ADVANCED MATERIALS.\n"
-            "MANDATORY FOCUS: Proprietary chemistry lines (e.g. ATBS, IBB, Veeral Organics butyl phenols / antioxidants), global market share, formula-indexed feedstock pass-through contracts, continuous-flow synthesis block capacity utilization, customer qualification cycles (2-3 year innovator qualification moats), and ROIC/ROCE vs WACC spreads.\n"
+            f"MANDATORY FOCUS: {chem_focus}, market share, formula-indexed feedstock pass-through contracts, continuous-flow synthesis block capacity utilization, customer qualification cycles (2-3 year innovator qualification moats), and ROIC/ROCE vs WACC spreads.\n"
             "STRICT PROHIBITION: Strictly NEVER mention retail consumer dealer agreements, appliances, copper, steel, CASA, NIM, or banking deposits."
         )
-        p1_focus = "Proprietary Chemistry Moat, ATBS/IBB Global Market Share & Formula-Indexed Pass-Through (Raw material pass-through, export stickiness)"
-        p2_focus = "Continuous-Flow Chemical Synthesis, Veeral Organics Integration & Regulatory Moat (Synthesis block utilization, innovator qualification barriers, environmental ZLD compliance)"
+        if is_vinati:
+            p1_focus = "Proprietary Chemistry Moat, ATBS/IBB Global Market Share & Formula-Indexed Pass-Through (Raw material pass-through, export stickiness)"
+            p2_focus = "Continuous-Flow Chemical Synthesis, Veeral Organics Integration & Regulatory Moat (Synthesis block utilization, innovator qualification barriers, environmental ZLD compliance)"
+            p4_focus = "Capital Allocation & Balance Sheet Durability (ROCE, ROIC, zero-debt balance sheet, organic expansion into butyl phenols/antioxidants)"
+        else:
+            p1_focus = "Proprietary Chemistry Moat, Intermediate Market Share & Formula-Indexed Pass-Through (Raw material pass-through, export stickiness)"
+            p2_focus = "Continuous-Flow Chemical Synthesis, Downstream Integration & Regulatory Moat (Synthesis block utilization, qualification barriers, environmental ZLD compliance)"
+            p4_focus = "Capital Allocation & Balance Sheet Durability (ROCE, ROIC, balance sheet health, organic expansion into downstream derivatives)"
         p3_focus = "Working Capital Dynamics & Export Supply Chain Governance (Debtor aging with global chemical innovators, inventory turnover, CFO/PAT conversion)"
-        p4_focus = "Capital Allocation & Balance Sheet Durability (ROCE, ROIC, zero-debt balance sheet, organic expansion into butyl phenols/antioxidants)"
     else:
         sector_rules = (
             "SECTOR: INDUSTRIAL / CONSUMER / MANUFACTURING / FMCG.\n"

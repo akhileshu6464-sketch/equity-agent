@@ -29,6 +29,8 @@ class Agent5IndustryKPI(BaseAgent):
         sector_key = context.get("sector_key") or "DIVERSIFIED_INDUSTRIALS"
         archetype = context.get("archetype") or get_archetype_by_key(sector_key)
         display_name = archetype.get("display_name", "Diversified Industrials & Manufacturing")
+        ticker = company_data.get("symbol", "") or company_data.get("clean_symbol", "") or context.get("ticker", "")
+        clean_ticker = str(ticker).upper().replace(".NS", "").replace(".BO", "")
         history = company_data.get("history_years", [])
         latest = history[-1] if history else {}
 
@@ -719,7 +721,7 @@ class Agent5IndustryKPI(BaseAgent):
                 ),
                 "Distribution Counter Reach & Active Outlets": make_audit_node(
                     title="Active Retail Distribution Counter Reach & Density",
-                    level_a="Active distribution spans over 135,000+ retail touchpoints and alternate channels, compounding at 6.8% CAGR over 5 years.",
+                    level_a="Active distribution spans over 135,000+ retail touchpoints and alternate channels, compounding at 6.8% CAGR over 5 years." if "CROMPTON" in clean_ticker else "Active retail distribution spans authorized dealers and alternate channels as disclosed in regulatory filings.",
                     level_b="Multi-tier distribution reaches urban, semi-urban, and rural counters via exclusive dealers, multi-brand outlets, and e-commerce.",
                     level_c="Distribution reach provides a formidable competitive barrier that takes decades to replicate.",
                     level_d="Distribution density drives immediate volume scale for new product launches, compressing payback periods."
@@ -739,10 +741,11 @@ class Agent5IndustryKPI(BaseAgent):
                     level_d="Premiumization drives gross margin accretion, enhancing long-term Return on Capital Employed (ROCE >20%)."
                 )
             }
+            reach_flag = "135,000+ active retail touchpoints across urban and rural tiers" if "CROMPTON" in clean_ticker else "Active distribution across authorized retail counters"
             flags = [
                 f"**Inventory Velocity**: {inventory_turns}x turns ({dsi} days DSI)",
                 f"**GMROI**: {gmroi}x return per rupee of working capital inventory",
-                "**Distribution Reach**: 135,000+ active retail touchpoints across urban and rural tiers"
+                f"**Distribution Reach**: {reach_flag}"
             ]
 
         # Audit metrics summary dictionary for concise card display

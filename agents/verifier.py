@@ -227,16 +227,32 @@ class FactCheckingVerifier:
 
         cleaned_text = " ".join(sanitized_sentences)
 
-        # 3. Enforce Primary Disclosures Grounding: check if product mentions align with primary disclosures
-        prod_portfolio = primary_disclosures.get("product_portfolio", {})
-        segments = prod_portfolio.get("segments", [])
-        if sec_category == "SPECIALTY_CHEMICALS":
-            # If prose completely lacks mention of core products like ATBS, IBB, or butyl phenols, append primary disclosure
-            if not any(k in cleaned_text.upper() for k in ["ATBS", "IBB", "BUTYL PHENOLS", "VEERAL", "MONOMER"]):
-                violations.append("Specialty chemical narrative missing primary product lines (ATBS/IBB).")
-                if segments and segments[0] != "Not Disclosed in Management Filings":
-                    addition = f"\n\nFrom official exchange disclosures [Source: {prod_portfolio.get('source', 'BSE Filing')}], core operational revenue is driven by: {segments[0]}."
-                    cleaned_text += addition
-                    remediations.append("Injected verified primary product segment disclosure.")
+        # 3. Universal Cross-Company Foreign Entity Contamination Guard
+        raw_sym = (primary_disclosures.get("symbol") or "").upper().replace(".NS", "").replace(".BO", "").strip()
+        from core.company_identity import CANONICAL_ALIASES
+        active_sym = CANONICAL_ALIASES.get(raw_sym, raw_sym)
+
+        foreign_signatures = {
+            "TATAMOTORS": ["TATA MOTORS", "JAGUAR LAND ROVER", "JLR", "TATA MOTORS PASSENGER", "TMCV", "TMPV"],
+            "ASHOKA": ["ASHOKA BUILDCON", "ASHOKA CONCESSIONS", "ASHOK KATARIYA"],
+            "VINATIORGA": ["VINATI ORGANICS", "ATBS", "ISOBUTYL BENZENE", "VEERAL ORGANICS", "VEERAL ADDITIVES"],
+            "REDINGTON": ["REDINGTON", "PROCONNECT", "ENSURE SUPPORT", "REDINGTON INDIA"],
+            "HDFCBANK": ["HDFC BANK", "HOUSING DEVELOPMENT FINANCE CORPORATION"],
+            "RELIANCE": ["RELIANCE INDUSTRIES", "JIO", "RELIANCE RETAIL"],
+            "CROMPTON": ["CROMPTON GREAVES", "CROMPTON GREAVES CONSUMER", "BUTTERFLY GANDHIMATHI"],
+            "INFY": ["INFOSYS", "INFOSYS LIMITED"],
+            "TCS": ["TATA CONSULTANCY SERVICES"],
+            "LT": ["LARSEN & TOUBRO", "L&T"]
+        }
+
+        for other_sym, signatures in foreign_signatures.items():
+            if other_sym == active_sym:
+                continue
+            for sig in signatures:
+                pattern = r'\b' + re.escape(sig) + r'\b'
+                if re.search(pattern, cleaned_text, flags=re.IGNORECASE):
+                    violations.append(f"CRITICAL CONTAMINATION: Foreign entity signature '{sig}' belonging to '{other_sym}' detected in report for '{active_sym}'.")
+                    cleaned_text = re.sub(pattern, "an industry peer", cleaned_text, flags=re.IGNORECASE)
+                    remediations.append(f"Purged foreign entity '{sig}' ({other_sym}).")
 
         return cleaned_text, violations, remediations

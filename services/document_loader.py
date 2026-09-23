@@ -20,6 +20,7 @@ import logging
 from typing import Dict, Any, List, Optional
 import requests
 from bs4 import BeautifulSoup
+from core.research_context import ResearchRunContext, create_research_context, DataContaminationError, assert_company_boundary
 
 try:
     import pymupdf
@@ -104,25 +105,36 @@ def _clean_ascii(text: str) -> str:
     return text.strip()
 
 
+from core.company_identity import resolve_canonical_identity, CompanyIdentity
+from core.research_context import ResearchRunContext, create_research_context
+from services.rag_engine import CompanyRAGEngine
+
+
 class DocumentLoader:
-    """Primary document ingestion and normalization engine for Indian equities."""
+    """Primary document ingestion and normalization engine for Indian equities with strict company_id isolation."""
 
     def __init__(self, db_path: Optional[str] = None, ttl_seconds: int = CACHE_TTL_SECONDS):
         self._db_path = db_path or DOCUMENT_DB_PATH
         self._ttl_seconds = ttl_seconds
         self._session = requests.Session()
         self._session.headers.update(BROWSER_HEADERS)
+        self.rag_engine = CompanyRAGEngine(self._db_path)
         self._init_db()
 
     def _init_db(self) -> None:
-        """Initializes SQLite cache table."""
+        """Initializes SQLite cache table, migrating schema if needed."""
         conn = None
         try:
             os.makedirs(os.path.dirname(self._db_path), exist_ok=True)
             conn = sqlite3.connect(self._db_path)
+            cursor = conn.execute("PRAGMA table_info(document_cache)")
+            cols = [row[1] for row in cursor.fetchall()]
+            if cols and "company_id" not in cols:
+                conn.execute("DROP TABLE document_cache")
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS document_cache (
-                    symbol TEXT PRIMARY KEY,
+                    company_id TEXT PRIMARY KEY,
+                    symbol TEXT NOT NULL,
                     data_json TEXT NOT NULL,
                     cached_at REAL NOT NULL
                 )
@@ -134,41 +146,41 @@ class DocumentLoader:
             if conn:
                 conn.close()
 
-    def _get_from_sqlite(self, symbol: str) -> Optional[Dict[str, Any]]:
-        """Retrieves cached document data from SQLite if within TTL."""
+    def _get_from_sqlite(self, company_id: str) -> Optional[Dict[str, Any]]:
+        """Retrieves cached document data from SQLite strictly by company_id if within TTL."""
         conn = None
         try:
             conn = sqlite3.connect(self._db_path)
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT data_json, cached_at FROM document_cache WHERE symbol = ?",
-                (symbol,)
+                "SELECT data_json, cached_at FROM document_cache WHERE company_id = ?",
+                (company_id,)
             )
             row = cursor.fetchone()
             if row:
                 data_json, cached_at = row
                 if (time.time() - cached_at) < self._ttl_seconds:
-                    logger.info(f"SQLite document cache HIT for {symbol}")
+                    logger.info(f"SQLite document cache HIT for {company_id}")
                     return json.loads(data_json)
         except Exception as e:
-            logger.warning(f"Error reading SQLite document cache for {symbol}: {e}")
+            logger.warning(f"Error reading SQLite document cache for {company_id}: {e}")
         finally:
             if conn:
                 conn.close()
         return None
 
-    def _save_to_sqlite(self, symbol: str, data: Dict[str, Any]) -> None:
-        """Saves document disclosures to SQLite."""
+    def _save_to_sqlite(self, company_id: str, symbol: str, data: Dict[str, Any]) -> None:
+        """Saves document disclosures to SQLite with company_id key."""
         conn = None
         try:
             conn = sqlite3.connect(self._db_path)
             conn.execute(
-                "INSERT OR REPLACE INTO document_cache (symbol, data_json, cached_at) VALUES (?, ?, ?)",
-                (symbol, json.dumps(data, ensure_ascii=True), time.time())
+                "INSERT OR REPLACE INTO document_cache (company_id, symbol, data_json, cached_at) VALUES (?, ?, ?, ?)",
+                (company_id, symbol, json.dumps(data, ensure_ascii=True), time.time())
             )
             conn.commit()
         except Exception as e:
-            logger.warning(f"Error saving to SQLite document cache for {symbol}: {e}")
+            logger.warning(f"Error saving to SQLite document cache for {company_id}: {e}")
         finally:
             if conn:
                 conn.close()
@@ -189,20 +201,32 @@ class DocumentLoader:
         symbol: str,
         company_name: str,
         company_data: Optional[Dict[str, Any]] = None,
-        force_refresh: bool = False
+        force_refresh: bool = False,
+        run_context: Optional[ResearchRunContext] = None
     ) -> Dict[str, Any]:
         """
-        Loads and synthesizes all verified primary disclosures for symbol:
+        Loads and synthesizes all verified primary disclosures for company with strict isolation:
         1. Product Offerings and Segments from official company profile.
         2. Credit Rating Rationale (CARE / CRISIL / ICRA).
         3. Concall Transcript Management Highlights & Guidance.
         4. Corporate Announcements under Regulation 30.
+        All ingested documents are stored with canonical company_id in RAG engine.
         """
         clean_sym = symbol.upper().replace(".NS", "").replace(".BO", "").strip()
 
+        # Resolve or validate canonical run context
+        if run_context is None:
+            try:
+                run_context = create_research_context(clean_sym)
+            except Exception:
+                run_context = create_research_context(company_name or clean_sym)
+
+        cid = run_context.company_id
+
         if not force_refresh:
-            cached = self._get_from_sqlite(clean_sym)
+            cached = self._get_from_sqlite(cid)
             if cached:
+                assert_company_boundary(cached, cid, caller_module="DocumentLoader.Cache")
                 return cached
 
         soup = self._fetch_screener_soup(clean_sym)
@@ -220,19 +244,49 @@ class DocumentLoader:
         concall = self._extract_concall_transcript(soup, clean_sym, company_name)
 
         disclosures = {
-            "symbol": symbol,
-            "company_name": company_name,
+            "company_id": cid,
+            "symbol": run_context.ticker,
+            "company_name": run_context.company_name,
+            "isin": run_context.isin,
             "product_portfolio": product_portfolio,
             "credit_rating": credit_rating,
             "concall_transcript": concall,
             "corporate_announcements": announcements
         }
 
+        # Store partitioned documents in RAG engine
+        if product_portfolio.get("details"):
+            self.rag_engine.store_document_with_chunks(
+                run_context=run_context,
+                document_id=f"doc_profile_{clean_sym}",
+                document_type="OFFICIAL_PROFILE",
+                content=f"{product_portfolio.get('overview', '')}\n{product_portfolio.get('details', '')}",
+                source=product_portfolio.get("source", "Official Profile")
+            )
+
+        if credit_rating.get("rationale_highlights") and credit_rating.get("rationale_highlights") != "Not Disclosed in Management Filings":
+            self.rag_engine.store_document_with_chunks(
+                run_context=run_context,
+                document_id=f"doc_rating_{clean_sym}",
+                document_type="RATING_RATIONALE",
+                content=f"Agency: {credit_rating.get('agency')}\nRating: {credit_rating.get('rating')}\nFacilities: {credit_rating.get('facilities_cr')}\nRationale: {credit_rating.get('rationale_highlights')}",
+                source=credit_rating.get("source", "Credit Rating Agency")
+            )
+
+        if concall.get("management_remarks") and concall.get("management_remarks") != "Not Disclosed in Management Filings":
+            self.rag_engine.store_document_with_chunks(
+                run_context=run_context,
+                document_id=f"doc_concall_{clean_sym}",
+                document_type="CONCALL_TRANSCRIPT",
+                content=f"Title: {concall.get('title')}\nRemarks:\n{concall.get('management_remarks')}\nGuidance:\n" + "\n".join(concall.get("guidance_points", [])),
+                source=concall.get("source", "Concall Transcript")
+            )
+
         # Format XML block
         disclosures["disclosures_xml"] = self.format_primary_disclosures_block(disclosures)
 
         # Save to SQLite
-        self._save_to_sqlite(clean_sym, disclosures)
+        self._save_to_sqlite(cid, clean_sym, disclosures)
 
         return disclosures
 
@@ -496,10 +550,13 @@ class DocumentLoader:
         concall = disclosures.get("concall_transcript", {})
         announcements = disclosures.get("corporate_announcements", [])
 
+        cid = disclosures.get("company_id", "")
+        isin = disclosures.get("isin", "")
         lines = [
             "<primary_disclosures>",
-            "<!-- VERIFIED PRIMARY SOURCES: OFFICIAL FILINGS, RATINGS, AND CONCALL TRANSCRIPTS -->",
+            f"<!-- CANONICAL ISOLATION: company_id={cid} ticker={symbol} isin={isin or 'N/A'} -->",
             f"[COMPANY_OFFICIAL_PROFILE_AND_SEGMENTS]",
+            f"Canonical Company ID: {cid}",
             f"Company: {company_name} ({symbol})",
             f"Citation: [Source: {portfolio.get('source', 'BSE Official Profile')}]",
             f"Business Overview: {portfolio.get('overview', 'Not Disclosed in Management Filings')}",

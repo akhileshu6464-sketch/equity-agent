@@ -636,7 +636,7 @@ Output MUST be valid JSON with this exact schema:
         }
 
         # Peer benchmarking for Consumer Durables / IT / General
-        if "CROMPTON" in ticker_clean or is_consumer:
+        if "CROMPTON" in ticker_clean:
             peers = ["Havells India", "Polycab India", "Orient Electric"]
             bench_table = [
                 {
@@ -673,6 +673,31 @@ Output MUST be valid JSON with this exact schema:
                     "peer1": "55x - 65x (Havells)",
                     "peer2": "45x - 52x (Polycab)",
                     "commentary": "Crompton trades at an attractive 30-35% valuation discount to Havells, offering attractive risk-adjusted upside as appliance margins expand."
+                }
+            ]
+        elif is_consumer:
+            peers = ["Benchmark Peer A", "Benchmark Peer B"]
+            bench_table = [
+                {
+                    "metric": "Operating EBITDA Margin (%)",
+                    "company": "Operating in sector corridor",
+                    "peer1": "Benchmark Peer A",
+                    "peer2": "Benchmark Peer B",
+                    "commentary": f"Margin defense for {comp_name} anchored by product mix and operational scale."
+                },
+                {
+                    "metric": "Return on Capital Employed (ROCE %)",
+                    "company": "Sector competitive",
+                    "peer1": "Benchmark Peer A",
+                    "peer2": "Benchmark Peer B",
+                    "commentary": "Working capital discipline and brand equity sustain capital returns."
+                },
+                {
+                    "metric": "Working Capital Cycle (CCC Days)",
+                    "company": "Controlled operating cycle",
+                    "peer1": "Benchmark Peer A",
+                    "peer2": "Benchmark Peer B",
+                    "commentary": "Channel inventory and debtor turnover actively managed against distribution terms."
                 }
             ]
         elif is_it:

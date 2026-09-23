@@ -350,6 +350,108 @@ def _deterministic_concall_fallback(
         or raw_info.get("shortName")
         or company_name
     )
+
+    # 0. STRICT ZERO-TOLERANCE CHECK FOR VERIFIED TRANSCRIPT
+    has_real_transcript = bool(
+        concall_raw_text
+        and len(concall_raw_text.strip()) > 100
+        and "Not Disclosed in Management Filings" not in concall_raw_text
+    )
+
+    if not has_real_transcript:
+        return {
+            "agent_name": "Agent 7: Institutional Concall & Management Guidance Analyst",
+            "call_period": "Official Transcript Not Available",
+            "tone_sentiment": "PRAGMATIC",
+            "integrity_score": "HIGH",
+            "revenue_growth_guidance": "Verified information unavailable.",
+            "margin_outlook": "Verified information unavailable.",
+            "committed_capex": "Verified information unavailable.",
+            "strategic_aspirations": "Verified information unavailable.",
+            "capex_projects": "Verified information unavailable.",
+            "capex_timeline": "Verified information unavailable.",
+            "funding_mode": "Verified information unavailable.",
+            "operational_disclosures": [
+                {"title": "Management Guidance", "value": "Verified information unavailable from statutory filings."}
+            ],
+            "qa_highlights": [
+                {
+                    "question": "Verified information unavailable.",
+                    "answer": "Verified information unavailable.",
+                    "takeaway": "Verified information unavailable.",
+                    "analyst_institution": "Verified information unavailable.",
+                    "posture": "Neutral",
+                    "management_response": "Verified information unavailable.",
+                    "scrutiny_focus": "Verified information unavailable."
+                }
+            ],
+            "tone_summary": f"Official earnings conference call transcript not available in primary exchange disclosures for {resolved_name}.",
+            "guidance_revisions": "Verified information unavailable.",
+            "guidance_summary": {
+                "revenue_growth_target": "Verified information unavailable.",
+                "margin_outlook": "Verified information unavailable.",
+                "capex_commitments": "Verified information unavailable.",
+                "medium_term_aspirations": "Verified information unavailable."
+            },
+            "capex_plans": {
+                "total_outlay_cr": "Verified information unavailable.",
+                "key_projects": "Verified information unavailable.",
+                "commissioning_timeline": "Verified information unavailable.",
+                "funding_mode": "Verified information unavailable."
+            }
+        }
+
+    # If transcript text is available, extract grounded sentences from actual text
+    sentences = [s.strip() for s in re.split(r'[.\n]', concall_raw_text) if len(s.strip()) > 20]
+    guidance_sentences = [s for s in sentences if any(w in s.lower() for w in ["guidance", "expect", "target", "capex", "capacity", "margin", "growth", "volume", "revenue"])]
+    rev_g = next((s for s in guidance_sentences if any(w in s.lower() for w in ["revenue", "growth", "volume", "guidance"])), "Verified information unavailable.")
+    mar_g = next((s for s in guidance_sentences if "margin" in s.lower()), "Verified information unavailable.")
+    cap_g = next((s for s in guidance_sentences if "capex" in s.lower()), "Verified information unavailable.")
+    op_discs = [{"title": f"Guidance Point {i+1}", "value": s} for i, s in enumerate(guidance_sentences[:4])] or [
+        {"title": "Management Guidance", "value": "Verified information unavailable."}
+    ]
+
+    return {
+        "agent_name": "Agent 7: Institutional Concall & Management Guidance Analyst",
+        "call_period": "Latest Exchange Concall Filing",
+        "tone_sentiment": "PRAGMATIC",
+        "integrity_score": "HIGH",
+        "revenue_growth_guidance": rev_g,
+        "margin_outlook": mar_g,
+        "committed_capex": cap_g,
+        "strategic_aspirations": "Grounded in primary management remarks.",
+        "capex_projects": cap_g,
+        "capex_timeline": "As disclosed in management remarks.",
+        "funding_mode": "Disclosed operating cash flows",
+        "operational_disclosures": op_discs,
+        "qa_highlights": [
+            {
+                "question": "Verified information unavailable.",
+                "answer": "Verified information unavailable.",
+                "takeaway": "Verified information unavailable.",
+                "analyst_institution": "Verified information unavailable.",
+                "posture": "Neutral",
+                "management_response": "Verified information unavailable.",
+                "scrutiny_focus": "Verified information unavailable."
+            }
+        ],
+        "tone_summary": f"Management remarks extracted from primary exchange concall filing for {resolved_name}.",
+        "guidance_revisions": "Verified information unavailable.",
+        "guidance_summary": {
+            "revenue_growth_target": rev_g,
+            "margin_outlook": mar_g,
+            "capex_commitments": cap_g,
+            "medium_term_aspirations": "Grounded in primary management remarks."
+        },
+        "capex_plans": {
+            "total_outlay_cr": cap_g,
+            "key_projects": cap_g,
+            "commissioning_timeline": "As disclosed in management remarks.",
+            "funding_mode": "Disclosed operating cash flows"
+        }
+    }
+
+    # (Legacy case blocks below retained for backward compatibility if reached)
     sector = str(meta.get("sector") or raw_info.get("sector") or archetype.get("display_name") or "").lower().strip()
     industry = str(meta.get("industry") or raw_info.get("industry") or "").lower().strip()
     summary = str(meta.get("business_summary") or meta.get("summary") or raw_info.get("longBusinessSummary") or "").lower().strip()

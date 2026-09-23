@@ -9,7 +9,7 @@ import os
 import re
 import math
 import logging
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional, Tuple, Union
 import pandas as pd
 import numpy as np
 
@@ -20,6 +20,13 @@ except ImportError:
 
 from services.financial_data import FinancialDataService, extract_pure_symbol
 from utils.symbol_resolver import resolve_ticker
+from core.company_identity import resolve_canonical_identity, CompanyIdentity
+from core.research_context import (
+    ResearchRunContext,
+    assert_company_boundary,
+    DataContaminationError,
+    EntityRole
+)
 
 logger = logging.getLogger("ResearchBeast.ScreenerEngine")
 
@@ -61,7 +68,12 @@ def _safe_fast(fast: Any, attr: str, default: Any = None) -> Any:
         return default
 
 
-def _extract_quarterly_financials(yf_ticker: Any, shares_out: float = 0.0) -> Tuple[List[Dict[str, Any]], pd.DataFrame]:
+def _extract_quarterly_financials(
+    yf_ticker: Any,
+    shares_out: float = 0.0,
+    company_id: str = "",
+    isin: str = ""
+) -> Tuple[List[Dict[str, Any]], pd.DataFrame]:
     """Extracts recent quarters (chronological) from yfinance quarterly financials."""
     if yf_ticker is None:
         return [], pd.DataFrame()
@@ -110,6 +122,11 @@ def _extract_quarterly_financials(yf_ticker: Any, shares_out: float = 0.0) -> Tu
 
             quarterly_rows.append({
                 "quarter": col_label,
+                "period": col_label,
+                "company_id": company_id,
+                "isin": isin,
+                "entity_role": "PRIMARY_COMPANY",
+                "statement_scope": "CONSOLIDATED",
                 "sales": round(rev, 1),
                 "expenses": round(expenses, 1),
                 "op_profit": round(op_profit, 1),
@@ -180,7 +197,9 @@ def _extract_peer_comparison(
     target_div: float,
     target_s3: Optional[float],
     sector: str = "",
-    industry: str = ""
+    industry: str = "",
+    target_company_id: str = "",
+    target_isin: str = ""
 ) -> Tuple[List[Dict[str, Any]], pd.DataFrame]:
     """Compiles a deterministic peer comparison table including target stock and industry peers."""
     peer_symbols = _resolve_peer_symbols(target_sym, sector, industry)
@@ -188,6 +207,9 @@ def _extract_peer_comparison(
         {
             "name": target_name,
             "symbol": target_sym,
+            "company_id": target_company_id,
+            "isin": target_isin,
+            "entity_role": "PRIMARY_COMPANY",
             "is_target": True,
             "cmp": target_cmp,
             "pe": target_pe,
@@ -222,9 +244,13 @@ def _extract_peer_comparison(
                 pdiv = round(pdiv * 100.0, 2)
 
             pname = pinfo.get("shortName") or psym.replace(".NS", "").replace(".BO", "")
+            peer_sym_clean = psym.replace(".NS", "").replace(".BO", "").strip().upper()
+            peer_cid = f"NSE:{peer_sym_clean}"
             rows.append({
                 "name": pname,
                 "symbol": psym,
+                "company_id": peer_cid,
+                "entity_role": "PEER",
                 "is_target": False,
                 "cmp": pcmp,
                 "pe": ppe,
@@ -264,14 +290,40 @@ class ScreenerEngine:
     """
 
     @classmethod
-    def get_screener_data(cls, symbol: str) -> Dict[str, Any]:
+    def get_screener_data(
+        cls,
+        symbol_or_context: Union[str, ResearchRunContext],
+        run_context: Optional[ResearchRunContext] = None
+    ) -> Dict[str, Any]:
         """
         Main entrypoint. Ingests raw data, computes ratios and historical P&L,
         and constructs the context-locked financial payload.
         """
-        resolved = resolve_ticker(symbol)
-        clean_sym = extract_pure_symbol(resolved) or resolved
-        raw_symbol = clean_sym.replace(".NS", "").replace(".BO", "").strip().upper()
+        if isinstance(symbol_or_context, ResearchRunContext):
+            context = symbol_or_context
+            identity = CompanyIdentity(
+                company_id=context.company_id,
+                legal_name=context.legal_name or context.company_name,
+                display_name=context.display_name or context.company_name,
+                isin=context.isin,
+                primary_exchange=context.exchange,
+                primary_symbol=context.nse_symbol,
+                nse_symbol=context.nse_symbol,
+                bse_code=context.bse_code,
+                yahoo_symbol=context.ticker
+            )
+        elif run_context is not None:
+            context = run_context
+            identity = resolve_canonical_identity(str(symbol_or_context))
+            context.assert_same_company(identity.company_id, caller_module="ScreenerEngine")
+        else:
+            identity = resolve_canonical_identity(str(symbol_or_context))
+            context = None
+
+        company_id = identity.company_id
+        clean_sym = identity.primary_ticker
+        raw_symbol = identity.nse_symbol or identity.primary_symbol or clean_sym.replace(".NS", "").replace(".BO", "")
+        isin = identity.isin
 
         # 1. Ingest via yfinance defensively
         info = {}
@@ -400,6 +452,11 @@ class ScreenerEngine:
 
             pl_rows.append({
                 "year": y_label or "TTM",
+                "period": y_label or "TTM",
+                "company_id": company_id,
+                "isin": isin,
+                "entity_role": "PRIMARY_COMPANY",
+                "statement_scope": "CONSOLIDATED",
                 "sales": round(rev, 2),
                 "expenses": round(expenses, 2),
                 "op_profit": round(op_profit, 2),
@@ -581,7 +638,13 @@ class ScreenerEngine:
 
         # Build context-locked JSON representation for the LLM
         json_context = {
+            "company_id": company_id,
+            "isin": isin,
+            "entity_role": "PRIMARY_COMPANY",
+            "statement_scope": "CONSOLIDATED",
             "company_name": company_name,
+            "legal_name": identity.legal_name,
+            "display_name": identity.display_name,
             "symbol": clean_sym,
             "sector": sector,
             "industry": industry,
@@ -612,7 +675,7 @@ class ScreenerEngine:
         # ---------------------------------------------------------------------
         # Quarterly Financial Results (Consolidated)
         # ---------------------------------------------------------------------
-        q_rows, q_df = _extract_quarterly_financials(yf_ticker, shares_out)
+        q_rows, q_df = _extract_quarterly_financials(yf_ticker, shares_out, company_id=company_id, isin=isin)
 
         # ---------------------------------------------------------------------
         # Peer Comparison Table
@@ -629,11 +692,19 @@ class ScreenerEngine:
             target_div=dividend_yield_pct,
             target_s3=sales_cagr_3y,
             sector=sector,
-            industry=industry
+            industry=industry,
+            target_company_id=company_id,
+            target_isin=isin
         )
 
-        return {
+        payload = {
+            "company_id": company_id,
+            "isin": isin,
+            "entity_role": "PRIMARY_COMPANY",
+            "statement_scope": "CONSOLIDATED",
             "company_name": company_name,
+            "legal_name": identity.legal_name,
+            "display_name": identity.display_name,
             "clean_symbol": clean_sym,
             "raw_symbol": raw_symbol,
             "sector": sector,
@@ -682,3 +753,9 @@ class ScreenerEngine:
             # Strict JSON Context for Agent
             "json_context": json_context
         }
+
+        if context is not None:
+            context.assert_same_company(payload["company_id"], caller_module="ScreenerEngine")
+        assert_company_boundary(payload, company_id, caller_module="ScreenerEngine")
+
+        return payload

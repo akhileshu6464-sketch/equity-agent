@@ -12,6 +12,54 @@ import math
 import logging
 from typing import Dict, Any, List, Optional
 
+from calculations.growth import cagr as calc_cagr, revenue_growth as calc_revenue_growth, yoy_change as calc_yoy_change
+from calculations.margins import (
+    ebitda_margin as calc_ebitda_margin,
+    ebit_margin as calc_ebit_margin,
+    pat_margin as calc_pat_margin,
+    gross_margin as calc_gross_margin,
+    margin_change_bps as calc_margin_change_bps,
+)
+from calculations.profitability import (
+    roe as calc_roe,
+    roce as calc_roce,
+    roic as calc_roic,
+    asset_turnover as calc_asset_turnover,
+)
+from calculations.cashflow import (
+    cfo_to_pat as calc_cfo_to_pat,
+    free_cash_flow as calc_free_cash_flow,
+    fcf_yield as calc_fcf_yield,
+    cash_flow_reconciliation as calc_cash_flow_reconciliation,
+)
+from calculations.leverage import (
+    debt_to_equity as calc_debt_to_equity,
+    net_debt as calc_net_debt,
+    net_debt_to_ebitda as calc_net_debt_to_ebitda,
+    interest_coverage as calc_interest_coverage,
+)
+from calculations.working_capital import (
+    net_working_capital as calc_net_working_capital,
+    receivable_days as calc_receivable_days,
+    inventory_days as calc_inventory_days,
+    payable_days as calc_payable_days,
+    cash_conversion_cycle as calc_cash_conversion_cycle,
+)
+from calculations.valuation import (
+    pe_ratio as calc_pe_ratio,
+    pb_ratio as calc_pb_ratio,
+    market_capitalization as calc_market_cap,
+    enterprise_value as calc_enterprise_value,
+    ev_to_ebitda as calc_ev_to_ebitda,
+    ev_to_sales as calc_ev_to_sales,
+)
+from calculations.shareholding import (
+    promoter_holding_change as calc_promoter_holding_change,
+    promoter_pledge_percentage as calc_promoter_pledge_percentage,
+)
+from calculations.normalization import normalize_to_inr, format_inr_crores, format_percentage
+from calculations.audit import global_audit_registry
+
 logger = logging.getLogger("EquityPipeline.FinancialEngine")
 
 
@@ -157,9 +205,14 @@ class FinancialEngine:
             shares_out = (mcap_cr * 1e7) / cmp
 
         shareholding = company_data.get("shareholding", {}) or {}
-        promoter_pledge_pct = _safe_float(shareholding.get("promoter_pledge_pct"), 0.0)
-        promoter_holding_pct = _safe_float(shareholding.get("promoter_holding_pct"), 51.0 if not is_bfsi else 25.0)
-        institutional_holding_pct = _safe_float(shareholding.get("institutional_holding_pct"), 35.0)
+        raw_pledge = shareholding.get("promoter_pledge_pct")
+        promoter_pledge_pct = float(raw_pledge) if raw_pledge is not None and str(raw_pledge).strip() not in ["", "None", "N/A"] else 0.0
+
+        raw_promoter = shareholding.get("promoter_holding_pct")
+        promoter_holding_pct = float(raw_promoter) if raw_promoter is not None and str(raw_promoter).strip() not in ["", "None", "N/A"] else None
+
+        raw_inst = shareholding.get("institutional_holding_pct")
+        institutional_holding_pct = float(raw_inst) if raw_inst is not None and str(raw_inst).strip() not in ["", "None", "N/A"] else None
 
         # Slice historical years (most recent is last)
         n_years = len(history)
@@ -173,167 +226,185 @@ class FinancialEngine:
         # ---------------------------------------------------------------------
         # 1. 3-Year & 5-Year Revenue and PAT CAGRs
         # ---------------------------------------------------------------------
-        latest_rev = _safe_float(latest.get("revenue"))
-        rev_3y_ago = _safe_float(y_3yr_ago.get("revenue"))
-        rev_5y_ago = _safe_float(y_5yr_ago.get("revenue"))
+        latest_rev = _safe_float(latest.get("revenue")) if latest.get("revenue") is not None else None
+        rev_3y_ago = _safe_float(y_3yr_ago.get("revenue")) if y_3yr_ago.get("revenue") is not None else None
+        rev_5y_ago = _safe_float(y_5yr_ago.get("revenue")) if y_5yr_ago.get("revenue") is not None else None
 
-        rev_cagr_3y = _calculate_cagr(rev_3y_ago, latest_rev, periods_3y)
-        rev_cagr_5y = _calculate_cagr(rev_5y_ago, latest_rev, periods_5y)
-        if rev_cagr_5y is None and rev_cagr_3y is not None:
-            rev_cagr_5y = rev_cagr_3y
-        elif rev_cagr_5y is None:
-            rev_cagr_5y = 12.0
+        r3_res = calc_cagr(rev_3y_ago, latest_rev, periods_3y)
+        rev_cagr_3y = round(r3_res.value, 2) if r3_res.value is not None else None
 
-        latest_pat = _safe_float(latest.get("net_income"))
-        pat_3y_ago = _safe_float(y_3yr_ago.get("net_income"))
-        pat_5y_ago = _safe_float(y_5yr_ago.get("net_income"))
+        r5_res = calc_cagr(rev_5y_ago, latest_rev, periods_5y)
+        rev_cagr_5y = round(r5_res.value, 2) if r5_res.value is not None else None
 
-        pat_cagr_3y = _calculate_cagr(pat_3y_ago, latest_pat, periods_3y)
-        pat_cagr_5y = _calculate_cagr(pat_5y_ago, latest_pat, periods_5y)
-        if pat_cagr_5y is None and pat_cagr_3y is not None:
-            pat_cagr_5y = pat_cagr_3y
-        elif pat_cagr_5y is None:
-            pat_cagr_5y = 10.0
+        latest_pat = _safe_float(latest.get("net_income")) if latest.get("net_income") is not None else None
+        pat_3y_ago = _safe_float(y_3yr_ago.get("net_income")) if y_3yr_ago.get("net_income") is not None else None
+        pat_5y_ago = _safe_float(y_5yr_ago.get("net_income")) if y_5yr_ago.get("net_income") is not None else None
+
+        p3_res = calc_cagr(pat_3y_ago, latest_pat, periods_3y)
+        pat_cagr_3y = round(p3_res.value, 2) if p3_res.value is not None else None
+
+        p5_res = calc_cagr(pat_5y_ago, latest_pat, periods_5y)
+        pat_cagr_5y = round(p5_res.value, 2) if p5_res.value is not None else None
 
         # ---------------------------------------------------------------------
         # 2. Working Capital & Cash Conversion Cycle (DIO + DSO - DPO)
         # ---------------------------------------------------------------------
-        latest_rec = _safe_float(latest.get("receivables"))
-        latest_inv = _safe_float(latest.get("inventory"))
-        latest_pay = _safe_float(latest.get("payables"))
-        latest_cogs = _safe_float(latest.get("operating_expense"))
-        if latest_cogs <= 0 and latest_rev > 0:
-            latest_cogs = latest_rev * 0.65
+        latest_rec = _safe_float(latest.get("receivables")) if latest.get("receivables") is not None else None
+        latest_inv = _safe_float(latest.get("inventory")) if latest.get("inventory") is not None else None
+        latest_pay = _safe_float(latest.get("payables")) if latest.get("payables") is not None else None
+        latest_cogs = _safe_float(latest.get("operating_expense")) if latest.get("operating_expense") is not None else None
 
-        if not is_bfsi and latest_rev > 0:
-            dso_days = round((latest_rec / latest_rev) * 365.0, 1) if latest_rev > 0 else 0.0
-            dio_days = round((latest_inv / latest_cogs) * 365.0, 1) if latest_cogs > 0 else 0.0
-            dpo_days = round((latest_pay / latest_cogs) * 365.0, 1) if latest_cogs > 0 else 0.0
-            ccc_days = round(dio_days + dso_days - dpo_days, 1)
+        if not is_bfsi and latest_rev and latest_rev > 0:
+            dso_res = calc_receivable_days(latest_rec, latest_rev)
+            dio_res = calc_inventory_days(latest_inv, latest_cogs)
+            dpo_res = calc_payable_days(latest_pay, latest_cogs)
+            dso_days = round(dso_res.value, 1) if dso_res.value is not None else None
+            dio_days = round(dio_res.value, 1) if dio_res.value is not None else None
+            dpo_days = round(dpo_res.value, 1) if dpo_res.value is not None else None
+            ccc_res = calc_cash_conversion_cycle(dso_days, dio_days, dpo_days)
+            ccc_days = round(ccc_res.value, 1) if ccc_res.value is not None else None
         else:
-            dso_days = 0.0
-            dio_days = 0.0
-            dpo_days = 0.0
-            ccc_days = 0.0
+            dso_days = None
+            dio_days = None
+            dpo_days = None
+            ccc_days = None
 
         # ---------------------------------------------------------------------
         # 3. Earnings Quality Score: Cumulative 5-Year CFO / 5-Year PAT
         # ---------------------------------------------------------------------
-        cfo_5y_list = [_safe_float(y.get("operating_cash_flow")) for y in history[-5:]] if history else [0.0]
-        pat_5y_list = [_safe_float(y.get("net_income")) for y in history[-5:]] if history else [0.0]
+        cfo_5y_list = [_safe_float(y.get("operating_cash_flow")) for y in history[-5:]] if history else []
+        pat_5y_list = [_safe_float(y.get("net_income")) for y in history[-5:]] if history else []
 
-        total_cfo_5y_raw = sum(cfo_5y_list)
-        total_pat_5y_raw = sum(pat_5y_list)
+        total_cfo_5y_raw = sum(cfo_5y_list) if cfo_5y_list else 0.0
+        total_pat_5y_raw = sum(pat_5y_list) if pat_5y_list else 0.0
 
         total_cfo_5y_cr = _to_cr(total_cfo_5y_raw)
         total_pat_5y_cr = _to_cr(total_pat_5y_raw)
 
-        if total_pat_5y_raw > 0:
-            cfo_to_pat_5y_pct = round((total_cfo_5y_raw / total_pat_5y_raw) * 100.0, 2)
-        else:
-            cfo_to_pat_5y_pct = 100.0 if total_cfo_5y_raw > 0 else 0.0
+        cfo_pat_res = calc_cash_flow_reconciliation(cfo_5y_list, pat_5y_list)
+        cfo_to_pat_5y_pct = round(cfo_pat_res.value, 2) if cfo_pat_res.value is not None else None
 
-        earnings_quality_verdict = (
-            "EXCELLENT (>100% Cash Realization)" if cfo_to_pat_5y_pct >= 95.0
-            else ("GOOD (80%-95% Cash Realization)" if cfo_to_pat_5y_pct >= 80.0
-                  else "ACCURAL HEAVY / CAUTION (<80% Cash Realization)")
-        )
+        if cfo_to_pat_5y_pct is not None:
+            earnings_quality_verdict = (
+                "EXCELLENT (>100% Cash Realization)" if cfo_to_pat_5y_pct >= 95.0
+                else ("GOOD (80%-95% Cash Realization)" if cfo_to_pat_5y_pct >= 80.0
+                      else "ACCURAL HEAVY / CAUTION (<80% Cash Realization)")
+            )
+        else:
+            earnings_quality_verdict = "INSUFFICIENT HISTORICAL CASH FLOW DATA"
 
         # ---------------------------------------------------------------------
         # 4. Solvency: Net Debt to EBITDA, Interest Coverage, Promoter Pledge
         # ---------------------------------------------------------------------
-        raw_total_debt = _safe_float(latest.get("total_debt") or company_data.get("latest_total_debt"))
-        raw_cash = _safe_float(latest.get("cash_and_equivalents") or company_data.get("latest_cash"))
-        raw_equity = _safe_float(latest.get("stockholders_equity"))
-        raw_assets = _safe_float(latest.get("total_assets"))
-
-        if raw_equity <= 0 and mcap_cr > 0:
-            raw_equity = mcap_cr * 1e7 * 0.45
+        raw_total_debt = _safe_float(latest.get("total_debt") or company_data.get("latest_total_debt")) if (latest.get("total_debt") is not None or company_data.get("latest_total_debt") is not None) else 0.0
+        raw_cash = _safe_float(latest.get("cash_and_equivalents") or company_data.get("latest_cash")) if (latest.get("cash_and_equivalents") is not None or company_data.get("latest_cash") is not None) else 0.0
+        raw_equity = _safe_float(latest.get("stockholders_equity")) if latest.get("stockholders_equity") is not None else None
+        raw_assets = _safe_float(latest.get("total_assets")) if latest.get("total_assets") is not None else None
 
         total_debt_cr = _to_cr(raw_total_debt)
         cash_cr = _to_cr(raw_cash)
         net_debt_cr = round(total_debt_cr - cash_cr, 2)
-        equity_cr = _to_cr(raw_equity)
-        total_assets_cr = _to_cr(raw_assets)
+        equity_cr = _to_cr(raw_equity) if raw_equity is not None else 0.0
+        total_assets_cr = _to_cr(raw_assets) if raw_assets is not None else 0.0
 
-        ebitda_latest = _safe_float(latest.get("ebitda"))
-        ebit_latest = _safe_float(latest.get("ebit") or latest.get("operating_income"))
-        interest_latest = abs(_safe_float(latest.get("interest_expense")))
+        ebitda_latest = _safe_float(latest.get("ebitda")) if latest.get("ebitda") is not None else None
+        ebit_latest = _safe_float(latest.get("ebit") or latest.get("operating_income")) if (latest.get("ebit") is not None or latest.get("operating_income") is not None) else None
+        interest_latest = abs(_safe_float(latest.get("interest_expense"))) if latest.get("interest_expense") is not None else None
 
-        if ebitda_latest > 0:
-            net_debt_to_ebitda = round(net_debt_cr / _to_cr(ebitda_latest), 2)
-        else:
-            net_debt_to_ebitda = 0.0 if net_debt_cr <= 0 else 5.0
+        nd_ebitda_res = calc_net_debt_to_ebitda(net_debt_cr, _to_cr(ebitda_latest) if ebitda_latest is not None else None)
+        net_debt_to_ebitda = round(nd_ebitda_res.value, 2) if nd_ebitda_res.value is not None else None
 
-        if interest_latest > 0:
-            interest_coverage = round(ebit_latest / interest_latest, 2)
-        else:
-            interest_coverage = 50.0  # Zero interest / essentially infinite coverage
+        icr_res = calc_interest_coverage(ebit_latest, interest_latest)
+        interest_coverage = round(icr_res.value, 2) if icr_res.value is not None else None
 
-        debt_to_equity = round(total_debt_cr / equity_cr, 2) if equity_cr > 0 else 0.0
-        net_debt_to_equity = round(net_debt_cr / equity_cr, 2) if equity_cr > 0 else 0.0
+        de_res = calc_debt_to_equity(total_debt_cr, equity_cr)
+        debt_to_equity = round(de_res.value, 2) if de_res.value is not None else None
+
+        nde_res = calc_debt_to_equity(net_debt_cr, equity_cr)
+        net_debt_to_equity = round(nde_res.value, 2) if nde_res.value is not None else None
 
         # ---------------------------------------------------------------------
         # 5. Profitability & Returns (ROCE, ROIC, ROE, ROA, Margins)
         # ---------------------------------------------------------------------
-        invested_capital = max(raw_equity + raw_total_debt - raw_cash, 1.0)
-        nopat = ebit_latest * 0.75  # Normalized 25% tax
-        roic_pct = round((nopat / invested_capital) * 100.0, 2) if invested_capital > 0 else 0.0
-        roce_pct = round((ebit_latest / invested_capital) * 100.0, 2) if invested_capital > 0 else 0.0
-        roe_pct = round((latest_pat / raw_equity) * 100.0, 2) if raw_equity > 0 else 0.0
-        roa_pct = round((latest_pat / raw_assets) * 100.0, 2) if raw_assets > 0 else 0.0
+        invested_capital = (raw_equity + raw_total_debt - raw_cash) if (raw_equity is not None and (raw_equity + raw_total_debt - raw_cash) > 0) else None
+        nopat = (ebit_latest * 0.7483) if ebit_latest is not None else None  # Section 115BAA corporate tax rate (25.17%)
 
-        gross_margin_pct = round(((latest_rev - latest_cogs) / latest_rev) * 100.0, 2) if latest_rev > 0 else 0.0
-        ebitda_margin_pct = round((ebitda_latest / latest_rev) * 100.0, 2) if latest_rev > 0 else 0.0
-        pat_margin_pct = round((latest_pat / latest_rev) * 100.0, 2) if latest_rev > 0 else 0.0
+        roic_res = calc_roic(nopat, invested_capital)
+        roic_pct = round(roic_res.value, 2) if roic_res.value is not None else None
+
+        roce_res = calc_roce(ebit_latest, None, invested_capital)
+        roce_pct = round(roce_res.value, 2) if roce_res.value is not None else None
+
+        roe_res = calc_roe(latest_pat, None, raw_equity)
+        roe_pct = round(roe_res.value, 2) if roe_res.value is not None else None
+
+        roa_res = calc_pat_margin(latest_pat, raw_assets)
+        roa_pct = round(roa_res.value, 2) if roa_res.value is not None else None
+
+        gm_res = calc_gross_margin(latest_rev, latest_cogs)
+        gross_margin_pct = round(gm_res.value, 2) if gm_res.value is not None else None
+
+        ebitda_m_res = calc_ebitda_margin(ebitda_latest, latest_rev)
+        ebitda_margin_pct = round(ebitda_m_res.value, 2) if ebitda_m_res.value is not None else None
+
+        pat_m_res = calc_pat_margin(latest_pat, latest_rev)
+        pat_margin_pct = round(pat_m_res.value, 2) if pat_m_res.value is not None else None
 
         # ---------------------------------------------------------------------
         # 6. Valuation Multiples & Free Cash Flow
         # ---------------------------------------------------------------------
         pe_ratio = _safe_float(company_data.get("trailing_pe"))
-        if pe_ratio <= 0 and latest_pat > 0 and mcap_cr > 0:
-            pe_ratio = round((mcap_cr * 1e7) / latest_pat, 2)
+        if (pe_ratio is None or pe_ratio <= 0) and latest_pat and latest_pat > 0 and mcap_cr > 0:
+            pe_res = calc_pe_ratio(mcap_cr * 1e7, latest_pat)
+            pe_ratio = round(pe_res.value, 2) if pe_res.value is not None else None
 
         ev_to_ebitda = _safe_float(company_data.get("ev_to_ebitda"))
-        if ev_to_ebitda <= 0 and ebitda_latest > 0 and mcap_cr > 0:
+        if (ev_to_ebitda is None or ev_to_ebitda <= 0) and ebitda_latest and ebitda_latest > 0 and mcap_cr > 0:
             ev_cr = mcap_cr + net_debt_cr
-            ev_to_ebitda = round(ev_cr / _to_cr(ebitda_latest), 2)
+            ev_res = calc_ev_to_ebitda(ev_cr, _to_cr(ebitda_latest))
+            ev_to_ebitda = round(ev_res.value, 2) if ev_res.value is not None else None
 
         pb_ratio = _safe_float(company_data.get("price_to_book"))
-        if pb_ratio <= 0 and equity_cr > 0 and mcap_cr > 0:
-            pb_ratio = round(mcap_cr / equity_cr, 2)
+        if (pb_ratio is None or pb_ratio <= 0) and equity_cr and equity_cr > 0 and mcap_cr > 0:
+            pb_res = calc_pb_ratio(mcap_cr, equity_cr)
+            pb_ratio = round(pb_res.value, 2) if pb_res.value is not None else None
 
-        latest_fcf_raw = _safe_float(latest.get("free_cash_flow"))
-        if latest_fcf_raw == 0.0:
-            cfo_lat = _safe_float(latest.get("operating_cash_flow"))
-            capex_lat = abs(_safe_float(latest.get("capital_expenditure")))
-            latest_fcf_raw = cfo_lat - capex_lat if (cfo_lat or capex_lat) else (latest_rev * 0.08)
-        latest_fcf_cr = _to_cr(latest_fcf_raw)
-        fcf_yield_pct = round((latest_fcf_cr / mcap_cr) * 100.0, 2) if mcap_cr > 0 else 3.0
+        latest_fcf_raw = latest.get("free_cash_flow")
+        if latest_fcf_raw is None:
+            cfo_lat = latest.get("operating_cash_flow")
+            capex_lat = latest.get("capital_expenditure")
+            if cfo_lat is not None:
+                fcf_res = calc_free_cash_flow(_safe_float(cfo_lat), _safe_float(capex_lat) if capex_lat is not None else 0.0)
+                latest_fcf_raw = fcf_res.value
+
+        latest_fcf_cr = _to_cr(_safe_float(latest_fcf_raw)) if latest_fcf_raw is not None else None
+        fcf_y_res = calc_fcf_yield(latest_fcf_cr, mcap_cr) if (latest_fcf_cr is not None and mcap_cr > 0) else None
+        fcf_yield_pct = round(fcf_y_res.value, 2) if (fcf_y_res and fcf_y_res.value is not None) else None
 
         # ---------------------------------------------------------------------
         # 7. Sector-Specific Ratios (BFSI Banking vs Non-BFSI)
         # ---------------------------------------------------------------------
         if is_bfsi:
-            crar_pct = round(min(max((raw_equity / max(raw_assets * 0.65, 1.0)) * 100.0, 14.5), 21.0), 2)
-            tier1_cet1_pct = round(crar_pct * 0.90, 2)
-            cost_to_income_pct = 46.5
-            nim_pct = 3.85
-            gnpa_pct = 1.78
-            nnpa_pct = 0.42
-            pcr_pct = 76.4
-            credit_cost_pct = 0.48
-            casa_pct = 43.8
+            banking_data = company_data.get("banking_ratios") or {}
+            crar_pct = banking_data.get("crar_pct")
+            tier1_cet1_pct = banking_data.get("tier1_cet1_pct")
+            cost_to_income_pct = banking_data.get("cost_to_income_pct")
+            nim_pct = banking_data.get("nim_pct")
+            gnpa_pct = banking_data.get("gnpa_pct")
+            nnpa_pct = banking_data.get("nnpa_pct")
+            pcr_pct = banking_data.get("pcr_pct")
+            credit_cost_pct = banking_data.get("credit_cost_pct")
+            casa_pct = banking_data.get("casa_pct")
         else:
-            crar_pct = 0.0
-            tier1_cet1_pct = 0.0
-            cost_to_income_pct = 0.0
-            nim_pct = 0.0
-            gnpa_pct = 0.0
-            nnpa_pct = 0.0
-            pcr_pct = 0.0
-            credit_cost_pct = 0.0
-            casa_pct = 0.0
+            crar_pct = None
+            tier1_cet1_pct = None
+            cost_to_income_pct = None
+            nim_pct = None
+            gnpa_pct = None
+            nnpa_pct = None
+            pcr_pct = None
+            credit_cost_pct = None
+            casa_pct = None
 
         # Dynamic WACC and Cost of Equity (CAPM)
         dynamic_wacc = calculate_dynamic_wacc(company_data)
@@ -415,63 +486,73 @@ class FinancialEngine:
         """
         Formats calculated metrics into an XML block wrapped in <verified_financials> tags
         for strict context locking in LLM prompts.
+        Enforces Section 65: Absolute LLM prompt rule forbidding ratio recalculation or number invention.
         """
-        cmp = metrics.get("current_price", 0.0)
-        mcap = metrics.get("market_cap_cr", 0.0)
-        pe = metrics.get("pe_ratio", 0.0)
-        ev_ebitda = metrics.get("ev_to_ebitda", 0.0)
-        pb = metrics.get("pb_ratio", 0.0)
+        def _fmt_val(val: Any, suffix: str = "", prefix: str = "", decimals: int = 2) -> str:
+            if val is None or str(val).strip() in ["", "None", "N/A"]:
+                return "Not Disclosed in Available Statements"
+            try:
+                f = float(val)
+                return f"{prefix}{f:,.{decimals}f}{suffix}"
+            except (ValueError, TypeError):
+                return str(val)
 
-        r3 = metrics.get("rev_cagr_3y")
-        r5 = metrics.get("rev_cagr_5y")
-        p3 = metrics.get("pat_cagr_3y")
-        p5 = metrics.get("pat_cagr_5y")
+        cmp_str = _fmt_val(metrics.get("current_price"), prefix="₹")
+        mcap_str = _fmt_val(metrics.get("market_cap_cr"), suffix=" Cr", prefix="₹")
+        pe_str = _fmt_val(metrics.get("pe_ratio"), suffix="x", decimals=1)
+        ev_ebitda_str = _fmt_val(metrics.get("ev_to_ebitda"), suffix="x", decimals=1)
+        pb_str = _fmt_val(metrics.get("pb_ratio"), suffix="x")
 
-        r3_str = f"{r3:.1f}%" if r3 is not None else "Not Available"
-        r5_str = f"{r5:.1f}%" if r5 is not None else "Not Available"
-        p3_str = f"{p3:.1f}%" if p3 is not None else "Not Available"
-        p5_str = f"{p5:.1f}%" if p5 is not None else "Not Available"
+        r3_str = _fmt_val(metrics.get("rev_cagr_3y"), suffix="%")
+        r5_str = _fmt_val(metrics.get("rev_cagr_5y"), suffix="%")
+        p3_str = _fmt_val(metrics.get("pat_cagr_3y"), suffix="%")
+        p5_str = _fmt_val(metrics.get("pat_cagr_5y"), suffix="%")
 
-        cfo_5y = metrics.get("cfo_5y_cr", 0.0)
-        pat_5y = metrics.get("pat_5y_cr", 0.0)
-        cfo_pat = metrics.get("cfo_to_pat_5y_pct", 0.0)
-        eq_verdict = metrics.get("earnings_quality_verdict", "GOOD")
+        cfo_5y_str = _fmt_val(metrics.get("cfo_5y_cr"), suffix=" Cr", prefix="₹")
+        pat_5y_str = _fmt_val(metrics.get("pat_5y_cr"), suffix=" Cr", prefix="₹")
+        cfo_pat_str = _fmt_val(metrics.get("cfo_to_pat_5y_pct"), suffix="%")
+        eq_verdict = metrics.get("earnings_quality_verdict", "INSUFFICIENT DATA")
 
-        tot_debt = metrics.get("total_debt_cr", 0.0)
-        cash = metrics.get("cash_cr", 0.0)
-        net_debt = metrics.get("net_debt_cr", 0.0)
-        nd_ebitda = metrics.get("net_debt_to_ebitda", 0.0)
-        icr = metrics.get("interest_coverage", 0.0)
-        de = metrics.get("debt_to_equity", 0.0)
-        pledge = metrics.get("promoter_pledge_pct", 0.0)
-        promoter = metrics.get("promoter_holding_pct", 0.0)
-        institutions = metrics.get("institutional_holding_pct", 0.0)
+        tot_debt_str = _fmt_val(metrics.get("total_debt_cr"), suffix=" Cr", prefix="₹")
+        cash_str = _fmt_val(metrics.get("cash_cr"), suffix=" Cr", prefix="₹")
+        net_debt = metrics.get("net_debt_cr")
+        if net_debt is not None:
+            net_debt_desc = f"-₹{abs(net_debt):,.2f} Cr (Net Cash Positive)" if net_debt < 0 else f"₹{net_debt:,.2f} Cr"
+        else:
+            net_debt_desc = "Not Disclosed"
 
-        roce = metrics.get("roce_pct", 0.0)
-        roic = metrics.get("roic_pct", 0.0)
-        roe = metrics.get("roe_pct", 0.0)
-        roa = metrics.get("roa_pct", 0.0)
-        gm = metrics.get("gross_margin_pct", 0.0)
-        ebitda_m = metrics.get("ebitda_margin_pct", 0.0)
+        nd_ebitda_str = _fmt_val(metrics.get("net_debt_to_ebitda"), suffix="x")
+        icr_str = _fmt_val(metrics.get("interest_coverage"), suffix="x", decimals=1)
+        de_str = _fmt_val(metrics.get("debt_to_equity"), suffix="x")
+        pledge_str = _fmt_val(metrics.get("promoter_pledge_pct"), suffix="%")
+        promoter_str = _fmt_val(metrics.get("promoter_holding_pct"), suffix="%")
+        institutions_str = _fmt_val(metrics.get("institutional_holding_pct"), suffix="%")
 
-        net_debt_desc = f"-₹{abs(net_debt):,.2f} Cr (Net Cash Positive)" if net_debt < 0 else f"₹{net_debt:,.2f} Cr"
+        roce_str = _fmt_val(metrics.get("roce_pct"), suffix="%")
+        roic_str = _fmt_val(metrics.get("roic_pct"), suffix="%")
+        roe_str = _fmt_val(metrics.get("roe_pct"), suffix="%")
+        roa_str = _fmt_val(metrics.get("roa_pct"), suffix="%")
+        gm_str = _fmt_val(metrics.get("gross_margin_pct"), suffix="%")
+        ebitda_m_str = _fmt_val(metrics.get("ebitda_margin_pct"), suffix="%")
 
-        wacc_p = metrics.get("wacc_pct", 11.5)
-        coe_p = metrics.get("cost_of_equity_pct", 12.5)
-        beta_val = metrics.get("beta", 1.0)
+        wacc_p_str = _fmt_val(metrics.get("wacc_pct"), suffix="%")
+        coe_p_str = _fmt_val(metrics.get("cost_of_equity_pct"), suffix="%")
+        beta_str = _fmt_val(metrics.get("beta"))
 
         lines = [
             "<verified_financials>",
-            "<!-- HARD NUMERICAL TRUTH COMPUTED DIRECTLY FROM RAW FINANCIAL STATEMENTS -->",
+            "<!-- SYSTEM DIRECTIVE (NON-NEGOTIABLE):",
+            "You are receiving verified and programmatically calculated financial metrics. Treat numerical values as authoritative inputs. Do not recalculate, alter, approximate, interpolate, or invent numerical values. Do not introduce financial numbers that are not present in the supplied structured data or cited source evidence. If a required number is unavailable, state that it is unavailable.",
+            "-->",
             "[CORE_VALUATION_METRICS]",
-            f"Current Market Price (CMP): ₹{cmp:,.2f}",
-            f"Market Capitalization: ₹{mcap:,.2f} Cr",
-            f"Trailing P/E Ratio: {pe:.1f}x",
-            f"Price to Book (P/BV): {pb:.2f}x",
-            f"EV/EBITDA: {ev_ebitda:.1f}x" if not is_bfsi else "EV/EBITDA: N/A (Financial Institution)",
-            f"Beta: {beta_val:.2f}",
-            f"Cost of Equity (CAPM: Rf 7.0% + Beta x ERP 5.5%): {coe_p:.2f}%",
-            f"Dynamic WACC Hurdle Rate: {wacc_p:.2f}%",
+            f"Current Market Price (CMP): {cmp_str}",
+            f"Market Capitalization: {mcap_str}",
+            f"Trailing P/E Ratio: {pe_str}",
+            f"Price to Book (P/BV): {pb_str}",
+            f"EV/EBITDA: {ev_ebitda_str}" if not is_bfsi else "EV/EBITDA: N/A (Financial Institution)",
+            f"Beta: {beta_str}",
+            f"Cost of Equity (CAPM: Rf 7.0% + Beta x ERP 5.5%): {coe_p_str}",
+            f"Dynamic WACC Hurdle Rate: {wacc_p_str}",
             "",
             "[HISTORICAL_GROWTH_CAGR]",
             f"3-Year Consolidated Revenue CAGR: {r3_str}",
@@ -482,16 +563,16 @@ class FinancialEngine:
         ]
 
         if not is_bfsi:
-            dio = metrics.get("dio_days", 0.0)
-            dso = metrics.get("dso_days", 0.0)
-            dpo = metrics.get("dpo_days", 0.0)
-            ccc = metrics.get("ccc_days", 0.0)
+            dio_str = _fmt_val(metrics.get("dio_days"), suffix=" Days", decimals=1)
+            dso_str = _fmt_val(metrics.get("dso_days"), suffix=" Days", decimals=1)
+            dpo_str = _fmt_val(metrics.get("dpo_days"), suffix=" Days", decimals=1)
+            ccc_str = _fmt_val(metrics.get("ccc_days"), suffix=" Days", decimals=1)
             lines.extend([
                 "[WORKING_CAPITAL_AND_CASH_CONVERSION_CYCLE]",
-                f"Days Inventory Outstanding (DIO): {dio:.1f} Days",
-                f"Days Sales Outstanding (DSO): {dso:.1f} Days",
-                f"Days Payable Outstanding (DPO): {dpo:.1f} Days",
-                f"Cash Conversion Cycle (CCC = DIO + DSO - DPO): {ccc:.1f} Days",
+                f"Days Inventory Outstanding (DIO): {dio_str}",
+                f"Days Sales Outstanding (DSO): {dso_str}",
+                f"Days Payable Outstanding (DPO): {dpo_str}",
+                f"Cash Conversion Cycle (CCC = DIO + DSO - DPO): {ccc_str}",
                 ""
             ])
         else:
@@ -503,53 +584,53 @@ class FinancialEngine:
 
         lines.extend([
             "[EARNINGS_QUALITY_AND_CASH_FLOW]",
-            f"5-Year Cumulative Operating Cash Flow (CFO): ₹{cfo_5y:,.2f} Cr",
-            f"5-Year Cumulative Net Profit (PAT): ₹{pat_5y:,.2f} Cr",
-            f"5-Year CFO to PAT Cash Conversion Ratio: {cfo_pat:.1f}%",
+            f"5-Year Cumulative Operating Cash Flow (CFO): {cfo_5y_str}",
+            f"5-Year Cumulative Net Profit (PAT): {pat_5y_str}",
+            f"5-Year CFO to PAT Cash Conversion Ratio: {cfo_pat_str}",
             f"Earnings Quality Assessment: {eq_verdict}",
             "",
             "[SOLVENCY_AND_BALANCE_SHEET_DURABILITY]",
-            f"Total Debt: ₹{tot_debt:,.2f} Cr",
-            f"Cash & Liquid Equivalents: ₹{cash:,.2f} Cr",
+            f"Total Debt: {tot_debt_str}",
+            f"Cash & Liquid Equivalents: {cash_str}",
             f"Net Debt: {net_debt_desc}",
-            f"Net Debt to EBITDA: {nd_ebitda:.2f}x" if not is_bfsi else "Net Debt to EBITDA: N/A (Bank/NBFC)",
-            f"Interest Coverage Ratio (EBIT / Interest): {icr:.1f}x",
-            f"Debt to Equity Ratio: {de:.2f}x",
-            f"Promoter Pledge Percentage: {pledge:.2f}% (Pristine zero-pledge if 0.0%)",
-            f"Promoter Shareholding: {promoter:.2f}%",
-            f"Institutional Shareholding (FII + DII): {institutions:.2f}%",
+            f"Net Debt to EBITDA: {nd_ebitda_str}" if not is_bfsi else "Net Debt to EBITDA: N/A (Bank/NBFC)",
+            f"Interest Coverage Ratio (EBIT / Interest): {icr_str}",
+            f"Debt to Equity Ratio: {de_str}",
+            f"Promoter Pledge Percentage: {pledge_str}",
+            f"Promoter Shareholding: {promoter_str}",
+            f"Institutional Shareholding (FII + DII): {institutions_str}",
             "",
             "[CAPITAL_EFFICIENCY_AND_RETURNS]",
-            f"Return on Capital Employed (ROCE): {roce:.1f}%",
-            f"Return on Invested Capital (ROIC): {roic:.1f}%",
-            f"Return on Equity (ROE): {roe:.1f}%",
-            f"Return on Assets (ROA): {roa:.2f}%",
-            f"Operating Gross Margin: {gm:.1f}%" if not is_bfsi else "Operating Gross Margin: N/A (BFSI)",
-            f"Operating EBITDA Margin: {ebitda_m:.1f}%" if not is_bfsi else "Operating EBITDA Margin: N/A (BFSI)",
+            f"Return on Capital Employed (ROCE): {roce_str}",
+            f"Return on Invested Capital (ROIC): {roic_str}",
+            f"Return on Equity (ROE): {roe_str}",
+            f"Return on Assets (ROA): {roa_str}",
+            f"Operating Gross Margin: {gm_str}" if not is_bfsi else "Operating Gross Margin: N/A (BFSI)",
+            f"Operating EBITDA Margin: {ebitda_m_str}" if not is_bfsi else "Operating EBITDA Margin: N/A (BFSI)",
             ""
         ])
 
         if is_bfsi:
-            nim = metrics.get("nim_pct", 0.0)
-            casa = metrics.get("casa_pct", 0.0)
-            gnpa = metrics.get("gnpa_pct", 0.0)
-            nnpa = metrics.get("nnpa_pct", 0.0)
-            pcr = metrics.get("pcr_pct", 0.0)
-            crar = metrics.get("crar_pct", 0.0)
-            tier1 = metrics.get("tier1_cet1_pct", 0.0)
-            cc = metrics.get("credit_cost_pct", 0.0)
-            c2i = metrics.get("cost_to_income_pct", 0.0)
+            nim_str = _fmt_val(metrics.get("nim_pct"), suffix="%")
+            casa_str = _fmt_val(metrics.get("casa_pct"), suffix="%")
+            gnpa_str = _fmt_val(metrics.get("gnpa_pct"), suffix="%")
+            nnpa_str = _fmt_val(metrics.get("nnpa_pct"), suffix="%")
+            pcr_str = _fmt_val(metrics.get("pcr_pct"), suffix="%")
+            crar_str = _fmt_val(metrics.get("crar_pct"), suffix="%")
+            tier1_str = _fmt_val(metrics.get("tier1_cet1_pct"), suffix="%")
+            cc_str = _fmt_val(metrics.get("credit_cost_pct"), suffix="%")
+            c2i_str = _fmt_val(metrics.get("cost_to_income_pct"), suffix="%")
             lines.extend([
                 "[BANKING_AND_NBFC_PRUDENTIAL_METRICS]",
-                f"Net Interest Margin (NIM): {nim:.2f}%",
-                f"CASA Deposit Ratio: {casa:.1f}%",
-                f"Gross NPA Ratio: {gnpa:.2f}%",
-                f"Net NPA Ratio: {nnpa:.2f}%",
-                f"Provision Coverage Ratio (PCR): {pcr:.1f}%",
-                f"Total Capital Adequacy Ratio (CRAR): {crar:.1f}%",
-                f"Common Equity Tier-1 (CET-1) Headroom: {tier1:.1f}%",
-                f"Normalized Credit Costs: {cc:.2f}%",
-                f"Cost-to-Income Ratio: {c2i:.1f}%",
+                f"Net Interest Margin (NIM): {nim_str}",
+                f"CASA Deposit Ratio: {casa_str}",
+                f"Gross NPA Ratio: {gnpa_str}",
+                f"Net NPA Ratio: {nnpa_str}",
+                f"Provision Coverage Ratio (PCR): {pcr_str}",
+                f"Total Capital Adequacy Ratio (CRAR): {crar_str}",
+                f"Common Equity Tier-1 (CET-1) Headroom: {tier1_str}",
+                f"Normalized Credit Costs: {cc_str}",
+                f"Cost-to-Income Ratio: {c2i_str}",
                 ""
             ])
 

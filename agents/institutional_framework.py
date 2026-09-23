@@ -89,10 +89,15 @@ def build_moat_prompt(ticker: str, financial_payload: Dict[str, Any], is_bank: b
         p3_desc = "Pillar 3: Asset Quality & Credit Cost Trajectory (GNPA, NNPA, PCR, slippage ratio)"
         p4_desc = "Pillar 4: Regulatory Capital & Balance Sheet Strength (CET-1, CRAR, LCR, RBI stress-testing buffers)"
     elif is_chem:
-        p1_desc = "Pillar 1: Proprietary Chemistry Moat, ATBS/IBB Global Market Share & Formula-Indexed Pass-Through (Raw material pass-through, export client stickiness)"
-        p2_desc = "Pillar 2: Continuous-Flow Chemical Synthesis, Veeral Organics Integration & Regulatory Moat (Synthesis block utilization, innovator qualification barriers, environmental ZLD compliance)"
+        if clean_sym == "VINATIORGA":
+            p1_desc = "Pillar 1: Proprietary Chemistry Moat, ATBS/IBB Global Market Share & Formula-Indexed Pass-Through (Raw material pass-through, export client stickiness)"
+            p2_desc = "Pillar 2: Continuous-Flow Chemical Synthesis, Veeral Organics Integration & Regulatory Moat (Synthesis block utilization, innovator qualification barriers, environmental ZLD compliance)"
+            p4_desc = "Pillar 4: Capital Allocation & Balance Sheet Durability (ROCE, ROIC, zero-debt balance sheet, organic expansion into butyl phenols/antioxidants)"
+        else:
+            p1_desc = "Pillar 1: Proprietary Chemistry Moat, Intermediate Market Share & Formula-Indexed Pass-Through (Raw material pass-through, customer stickiness)"
+            p2_desc = "Pillar 2: Continuous-Flow Chemical Synthesis, Downstream Integration & Regulatory Moat (Synthesis block utilization, qualification barriers, environmental ZLD compliance)"
+            p4_desc = "Pillar 4: Capital Allocation & Balance Sheet Durability (ROCE, ROIC, balance sheet health, organic expansion into downstream derivatives)"
         p3_desc = "Pillar 3: Working Capital Dynamics & Export Supply Chain Governance (Debtor aging with global chemical innovators, inventory turnover, CFO/PAT conversion)"
-        p4_desc = "Pillar 4: Capital Allocation & Balance Sheet Durability (ROCE, ROIC, zero-debt balance sheet, organic expansion into butyl phenols/antioxidants)"
     else:
         p1_desc = "Pillar 1: Brand Moat, Pricing Power & Margin Defensibility (Gross margins, pricing power against raw materials, product mix)"
         p2_desc = "Pillar 2: Distribution Network, Channel Throughput & Operating Leverage (Dealer/distributor touchpoints, secondary sales velocity, capacity utilization, operating EBITDA margins)"
