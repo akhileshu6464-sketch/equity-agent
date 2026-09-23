@@ -21,7 +21,6 @@ from services.screener_engine import ScreenerEngine
 from agents.editorial_agent import EditorialAgent
 from utils.symbol_resolver import resolve_ticker, resolve_ticker_info
 from agents.pipeline import run_deep_institutional_pipeline, parse_dimension_data
-from pdf_generator import build_institutional_pdf
 from core.company_identity import resolve_canonical_identity
 from core.research_context import (
     create_research_context,
@@ -782,38 +781,10 @@ else:
                 render_evidence_drawer(prim_disc, sources)
 
     # ---------------------------------------------------------------------
-    # TAB 7: Institutional Research Dossier & PDF Download
+    # TAB 7: Institutional Research Dossier
     # ---------------------------------------------------------------------
     with tab_dossier:
         render_section_header("Institutional Equity Research Dossier", "15 Multi-Dimensional Research Modules")
-
-        try:
-            pdf_metrics = {
-                'sector': sector,
-                'primary_valuation': dossier.get('primary_valuation', 'Multi-Stage DCF'),
-                'implied_cagr': str(dossier.get('implied_growth_pct', '10.0%')),
-                'cmp': f"{cmp:,.2f}",
-                'mcap': f"{mcap_cr:,.1f}",
-                'range': f"{low_52:,.0f} - {high_52:,.0f}",
-                'verdict': inst_rating
-            }
-            pdf_bytes = build_institutional_pdf(
-                ticker=clean_sym,
-                company_name=company_name,
-                metrics=pdf_metrics,
-                dossier_dict=dossier
-            )
-            clean_name_dl = re.sub(r'[\\/*?:"<>|]', '', company_name).strip() or clean_sym
-            st.download_button(
-                label="📥 Download 24-Page Institutional Equity Research Report (PDF)",
-                data=pdf_bytes,
-                file_name=f"{clean_name_dl} - Institutional Equity Report.pdf",
-                mime="application/pdf",
-                type="primary",
-                use_container_width=True
-            )
-        except Exception as pdf_err:
-            st.warning(f"Note: PDF generation background notice: {pdf_err}")
 
         subtab_moat, subtab_dossier_ind, subtab_fin, subtab_dossier_gov, subtab_concall, subtab_val = st.tabs([
             "🛡️ Business & Moat",

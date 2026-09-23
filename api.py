@@ -29,7 +29,6 @@ if CURRENT_DIR not in sys.path:
 import json
 from agents.pipeline import run_deep_institutional_pipeline
 from services.financial_data import FinancialDataService
-from pdf_generator import build_institutional_pdf
 
 # Configure logging
 logging.basicConfig(
@@ -64,11 +63,6 @@ class AnalyzeRequest(BaseModel):
     wacc: Optional[float] = Field(0.115, description="Weighted Average Cost of Capital hurdle")
     terminal_growth: Optional[float] = Field(0.055, description="Terminal growth rate assumption")
     base_growth: Optional[float] = Field(0.12, description="Base revenue growth assumption")
-
-
-class ExportPDFRequest(BaseModel):
-    ticker: str = Field(..., description="NSE/BSE ticker symbol (e.g. CROMPTON, RELIANCE, TATACONSUM.NS)")
-    dossier: Optional[Dict[str, Any]] = Field(None, description="Optional completed audit dossier payload")
 
 
 class HealthResponse(BaseModel):
@@ -261,93 +255,6 @@ async def analyze_equity(request: AnalyzeRequest):
             detail=f"Failed to audit equity {clean_ticker}: {err_str}"
         )
 
-
-@app.post("/api/export-pdf")
-async def export_pdf(request: ExportPDFRequest):
-    """
-    Compiles and downloads a publication-grade institutional equity research PDF report.
-    If a completed dossier dictionary is passed from the client, compiles immediately;
-    otherwise retrieves/audits the equity autonomously.
-    """
-    raw_ticker = request.ticker.strip()
-    if not raw_ticker:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Stock ticker symbol cannot be empty."
-        )
-
-    clean_ticker = FinancialDataService.normalize_ticker(raw_ticker)
-    dossier = request.dossier
-
-    try:
-        # If dossier is not provided or incomplete, run pipeline to generate it
-        if not dossier or not isinstance(dossier, dict) or not dossier.get("moat"):
-            logger.info(f"Generating fresh dossier for PDF export of {clean_ticker}...")
-            dossier = await run_in_threadpool(
-                run_deep_institutional_pipeline,
-                ticker=clean_ticker,
-                force_refresh=False
-            )
-
-        if not dossier:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Unable to construct equity dossier for {clean_ticker}."
-            )
-
-        company_name = (
-            dossier.get("company_name")
-            or dossier.get("short_name")
-            or dossier.get("long_name")
-            or clean_ticker
-        )
-
-        pdf_metrics = {
-            "current_price": dossier.get("current_price", 0.0),
-            "market_cap_cr": dossier.get("market_cap_cr", 0.0),
-            "sector": dossier.get("sector", "N/A"),
-            "industry": dossier.get("industry", "N/A"),
-            "pe_ratio": dossier.get("trailing_pe", 0.0),
-            "pb_ratio": dossier.get("price_to_book", 0.0),
-            "ev_to_ebitda": dossier.get("ev_to_ebitda", 0.0),
-            "fifty_two_week_high": dossier.get("fifty_two_week_high", 0.0),
-            "fifty_two_week_low": dossier.get("fifty_two_week_low", 0.0),
-        }
-
-        # Compile presentation-grade institutional PDF
-        pdf_bytes = await run_in_threadpool(
-            build_institutional_pdf,
-            ticker=clean_ticker,
-            company_name=company_name,
-            metrics=pdf_metrics,
-            dossier_dict=dossier
-        )
-
-        safe_comp_name = "".join(c for c in company_name if c.isalnum() or c in (" ", "-", "_")).strip()
-        safe_filename = f"{safe_comp_name or clean_ticker} - Institutional Equity Research Report.pdf"
-
-        return Response(
-            content=pdf_bytes,
-            media_type="application/pdf",
-            headers={
-                "Content-Disposition": f'attachment; filename="{safe_filename}"',
-                "Access-Control-Expose-Headers": "Content-Disposition"
-            }
-        )
-    except HTTPException:
-        raise
-    except Exception as exc:
-        err_str = str(exc)
-        logger.error(f"Error compiling institutional PDF for {clean_ticker}: {err_str}", exc_info=True)
-        if "real-time fundamental data unavailable" in err_str.lower():
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Real-time fundamental data unavailable for {clean_ticker}"
-            )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate institutional PDF report: {err_str}"
-        )
 
 
 # -------------------------------------------------------------------------
