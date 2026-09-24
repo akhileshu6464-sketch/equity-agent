@@ -126,7 +126,9 @@ class TestSimpleInvestorIntelligence(unittest.TestCase):
 
         # Ensure plain replacements exist
         self.assertIn("operating costs growing faster than sales", cleaned.lower())
-        self.assertIn("making less profit from each ₹100 of sales", cleaned.lower())
+        self.assertTrue(
+            "profit margin fell" in cleaned.lower() or "making less profit from each ₹100 of sales" in cleaned.lower()
+        )
 
     def test_cash_flow_health_conversion(self):
         """
@@ -267,6 +269,58 @@ class TestSimpleInvestorIntelligence(unittest.TestCase):
         self.assertIn("20.0%", core["simple_explanation"])
         self.assertIn("14.5%", core["simple_explanation"])
 
+        # Verify story_sections
+        self.assertIn("story_sections", simple_exp)
+        story = simple_exp["story_sections"]
+        expected_sections = [
+            "snapshot", "what_changed", "why_it_changed", "financial_health",
+            "financial_red_flags", "industry_and_peers", "valuation_and_market",
+            "opportunities", "risks", "what_to_watch", "investor_questions", "sources"
+        ]
+        for sec in expected_sections:
+            self.assertIn(sec, story)
+
+        # Financial health must contain all required metrics
+        fin_health = story["financial_health"]
+        self.assertGreaterEqual(len(fin_health), 7)
+
+    def test_canonical_user_example_structured_insight(self):
+        """
+        Tests the exact canonical example with StructuredInsight schema:
+        Revenue: ₹1,000 Cr -> ₹1,200 Cr (+20%)
+        EBITDA: ₹180 Cr -> ₹192 Cr (+6.7%)
+        Margin: 18% -> 16% (-200 bps)
+        Explanation: "Sales increased 20.0%, but profit from the business increased only 6.7%.
+        This means the company earned less profit from every ₹100 of sales.
+        The profit margin fell from 18.0% to 16.0%."
+        """
+        insight = SimpleInvestorLanguageEngine.build_core_change_insight(
+            rev_prev=1000.0,
+            rev_curr=1200.0,
+            ebitda_prev=180.0,
+            ebitda_curr=192.0,
+            period_prev="FY24",
+            period_curr="FY25",
+            driver_note=None
+        )
+
+        self.assertIn("Sales increased 20.0%, but profit from the business increased only 6.7%", insight.explanation)
+        self.assertIn("less profit from every ₹100 of sales", insight.explanation)
+        self.assertIn("fell from 18.0% to 16.0%", insight.explanation)
+        self.assertEqual(insight.classification, "CONCERN")
+        self.assertEqual(insight.verification_status, "VERIFIED_AUDIT")
+
+        # Causation guard: when driver_note is None, never guess
+        self.assertIn("The available evidence does not clearly establish", insight.driver)
+
+        # 5 Core questions are answered
+        self.assertTrue(len(insight.what_happened) > 10)
+        self.assertTrue(len(insight.how_much_changed) > 10)
+        self.assertTrue(len(insight.why_it_matters) > 10)
+        self.assertTrue(len(insight.why_it_happened) > 10)
+        self.assertTrue(len(insight.what_to_watch) > 10)
+
 
 if __name__ == "__main__":
     unittest.main()
+

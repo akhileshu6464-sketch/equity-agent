@@ -24,7 +24,14 @@ def render_simple_investor_overview(
 ):
     """
     Renders the complete 2-5 Minute Simple Investor Intelligence Overview.
+    Delegates to the smooth vertical storytelling presentation layer when story_sections are available.
     """
+    story_sections = simple_data.get("story_sections")
+    if story_sections:
+        from ui.components.storytelling_view import render_vertical_storytelling_view
+        render_vertical_storytelling_view(story_sections, screener_data, intel)
+        return
+
     snapshot = simple_data.get("snapshot", "")
     core_chg = simple_data.get("core_change", {})
     cf_health = simple_data.get("cash_flow_health", {})

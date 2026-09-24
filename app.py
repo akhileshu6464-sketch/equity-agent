@@ -552,7 +552,7 @@ else:
     # MASTER WORKSTATION TABS (8 Integrated Modules)
     # ---------------------------------------------------------------------
     tab_overview, tab_dec, tab_fq, tab_ind, tab_dd, tab_stmt, tab_about, tab_dossier = st.tabs([
-        "💡 2-Minute Investor Overview",
+        "📖 Company Investor Story (12 Sections)",
         "🎯 Core Decision Intelligence",
         "🛡️ Financial Quality & Forensics",
         "🌐 Industry, Catalysts & Risks",
@@ -563,10 +563,10 @@ else:
     ])
 
     # ---------------------------------------------------------------------
-    # TAB 1: 2-Minute Investor Explanation (Simple, Plain English)
+    # TAB 1: 12-Section Vertical Storytelling Experience (Clean, Plain English)
     # ---------------------------------------------------------------------
     with tab_overview:
-        render_section_header("2-Minute Investor Intelligence", "Complex Analysis Behind The Scenes · Simple Explanation in Front of You")
+        render_section_header("Fundamental Investment Story", "Smart Human Analyst Voice · Clean Vertical Scrolling · 100% Audited Data")
         if intel and "simple_explanation" in intel:
             render_simple_investor_overview(intel["simple_explanation"], data, intel)
         else:

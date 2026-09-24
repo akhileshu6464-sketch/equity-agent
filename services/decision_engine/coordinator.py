@@ -242,6 +242,28 @@ class DecisionEngineCoordinator:
             for a in forensic_data.get("anomalies", [])
         ]
 
+        story_payload = SimpleInvestorLanguageEngine.build_comprehensive_investor_story(
+            company_name=cname,
+            symbol=ticker,
+            store=store,
+            company_data=company_data,
+            screener_data=screener_data or company_data,
+            dossier=dossier or {},
+            change_data=change_data,
+            driver_results=driver_results,
+            fq_data=fq_data,
+            forensic_data=forensic_data,
+            industry_data=industry_data,
+            opportunities=opportunities,
+            risks=risks,
+            valuation_data=valuation_data,
+            timeline_events=events,
+            investor_questions=investor_questions,
+            concall=concall,
+            cmp=cmp,
+            mcap=mcap
+        )
+
         simple_explanation_payload = {
             "snapshot": snapshot_2_3_sentences,
             "core_change": core_change_takeaway.to_dict(),
@@ -262,7 +284,8 @@ class DecisionEngineCoordinator:
                 "what_risks_should_investor_investigate": [r.get("risk_title") for r in risks[:3]],
                 "what_opportunities_should_investor_investigate": [o.get("opportunity_title") for o in opportunities[:3]],
                 "what_should_investor_monitor_next": [q.get("question") for q in investor_questions[:3]]
-            }
+            },
+            "story_sections": story_payload
         }
 
         logger.info(f"Investment Intelligence Audit complete for {cname}. Total JEV verified claims: {len(verified_claims_log)}")
