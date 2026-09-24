@@ -72,7 +72,12 @@ from ui.components.error_state import render_error_state
 from ui.components.simple_investor_deck import render_simple_investor_overview
 
 # Direct Screener Extractor, Thesis Agent & Clean Screener View
-from services.screener_fetcher import fetch_screener_data, clean_user_input
+from services.screener_fetcher import (
+    fetch_screener_data,
+    clean_user_input,
+    fetch_stock_chart_data,
+    fetch_day_change,
+)
 from agents.thesis_agent import ThesisAgent
 from ui.components.screener_view import (
     render_screener_top_header,
@@ -81,6 +86,22 @@ from ui.components.screener_view import (
     render_screener_financial_table,
     render_screener_editorial_memo,
 )
+from ui.components.screener_tables import (
+    render_layer1_header,
+    render_horizontal_nav,
+    render_overview_row,
+    render_stock_chart,
+    render_compact_key_financials,
+    render_peers_table,
+    render_quarterly_section,
+    render_annual_section,
+    render_cash_flow_section,
+    render_balance_sheet_section,
+    render_ratios_section,
+    render_shareholding_section,
+    render_news_section,
+)
+from ui.components.qa_intelligence import render_qa_intelligence_section
 
 logger = logging.getLogger("ResearchBeast.App")
 
@@ -560,15 +581,26 @@ else:
             logger.error(f"Fallback decision engine audit failed for {clean_sym}: {exc}", exc_info=True)
             intel = None
 
-    cid = (intel or {}).get("company_id") or f"NSE_{clean_sym}"
-    isin = (intel or {}).get("isin") or "INE-VERIFIED"
+    # Resolve canonical identity for regulatory symbols and classification
+    try:
+        canonical_id = resolve_canonical_identity(clean_sym)
+    except Exception:
+        canonical_id = None
+
+    cid = (intel or {}).get("company_id") or getattr(canonical_id, "company_id", f"NSE_{clean_sym}")
+    isin = getattr(canonical_id, "isin", (intel or {}).get("isin") or "INE-VERIFIED")
+    nse_sym = getattr(canonical_id, "nse_symbol", clean_sym)
+    bse_code = getattr(canonical_id, "bse_code", "")
+    sector_name = getattr(canonical_id, "sector", sector or "General")
+    industry_name = getattr(canonical_id, "industry", industry or "Diversified")
+
+    # Fetch live day change metrics
+    day_chg_rs, day_chg_pct = fetch_day_change(clean_sym)
 
     simple_exp = (intel or {}).get("simple_explanation", {})
     health_status = simple_exp.get("core_change", {}).get("status", "VERIFIED AUDIT")
 
-    # ---------------------------------------------------------------------
-    # LEVEL 0: Clean Screener-Style Frontend (Direct Screener & Editorial Memo)
-    # ---------------------------------------------------------------------
+    # Extract verified financial tables from direct extract or engine data
     if direct_scr:
         scr_cname = direct_scr.get("company_name", company_name)
         scr_cmp_str = direct_scr.get("ratios", {}).get("Current Price", fmt_curr(cmp))
@@ -576,6 +608,12 @@ else:
         scr_about = direct_scr.get("about", "")
         scr_ratios = direct_scr.get("ratios", {})
         scr_pl_df = direct_scr.get("pl_dataframe")
+        q_df = direct_scr.get("quarters_table", {}).get("df")
+        bs_df = direct_scr.get("balance_sheet_table", {}).get("df")
+        cf_df = direct_scr.get("cash_flow_table", {}).get("df")
+        r_df = direct_scr.get("ratios_table", {}).get("df")
+        sh_df = direct_scr.get("shareholding_table", {}).get("df")
+        announcements = direct_scr.get("announcements", [])
     else:
         scr_cname = company_name
         scr_cmp_str = fmt_curr(cmp)
@@ -593,30 +631,85 @@ else:
             "Face Value": f"₹{data.get('face_value', 1.0):.1f}" if data else "₹ 1.0",
         }
         scr_pl_df = data.get("pl_dataframe") if data else None
+        q_df = pd.DataFrame(data.get("quarterly_rows", [])) if data and data.get("quarterly_rows") else None
+        bs_df = pd.DataFrame(data.get("balance_sheet_rows", [])) if data and data.get("balance_sheet_rows") else None
+        cf_df = pd.DataFrame(data.get("cash_flow_rows", [])) if data and data.get("cash_flow_rows") else None
+        r_df = pd.DataFrame(data.get("ratio_rows", [])) if data and data.get("ratio_rows") else None
+        sh_df = None
+        announcements = []
 
-    # 1. Top Header: Company Name, CMP, and Market Cap
-    render_screener_top_header(
+    peer_rows = (data or {}).get("peer_rows", [])
+    debt_to_equity = (data or {}).get("debt_to_equity")
+
+    # =====================================================================
+    # LAYER 1: SCREENER-STYLE FINANCIAL DATA (Verified Numbers First)
+    # =====================================================================
+    # Header: Company Name, NSE, BSE, ISIN, Sector, Industry, CMP, Market Cap, Day Change
+    render_layer1_header(
         company_name=scr_cname,
-        cmp_str=scr_cmp_str,
-        mcap_str=scr_mcap_str,
-        symbol=clean_sym
+        nse_symbol=nse_sym,
+        bse_code=bse_code,
+        isin=isin,
+        sector=sector_name,
+        industry=industry_name,
+        market_cap_str=scr_mcap_str,
+        current_price_str=scr_cmp_str,
+        day_change_rs=day_chg_rs,
+        day_change_pct=day_chg_pct,
     )
 
-    # 2. About Box: Authentic business summary and key operations
-    render_screener_about_box(
-        company_name=scr_cname,
-        about_text=scr_about
-    )
+    # Clean Horizontal Navigation Bar
+    render_horizontal_nav()
 
-    # 3. Ratios Grid: 3x3 clean metric grid for the 9 key ratios
-    render_screener_ratios_3x3(scr_ratios)
+    # 1. Overview Row: Essential company numbers in a clean row
+    render_overview_row(scr_ratios, debt_to_equity=debt_to_equity)
 
-    # 4. Financial Table: 5 to 10-year Profit & Loss table in a clean Pandas/Streamlit table
-    render_screener_financial_table(scr_pl_df)
+    # Authentic About Narrative Box
+    if scr_about:
+        render_screener_about_box(company_name=scr_cname, about_text=scr_about)
 
-    # 5. Editorial Memo: Render LLM-generated qualitative thesis below the tables
+    # 2. Stock Price and Volume Chart
+    render_stock_chart(clean_sym)
+
+    # 3. Key Financials (Quarterly | Annual Switcher)
+    render_compact_key_financials(scr_pl_df, q_df)
+
+    # 4. Peers Comparison Table (Pure Verified Data, Highlight Target)
+    render_peers_table(peer_rows, clean_sym)
+
+    # 5. Quarterly P&L (Recent Quarters Chart + Table)
+    render_quarterly_section(q_df)
+
+    # 6. 10-Year Annual Financials (Metric Switcher Chart + Table)
+    render_annual_section(scr_pl_df)
+
+    # 7. Cash Flow Statement (Chart + Table)
+    render_cash_flow_section(cf_df)
+
+    # 8. Balance Sheet (Historical Comparison Table)
+    render_balance_sheet_section(bs_df)
+
+    # 9. Key Financial & Efficiency Ratios (Historical Trend)
+    render_ratios_section(r_df)
+
+    # 10. Shareholding Pattern (Historical Changes Table + Stacked Chart)
+    render_shareholding_section(sh_df)
+
+    # 11. Recent Company News & Regulatory Announcements (Neutral & Factual)
+    render_news_section(announcements)
+
+    # Qualitative Thesis Memo if available
     if editorial_memo:
         render_screener_editorial_memo(editorial_memo)
+
+    # =====================================================================
+    # LAYER 2: RESEARCH BEAST Q&A INTELLIGENCE (Analysis Second)
+    # =====================================================================
+    render_qa_intelligence_section(
+        intel=intel or {},
+        screener_data=data or {},
+        direct_scr=direct_scr
+    )
 
     # ---------------------------------------------------------------------
     # DEEP RESEARCH & INSTITUTIONAL WORKSTATION (EXPANDABLE)

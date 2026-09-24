@@ -275,51 +275,274 @@ def fetch_screener_data(symbol: str) -> Dict[str, Any]:
         "face_value": _parse_numeric(fv_str),
     }
 
-    # 4. Profit & Loss Historical Table (10-Year Annual Columns)
+def _parse_section_table(soup: BeautifulSoup, section_id: str) -> Tuple[List[str], List[Dict[str, Any]], pd.DataFrame]:
+    """Parses standard Screener table inside a section by ID."""
     headers_list: List[str] = []
-    pl_rows_dicts: List[Dict[str, Any]] = []
-    pl_rows_table: List[Dict[str, Any]] = []
+    rows_table: List[Dict[str, Any]] = []
 
-    pl_sec = soup.find("section", id="profit-loss")
-    if pl_sec:
-        table = pl_sec.find("table")
-        if table:
-            thead = table.find("thead")
-            if thead:
-                headers_list = [
-                    re.sub(r"\s+", " ", th.get_text(strip=True))
-                    for th in thead.find_all("th")
-                    if th.get_text(strip=True)
-                ]
-            tbody = table.find("tbody")
-            if tbody:
-                for tr in tbody.find_all("tr"):
-                    cells = [
-                        re.sub(r"\s+", " ", td.get_text(strip=True)).replace("+", "").strip()
-                        for td in tr.find_all("td")
-                    ]
-                    if cells:
-                        row_name = cells[0]
-                        row_vals = cells[1:]
-                        row_dict = {"Metric": row_name}
-                        for idx, v in enumerate(row_vals):
-                            if idx < len(headers_list):
-                                row_dict[headers_list[idx]] = v
-                        pl_rows_table.append(row_dict)
-                        pl_rows_dicts.append({
-                            "metric": row_name,
-                            "values": row_vals,
-                            "row_data": row_dict
-                        })
+    sec = soup.find("section", id=section_id)
+    if not sec:
+        return [], [], pd.DataFrame()
 
-    # Create clean pandas DataFrame
-    if pl_rows_table:
-        df = pd.DataFrame(pl_rows_table)
-        # Ensure 'Metric' is the first column
+    table = sec.find("table")
+    if not table:
+        return [], [], pd.DataFrame()
+
+    thead = table.find("thead")
+    if thead:
+        headers_list = [
+            re.sub(r"\s+", " ", th.get_text(strip=True))
+            for th in thead.find_all("th")
+            if th.get_text(strip=True)
+        ]
+
+    tbody = table.find("tbody")
+    if tbody:
+        for tr in tbody.find_all("tr"):
+            cells = [
+                re.sub(r"\s+", " ", td.get_text(strip=True)).replace("+", "").strip()
+                for td in tr.find_all("td")
+            ]
+            if cells:
+                row_name = cells[0]
+                row_vals = cells[1:]
+                row_dict = {"Metric": row_name}
+                for idx, v in enumerate(row_vals):
+                    if idx < len(headers_list):
+                        row_dict[headers_list[idx]] = v
+                rows_table.append(row_dict)
+
+    if rows_table:
+        df = pd.DataFrame(rows_table)
         cols = ["Metric"] + [c for c in headers_list if c in df.columns]
         df = df[[c for c in cols if c in df.columns]]
     else:
         df = pd.DataFrame(columns=["Metric"] + headers_list)
+
+    return headers_list, rows_table, df
+
+
+def _extract_announcements(soup: BeautifulSoup) -> List[Dict[str, str]]:
+    """Extracts official regulatory filings and announcements from the documents section."""
+    announcements: List[Dict[str, str]] = []
+    doc_sec = soup.find("section", id="documents")
+    if not doc_sec:
+        return []
+
+    ul = doc_sec.find("ul", class_="list-links")
+    if ul:
+        for li in ul.find_all("li"):
+            a = li.find("a")
+            if not a:
+                continue
+            title = a.get_text(strip=True)
+            href = a.get("href", "")
+            date_div = li.find("div", class_="ink-600") or li.find("span")
+            date_str = date_div.get_text(strip=True) if date_div else ""
+
+            clean_title = re.sub(r"\s+", " ", title)
+            # Remove trailing date pattern e.g. '23 Sep' if appended to title
+            m = re.search(r"(\d{1,2}\s+[A-Za-z]{3})$", clean_title)
+            if m:
+                if not date_str:
+                    date_str = m.group(1)
+                clean_title = clean_title[:m.start()].strip()
+
+            announcements.append({
+                "headline": clean_title,
+                "date": date_str,
+                "source": "BSE / Regulatory Filing",
+                "link": href,
+            })
+    return announcements
+
+
+def fetch_stock_chart_data(symbol: str, timeframe: str = "1Y") -> pd.DataFrame:
+    """
+    Fetches clean stock price and volume history from yfinance.
+    Supports: '1M', '6M', '1Y', '3Y', '5Y', 'MAX'.
+    """
+    import yfinance as yf
+
+    tf_map = {
+        "1M": ("1mo", "1d"),
+        "6M": ("6mo", "1d"),
+        "1Y": ("1y", "1d"),
+        "3Y": ("3y", "1d"),
+        "5Y": ("5y", "1wk"),
+        "MAX": ("max", "1mo"),
+    }
+    period, interval = tf_map.get(timeframe.upper(), ("1y", "1d"))
+
+    clean_sym = clean_user_input(symbol)
+    candidates = [f"{clean_sym}.NS", f"{clean_sym}.BO"]
+    if symbol.upper().endswith(".NS") or symbol.upper().endswith(".BO"):
+        candidates.insert(0, symbol.upper())
+
+    for yf_sym in candidates:
+        try:
+            ticker = yf.Ticker(yf_sym)
+            hist = ticker.history(period=period, interval=interval)
+            if not hist.empty:
+                hist = hist.reset_index()
+                date_col = "Date" if "Date" in hist.columns else "Datetime"
+                hist["Date"] = pd.to_datetime(hist[date_col]).dt.tz_localize(None)
+                cols = [c for c in ["Date", "Open", "High", "Low", "Close", "Volume"] if c in hist.columns]
+                return hist[cols]
+        except Exception as e:
+            logger.warning(f"Error fetching chart history for {yf_sym}: {e}")
+
+    return pd.DataFrame()
+
+
+def fetch_day_change(symbol: str) -> Tuple[float, float]:
+    """
+    Computes absolute and percentage day change between the latest two trading days.
+    Returns: (day_change_rs, day_change_pct)
+    """
+    import yfinance as yf
+
+    clean_sym = clean_user_input(symbol)
+    candidates = [f"{clean_sym}.NS", f"{clean_sym}.BO"]
+    if symbol.upper().endswith(".NS") or symbol.upper().endswith(".BO"):
+        candidates.insert(0, symbol.upper())
+
+    for yf_sym in candidates:
+        try:
+            ticker = yf.Ticker(yf_sym)
+            hist = ticker.history(period="5d", interval="1d")
+            if len(hist) >= 2:
+                prev_close = float(hist["Close"].iloc[-2])
+                curr_close = float(hist["Close"].iloc[-1])
+                diff = curr_close - prev_close
+                pct = (diff / prev_close) * 100.0 if prev_close != 0 else 0.0
+                return round(diff, 2), round(pct, 2)
+        except Exception:
+            pass
+    return 0.0, 0.0
+
+
+def fetch_screener_data(symbol: str) -> Dict[str, Any]:
+    """
+    Directly extracts verified fundamentals from Screener.in.
+    Returns:
+    - symbol: Clean canonical symbol
+    - company_name: Full legal name
+    - about: Official about narrative
+    - ratios: Map of all 9 key ratios with formatted and numeric values
+    - pl_table: Headers and rows dictionary for 10-year P&L
+    - pl_dataframe: Pandas DataFrame of 10-year Profit & Loss table
+    - quarters_table: Quarterly P&L table {headers, rows, df}
+    - balance_sheet_table: Balance Sheet table {headers, rows, df}
+    - cash_flow_table: Cash Flow table {headers, rows, df}
+    - ratios_table: Ratios historical table {headers, rows, df}
+    - shareholding_table: Shareholding pattern table {headers, rows, df}
+    - announcements: List of official regulatory filings
+    - source_url: Source URL from Screener.in
+    """
+    cleaned_sym = clean_user_input(symbol)
+    if not cleaned_sym:
+        raise ValueError("Invalid empty company symbol provided.")
+
+    soup, final_url = _fetch_screener_soup(cleaned_sym)
+    if soup is None:
+        raise ValueError(
+            f"Could not extract fundamentals for symbol '{symbol}' (cleaned: '{cleaned_sym}') from Screener.in. "
+            "Please verify the ticker symbol."
+        )
+
+    # 1. Company Name
+    h1 = soup.find("h1")
+    company_name = h1.get_text(strip=True) if h1 else cleaned_sym
+
+    # 2. About Narrative
+    about_text = ""
+    about_div = soup.find("div", class_="about")
+    if about_div:
+        for a in about_div.find_all("a"):
+            a.decompose()
+        about_text = " ".join(about_div.stripped_strings)
+
+    # 3. Key Ratios (All 9 Ratios)
+    ratios_formatted: Dict[str, str] = {}
+    ratios_ul = soup.find("ul", id="top-ratios")
+    if ratios_ul:
+        for li in ratios_ul.find_all("li"):
+            name_el = li.find("span", class_="name")
+            val_el = (
+                li.find("span", class_="nowrap value")
+                or li.find("span", class_="value")
+                or li.find("span", class_="number")
+            )
+            if name_el and val_el:
+                k = re.sub(r"\s+", " ", name_el.get_text(strip=True))
+                v = re.sub(r"\s+", " ", val_el.get_text(strip=True))
+                ratios_formatted[k] = v
+
+    mcap_str = ratios_formatted.get("Market Cap", "N/A")
+    cmp_str = ratios_formatted.get("Current Price", "N/A")
+    hl_str = ratios_formatted.get("High / Low", "N/A")
+    pe_str = ratios_formatted.get("Stock P/E", "N/A")
+    bv_str = ratios_formatted.get("Book Value", "N/A")
+    div_str = ratios_formatted.get("Dividend Yield", "N/A")
+    roce_str = ratios_formatted.get("ROCE", "N/A")
+    roe_str = ratios_formatted.get("ROE", "N/A")
+    fv_str = ratios_formatted.get("Face Value", "N/A")
+
+    high_52, low_52 = None, None
+    if "/" in hl_str:
+        parts = hl_str.split("/")
+        if len(parts) == 2:
+            high_52 = _parse_numeric(parts[0])
+            low_52 = _parse_numeric(parts[1])
+
+    key_ratios = {
+        "Market Cap": mcap_str,
+        "Current Price": cmp_str,
+        "High / Low": hl_str,
+        "Stock P/E": pe_str,
+        "Book Value": bv_str,
+        "Dividend Yield": div_str,
+        "ROCE": roce_str,
+        "ROE": roe_str,
+        "Face Value": fv_str,
+        # Numeric normalized fields
+        "market_cap_cr": _parse_numeric(mcap_str),
+        "current_price": _parse_numeric(cmp_str),
+        "high_52w": high_52,
+        "low_52w": low_52,
+        "pe_ratio": _parse_numeric(pe_str),
+        "book_value": _parse_numeric(bv_str),
+        "dividend_yield_pct": _parse_numeric(div_str),
+        "roce_pct": _parse_numeric(roce_str),
+        "roe_pct": _parse_numeric(roe_str),
+        "face_value": _parse_numeric(fv_str),
+    }
+
+    # 4. Profit & Loss Historical Table (10-Year Annual Columns)
+    pl_headers, pl_rows, pl_df = _parse_section_table(soup, "profit-loss")
+    pl_rows_dicts = [
+        {"metric": r.get("Metric", ""), "values": [r.get(h, "") for h in pl_headers], "row_data": r}
+        for r in pl_rows
+    ]
+
+    # 5. Quarterly Results Table
+    q_headers, q_rows, q_df = _parse_section_table(soup, "quarters")
+
+    # 6. Balance Sheet Table
+    bs_headers, bs_rows, bs_df = _parse_section_table(soup, "balance-sheet")
+
+    # 7. Cash Flow Table
+    cf_headers, cf_rows, cf_df = _parse_section_table(soup, "cash-flow")
+
+    # 8. Ratios Historical Table
+    r_headers, r_rows, r_df = _parse_section_table(soup, "ratios")
+
+    # 9. Shareholding Pattern Table
+    sh_headers, sh_rows, sh_df = _parse_section_table(soup, "shareholding")
+
+    # 10. Documents & Announcements
+    announcements = _extract_announcements(soup)
 
     return {
         "symbol": cleaned_sym,
@@ -327,11 +550,37 @@ def fetch_screener_data(symbol: str) -> Dict[str, Any]:
         "about": about_text,
         "ratios": key_ratios,
         "pl_table": {
-            "headers": headers_list,
-            "rows": pl_rows_table,
+            "headers": pl_headers,
+            "rows": pl_rows,
             "parsed_rows": pl_rows_dicts,
         },
-        "pl_dataframe": df,
+        "pl_dataframe": pl_df,
+        "quarters_table": {
+            "headers": q_headers,
+            "rows": q_rows,
+            "df": q_df,
+        },
+        "balance_sheet_table": {
+            "headers": bs_headers,
+            "rows": bs_rows,
+            "df": bs_df,
+        },
+        "cash_flow_table": {
+            "headers": cf_headers,
+            "rows": cf_rows,
+            "df": cf_df,
+        },
+        "ratios_table": {
+            "headers": r_headers,
+            "rows": r_rows,
+            "df": r_df,
+        },
+        "shareholding_table": {
+            "headers": sh_headers,
+            "rows": sh_rows,
+            "df": sh_df,
+        },
+        "announcements": announcements,
         "source_url": final_url,
         "extraction_status": "SUCCESS",
     }
