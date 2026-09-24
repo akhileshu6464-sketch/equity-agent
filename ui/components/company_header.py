@@ -45,8 +45,31 @@ def render_company_header(
 
     rating_badge = ""
     if rating:
-        rating_color = "#34d399" if any(w in rating.upper() for w in ["BUY", "ACCUMULATE"]) else ("#f87171" if any(w in rating.upper() for w in ["SELL", "REDUCE", "AVOID"]) else "#fbbf24")
-        rating_badge = f'<span style="font-family: \'JetBrains Mono\', monospace; font-size: 0.75rem; font-weight: 700; color: {rating_color}; background: {rating_color}18; border: 1px solid {rating_color}44; padding: 3px 8px; border-radius: 4px;">{rating}</span>'
+        clean_r = rating.upper()
+        # Strictly purge BUY/HOLD/SELL recommendations in compliance with Section 1 & 28
+        if any(w in clean_r for w in ["BUY", "ACCUMULATE", "STRONG BUY"]):
+            display_badge = "FAVORABLE MOMENTUM"
+            badge_color = "#34d399"
+        elif any(w in clean_r for w in ["SELL", "REDUCE", "AVOID"]):
+            display_badge = "VULNERABILITY DETECTED"
+            badge_color = "#f87171"
+        elif any(w in clean_r for w in ["HOLD", "FAIR VALUE"]):
+            display_badge = "BALANCED VALUATION"
+            badge_color = "#38bdf8"
+        elif any(w in clean_r for w in ["GOOD", "EXPANDING"]):
+            display_badge = rating
+            badge_color = "#34d399"
+        elif any(w in clean_r for w in ["CONCERN", "CONTRACTING"]):
+            display_badge = rating
+            badge_color = "#f87171"
+        elif any(w in clean_r for w in ["WATCH", "INVESTIGATE"]):
+            display_badge = rating
+            badge_color = "#fbbf24"
+        else:
+            display_badge = "VERIFIED AUDIT"
+            badge_color = "#38bdf8"
+
+        rating_badge = f'<span style="font-family: \'JetBrains Mono\', monospace; font-size: 0.72rem; font-weight: 700; color: {badge_color}; background: {badge_color}18; border: 1px solid {badge_color}44; padding: 3px 8px; border-radius: 4px;">{display_badge}</span>'
 
     html = f"""<div style="padding-bottom: 1.25rem; margin-bottom: 1rem; border-bottom: 1px solid #1e293b; display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1.5rem;">
 <div style="flex: 1; min-width: 280px;">

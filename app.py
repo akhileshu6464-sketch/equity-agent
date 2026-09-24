@@ -69,6 +69,7 @@ from ui.components.evidence_card import (
 from ui.components.section_header import render_section_header
 from ui.components.empty_state import render_workstation_home
 from ui.components.error_state import render_error_state
+from ui.components.simple_investor_deck import render_simple_investor_overview
 
 logger = logging.getLogger("ResearchBeast.App")
 
@@ -509,6 +510,9 @@ else:
     cid = (intel or {}).get("company_id") or f"NSE_{clean_sym}"
     isin = (intel or {}).get("isin") or "INE-VERIFIED"
 
+    simple_exp = (intel or {}).get("simple_explanation", {})
+    health_status = simple_exp.get("core_change", {}).get("status", "VERIFIED AUDIT")
+
     # ---------------------------------------------------------------------
     # LEVEL 1: Company Header & Identity
     # ---------------------------------------------------------------------
@@ -521,7 +525,7 @@ else:
         market_cap_cr=mcap_cr,
         high_52=high_52,
         low_52=low_52,
-        rating=inst_rating,
+        rating=health_status,
         website=website,
         bse_url=bse_url,
         nse_url=nse_url,
@@ -545,20 +549,31 @@ else:
         render_decision_pillars(intel["decision_map"].get("decision_pillars", []))
 
     # ---------------------------------------------------------------------
-    # MASTER WORKSTATION TABS (7 Integrated Modules)
+    # MASTER WORKSTATION TABS (8 Integrated Modules)
     # ---------------------------------------------------------------------
-    tab_dec, tab_fq, tab_ind, tab_dd, tab_stmt, tab_about, tab_dossier = st.tabs([
+    tab_overview, tab_dec, tab_fq, tab_ind, tab_dd, tab_stmt, tab_about, tab_dossier = st.tabs([
+        "💡 2-Minute Investor Overview",
         "🎯 Core Decision Intelligence",
         "🛡️ Financial Quality & Forensics",
         "🌐 Industry, Catalysts & Risks",
         "🔍 Due Diligence & Audit Trail",
         "📊 Financial Statements",
         "🏢 Screener Profile & Moats",
-        "🏛️ Institutional Dossier & Report"
+        "🏛️ Complete Research Dossier"
     ])
 
     # ---------------------------------------------------------------------
-    # TAB 1: Core Decision Intelligence (What Changed, Why, Signals, Valuation)
+    # TAB 1: 2-Minute Investor Explanation (Simple, Plain English)
+    # ---------------------------------------------------------------------
+    with tab_overview:
+        render_section_header("2-Minute Investor Intelligence", "Complex Analysis Behind The Scenes · Simple Explanation in Front of You")
+        if intel and "simple_explanation" in intel:
+            render_simple_investor_overview(intel["simple_explanation"], data, intel)
+        else:
+            st.info("Verified financial data is being compiled into plain-English takeaways...")
+
+    # ---------------------------------------------------------------------
+    # TAB 2: Core Decision Intelligence (What Changed, Why, Signals, Valuation)
     # ---------------------------------------------------------------------
     with tab_dec:
         st.subheader("1. What Changed? — Multi-Year Trajectory & Divergence Alerts")

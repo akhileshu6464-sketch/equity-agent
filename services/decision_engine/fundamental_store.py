@@ -138,6 +138,16 @@ class FundamentalDataStore:
         dps = [dp for dp in self._datapoints if dp.metric == metric and dp.period_type == period_type.upper()]
         return dps
 
+    def get_latest_datapoint(self, metric: str, period_type: str = "ANNUAL") -> Optional[FundamentalDatapoint]:
+        """Returns the most recent verified datapoint for a metric, or None if unavailable (never guesses)."""
+        series = self.get_series(metric, period_type)
+        return series[-1] if series else None
+
+    def get_latest_datapoint_value(self, metric: str, period_type: str = "ANNUAL") -> Optional[float]:
+        """Returns the float value of the most recent verified datapoint, or None if unavailable."""
+        dp = self.get_latest_datapoint(metric, period_type)
+        return dp.value if dp is not None else None
+
     def populate_from_raw_sources(
         self,
         company_data: Dict[str, Any],

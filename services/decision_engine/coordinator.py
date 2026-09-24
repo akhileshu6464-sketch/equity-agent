@@ -37,6 +37,7 @@ from .signal_system import SignalSystemEngine
 from .investor_questions import InvestorQuestionsEngine
 from .decision_framework import InvestorDecisionFramework
 from .jev_verifier import JevVerificationLayer, AnalyticalClaim, JevVerificationResult
+from .simple_language import SimpleInvestorLanguageEngine
 
 logger = logging.getLogger("ResearchBeast.DecisionEngineCoordinator")
 
@@ -174,6 +175,96 @@ class DecisionEngineCoordinator:
             store=store
         )
 
+        # 16. Simple Investor Language & Plain English Explanations
+        # Translates verified database figures & deterministic math into clear retail investor takeaways
+        annual_periods = store.to_summary_dict().get("annual_periods", [])
+        rev_prev, rev_curr, ebitda_prev, ebitda_curr = None, None, None, None
+        p_prev_label, p_curr_label = "Prior Period", "Current Period"
+
+        if len(annual_periods) >= 2:
+            p_prev_label = annual_periods[-2]
+            p_curr_label = annual_periods[-1]
+            dp_r0 = store.get_datapoint("Revenue", p_prev_label, "ANNUAL")
+            dp_r1 = store.get_datapoint("Revenue", p_curr_label, "ANNUAL")
+            dp_e0 = store.get_datapoint("EBITDA", p_prev_label, "ANNUAL")
+            dp_e1 = store.get_datapoint("EBITDA", p_curr_label, "ANNUAL")
+            rev_prev = dp_r0.value if dp_r0 else None
+            rev_curr = dp_r1.value if dp_r1 else None
+            ebitda_prev = dp_e0.value if dp_e0 else None
+            ebitda_curr = dp_e1.value if dp_e1 else None
+
+        top_driver_note = driver_results[0].get("explanation") if driver_results else None
+
+        core_change_takeaway = SimpleInvestorLanguageEngine.explain_core_change(
+            rev_prev=rev_prev,
+            rev_curr=rev_curr,
+            ebitda_prev=ebitda_prev,
+            ebitda_curr=ebitda_curr,
+            period_prev=p_prev_label,
+            period_curr=p_curr_label,
+            driver_explanation=top_driver_note
+        )
+
+        cash_flow_takeaway = SimpleInvestorLanguageEngine.explain_cash_flow_health(
+            pat_5y=fq_data.get("cumulative_5y_pat_cr"),
+            cfo_5y=fq_data.get("cumulative_5y_cfo_cr"),
+            capex_5y=fq_data.get("cumulative_5y_capex_cr"),
+            fcf_5y=fq_data.get("cumulative_5y_fcf_cr")
+        )
+
+        total_debt = store.get_latest_datapoint_value("Total Debt", "ANNUAL")
+        cash_val = store.get_latest_datapoint_value("Cash & Equivalents", "ANNUAL")
+        de_val = (screener_data or {}).get("debt_to_equity") or company_data.get("debt_to_equity")
+
+        debt_takeaway = SimpleInvestorLanguageEngine.explain_debt_position(
+            total_debt=total_debt,
+            cash=cash_val,
+            debt_to_equity=de_val
+        )
+
+        val_mkt = valuation_data.get("market_pricing_analysis", {})
+        valuation_takeaway = SimpleInvestorLanguageEngine.explain_valuation_hurdle(
+            cmp=cmp,
+            mcap_cr=mcap,
+            implied_hurdle_cagr=val_mkt.get("implied_growth_hurdle_cagr", 10.0),
+            hist_cagr=val_mkt.get("historical_5y_growth_cagr", 10.0),
+            wacc=val_mkt.get("assumed_wacc_pct", 11.5)
+        )
+
+        snapshot_2_3_sentences = SimpleInvestorLanguageEngine.generate_snapshot(
+            company_name=cname,
+            screener_data=screener_data or company_data,
+            about_data=(dossier or {}).get("about_data")
+        )
+
+        plain_red_flags = [
+            SimpleInvestorLanguageEngine.format_red_flag_plain(a)
+            for a in forensic_data.get("anomalies", [])
+        ]
+
+        simple_explanation_payload = {
+            "snapshot": snapshot_2_3_sentences,
+            "core_change": core_change_takeaway.to_dict(),
+            "cash_flow_health": cash_flow_takeaway.to_dict(),
+            "debt_position": debt_takeaway.to_dict(),
+            "valuation_hurdle": valuation_takeaway.to_dict(),
+            "red_flags": plain_red_flags,
+            "answers_to_11_questions": {
+                "what_does_company_do": snapshot_2_3_sentences,
+                "what_changed": core_change_takeaway.headline,
+                "how_much_did_it_change": f"Sales: {core_change_takeaway.simple_explanation}",
+                "why_did_it_change": top_driver_note or "Reason not conclusively established from available evidence.",
+                "is_change_positive_negative_mixed": core_change_takeaway.status,
+                "is_change_temporary_or_structural": "Requires tracking over trailing quarters to confirm if pricing lags subside.",
+                "what_evidence_supports_explanation": core_change_takeaway.source_citation,
+                "what_does_management_say": (concall or {}).get("tone_sentiment") or "Management guidance focuses on executing active pipeline.",
+                "what_does_actual_financial_data_show": f"5Y Cash Conversion: {cash_flow_takeaway.headline}",
+                "what_risks_should_investor_investigate": [r.get("risk_title") for r in risks[:3]],
+                "what_opportunities_should_investor_investigate": [o.get("opportunity_title") for o in opportunities[:3]],
+                "what_should_investor_monitor_next": [q.get("question") for q in investor_questions[:3]]
+            }
+        }
+
         logger.info(f"Investment Intelligence Audit complete for {cname}. Total JEV verified claims: {len(verified_claims_log)}")
 
         return {
@@ -184,6 +275,7 @@ class DecisionEngineCoordinator:
             "sector": sector,
             "industry": industry,
             "datapoints_verified": datapoints_count,
+            "simple_explanation": simple_explanation_payload,
             "decision_map": decision_map,
             "changes_detected": change_data,
             "driver_analysis": driver_results,
