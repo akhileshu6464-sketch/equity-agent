@@ -74,7 +74,8 @@ THEME_CSS = """
 
     /* Container Max Width & Responsiveness */
     .block-container {
-        max-width: 1360px !important;
+        max-width: 1240px !important;
+        margin: 0 auto !important;
         padding-top: 1.5rem !important;
         padding-bottom: 5rem !important;
         padding-left: 2rem !important;

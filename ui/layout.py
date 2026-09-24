@@ -20,17 +20,14 @@ def render_workstation_top_bar():
                     RESEARCH BEAST
                 </div>
                 <div style="font-size: 0.72rem; color: #64748b; letter-spacing: 0.04em; text-transform: uppercase; font-weight: 500;">
-                    Fundamental Investment Intelligence Workstation
+                    Simple Financial Intelligence &amp; Q&amp;A
                 </div>
             </div>
         </div>
         <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
             <div style="display: flex; align-items: center; gap: 6px; background: rgba(52, 211, 153, 0.08); border: 1px solid rgba(52, 211, 153, 0.25); padding: 4px 10px; border-radius: 9999px; font-size: 0.75rem; color: #34d399; font-weight: 600;">
                 <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #34d399;"></span>
-                <span>ZERO CONTAMINATION ENFORCED</span>
-            </div>
-            <div style="font-size: 0.74rem; color: #64748b; font-family: 'JetBrains Mono', monospace;">
-                15 AUDIT MODULES
+                <span>VERIFIED FINANCIAL DATA</span>
             </div>
         </div>
     </div>
@@ -48,13 +45,13 @@ def render_command_bar(active_symbol: str = "") -> Optional[str]:
         query_val = st.text_input(
             "Search Security or Company:",
             value=active_symbol,
-            placeholder="Search company name, symbol or ticker (e.g. Vinati Organics, Ashoka Buildcon, Tata Motors)...",
+            placeholder="Search company name or symbol (e.g. Tata Motors, Vinati Organics, Reliance)...",
             label_visibility="collapsed",
             key="workstation_search_input"
         )
 
     with col_btn:
-        search_clicked = st.button("Audit Stock", type="primary", use_container_width=True, key="btn_audit_stock")
+        search_clicked = st.button("Search", type="primary", use_container_width=True, key="btn_audit_stock")
 
     # Quick Select Benchmark Row
     st.html("""
