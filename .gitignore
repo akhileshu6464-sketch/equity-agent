@@ -45,4 +45,5 @@ $RECYCLE.BIN/
 scratch/
 *.pdf
 *.db
-
+data/cache/
+data/transcripts/

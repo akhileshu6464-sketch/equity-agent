@@ -543,6 +543,31 @@ def fetch_screener_data(symbol: str) -> Dict[str, Any]:
 
     # 10. Documents & Announcements
     announcements = _extract_announcements(soup)
+    drishti_payload: Dict[str, Any] = {}
+
+    try:
+        from services.drishti import get_drishti_service, is_drishti_configured
+        if is_drishti_configured():
+            from core.company_identity import resolve_canonical_identity
+            target_ident = resolve_canonical_identity(cleaned_sym)
+            d_service = get_drishti_service()
+            d_ann = d_service.fetch_company_announcements(target_ident, limit=10)
+            d_news = d_service.fetch_company_news(target_ident, limit=10)
+            drishti_payload = {
+                "announcements": d_ann,
+                "news": d_news,
+                "is_configured": True,
+            }
+            # Append verified Drishti announcements with clear provenance
+            for da in d_ann:
+                announcements.append({
+                    "headline": da.headline,
+                    "date": da.publication_date or da.event_date,
+                    "source": "Drishti (BSE/NSE LODR)",
+                    "link": da.source_url,
+                })
+    except Exception as e:
+        logger.debug(f"Drishti enrichment skipped for {cleaned_sym}: {e}")
 
     return {
         "symbol": cleaned_sym,
@@ -581,6 +606,7 @@ def fetch_screener_data(symbol: str) -> Dict[str, Any]:
             "df": sh_df,
         },
         "announcements": announcements,
+        "drishti": drishti_payload,
         "source_url": final_url,
         "extraction_status": "SUCCESS",
     }

@@ -694,12 +694,17 @@ def render_news_section(announcements: List[Dict[str, str]]):
 
         link_tag = f'<a href="{link}" target="_blank" style="color: #38bdf8; text-decoration: none; font-size: 0.78rem; font-weight: 600;">View Filing ↗</a>' if link else ""
 
+        if "drishti" in source.lower():
+            source_badge = f'<span style="color: #38bdf8; font-weight: 600;">📡 Source: {_esc(source)}</span>'
+        else:
+            source_badge = f'<span>🏛️ {_esc(source)}</span>'
+
         items_html.append(f"""<div style="background: #0f172a; border: 1px solid #1e293b; border-radius: 6px; padding: 0.85rem 1.15rem; margin-bottom: 0.6rem; display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
   <div style="flex: 1 1 300px;">
     <div style="font-size: 0.9rem; color: #f8fafc; font-weight: 600; line-height: 1.4; margin-bottom: 4px;">{headline}</div>
-    <div style="font-size: 0.76rem; color: #94a3b8; display: flex; gap: 12px;">
+    <div style="font-size: 0.76rem; color: #94a3b8; display: flex; gap: 12px; align-items: center;">
       <span>📅 {date_str}</span>
-      <span>🏛️ {source}</span>
+      {source_badge}
     </div>
   </div>
   <div>{link_tag}</div>

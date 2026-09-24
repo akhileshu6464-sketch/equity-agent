@@ -89,6 +89,35 @@ class DecisionEngineCoordinator:
         concall = (dossier or {}).get("agent_7", {})
         gov_data = (dossier or {}).get("agent_4", {})
 
+        # Optional Drishti Intelligence Ingestion (Company ID locked)
+        drishti_intel = None
+        try:
+            from services.drishti import get_drishti_service, is_drishti_configured
+            if is_drishti_configured():
+                drishti_svc = get_drishti_service()
+                from core.company_identity import resolve_canonical_identity
+                canonical_ident = resolve_canonical_identity(ticker)
+                drishti_intel = drishti_svc.fetch_all_company_intelligence(
+                    symbol=ticker,
+                    primary_financials=company_data
+                )
+                if drishti_intel and drishti_intel.get("status") == "SUCCESS":
+                    d_calls = drishti_intel.get("concalls", [])
+                    if d_calls:
+                        if not isinstance(concall, dict):
+                            concall = {}
+                        concall["drishti_concalls"] = [c.to_dict() for c in d_calls]
+                        if not concall.get("transcript") and d_calls[0].source_url:
+                            concall["transcript"] = d_calls[0].source_url
+
+                    d_anns = drishti_intel.get("announcements", [])
+                    if d_anns:
+                        if not isinstance(prim_disc, dict):
+                            prim_disc = {}
+                        prim_disc["drishti_announcements"] = [a.to_dict() for a in d_anns]
+        except Exception as e:
+            logger.debug(f"Drishti enrichment skipped in coordinator: {e}")
+
         # 3. Driver Analysis Engine
         driver_engine = DriverAnalysisEngine(store)
         all_changes = change_data.get("annual_changes", []) + change_data.get("quarterly_changes", [])
@@ -312,7 +341,8 @@ class DecisionEngineCoordinator:
             "valuation_and_expectations": valuation_data,
             "event_timeline": events,
             "investor_investigation_questions": investor_questions,
-            "jev_verification_log": verified_claims_log
+            "jev_verification_log": verified_claims_log,
+            "drishti_intelligence": drishti_intel
         }
 
     def _execute_jev_verification_gate(

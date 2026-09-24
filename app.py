@@ -641,6 +641,22 @@ else:
     peer_rows = (data or {}).get("peer_rows", [])
     debt_to_equity = (data or {}).get("debt_to_equity")
 
+    # Enrich announcements feed with Drishti intelligence if available
+    d_intel = (intel or {}).get("drishti_intelligence")
+    if d_intel and d_intel.get("news"):
+        for dn in d_intel["news"]:
+            hl = getattr(dn, "headline", "") or (dn.get("headline", "") if isinstance(dn, dict) else "")
+            dt = getattr(dn, "publication_date", "") or (dn.get("publication_date", "") if isinstance(dn, dict) else "")
+            src = getattr(dn, "article_source", "") or (dn.get("article_source", "Drishti News") if isinstance(dn, dict) else "Drishti News")
+            lk = getattr(dn, "source_url", "") or (dn.get("source_url", "") if isinstance(dn, dict) else "")
+            if hl and not any(a.get("headline") == hl for a in announcements):
+                announcements.append({
+                    "headline": hl,
+                    "date": dt,
+                    "source": f"Drishti News ({src})",
+                    "link": lk,
+                })
+
     # =====================================================================
     # LAYER 1: SCREENER-STYLE FINANCIAL DATA (Verified Numbers First)
     # =====================================================================
