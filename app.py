@@ -71,6 +71,17 @@ from ui.components.empty_state import render_workstation_home
 from ui.components.error_state import render_error_state
 from ui.components.simple_investor_deck import render_simple_investor_overview
 
+# Direct Screener Extractor, Thesis Agent & Clean Screener View
+from services.screener_fetcher import fetch_screener_data, clean_user_input
+from agents.thesis_agent import ThesisAgent
+from ui.components.screener_view import (
+    render_screener_top_header,
+    render_screener_about_box,
+    render_screener_ratios_3x3,
+    render_screener_financial_table,
+    render_screener_editorial_memo,
+)
+
 logger = logging.getLogger("ResearchBeast.App")
 
 # -------------------------------------------------------------------------
@@ -312,6 +323,10 @@ def build_about_milestones_html(milestones: List[Dict[str, Any]]) -> str:
 # -------------------------------------------------------------------------
 # Session State Initialization
 # -------------------------------------------------------------------------
+if "screener_direct" not in st.session_state:
+    st.session_state["screener_direct"] = None
+if "editorial_memo" not in st.session_state:
+    st.session_state["editorial_memo"] = None
 if "screener_data" not in st.session_state:
     st.session_state["screener_data"] = None
 if "dossier" not in st.session_state:
@@ -341,8 +356,11 @@ query_to_audit = render_command_bar(active_symbol=st.session_state.get("active_s
 if query_to_audit:
     raw_user_input = query_to_audit.strip()
     if raw_user_input:
-        resolved_sym, matched_name = resolve_ticker_info(raw_user_input)
+        clean_input = clean_user_input(raw_user_input)
+        resolved_sym, matched_name = resolve_ticker_info(clean_input or raw_user_input)
         clean_sym = extract_pure_symbol(resolved_sym) or resolved_sym
+        if clean_user_input(clean_sym):
+            clean_sym = clean_user_input(clean_sym)
 
         if clean_sym:
             # Canonical Identity Resolution
@@ -357,6 +375,8 @@ if query_to_audit:
             # Strict Session State Isolation: purge old company data on company switch
             prev_cid = st.session_state.get("active_company_id")
             if prev_cid != target_cid:
+                st.session_state["screener_direct"] = None
+                st.session_state["editorial_memo"] = None
                 st.session_state["screener_data"] = None
                 st.session_state["about_data"] = None
                 st.session_state["dossier"] = None
@@ -371,6 +391,28 @@ if query_to_audit:
             status_msg = f"Auditing {run_context.company_name} ({clean_sym}, {target_cid}) across 15 institutional domains..."
 
             with st.spinner(status_msg):
+                # 0. Direct Financial Extractor (Primary Regulatory Ground Truth from Screener.in)
+                direct_scr = None
+                try:
+                    direct_scr = fetch_screener_data(clean_sym)
+                    st.session_state[f"screener_direct:{target_cid}"] = direct_scr
+                    st.session_state["screener_direct"] = direct_scr
+                except Exception as exc:
+                    logger.warning(f"Direct screener extractor fallback for {clean_sym}: {exc}")
+                    direct_scr = None
+
+                # Editorial Research Memo (Qualitative Thesis Synthesis locked to verified figures)
+                if direct_scr:
+                    try:
+                        thesis_agent = ThesisAgent()
+                        memo = thesis_agent.generate_editorial_memo(direct_scr)
+                        st.session_state[f"editorial_memo:{target_cid}"] = memo
+                        st.session_state["editorial_memo"] = memo
+                    except Exception as exc:
+                        logger.warning(f"Thesis agent synthesis failed for {clean_sym}: {exc}")
+                        st.session_state[f"editorial_memo:{target_cid}"] = None
+                        st.session_state["editorial_memo"] = None
+
                 scr_data = None
                 try:
                     # 1. Deterministic Calculation & Financial Statements
@@ -440,18 +482,20 @@ if query_to_audit:
 # Render Workstation View
 # -------------------------------------------------------------------------
 active_cid = st.session_state.get("active_company_id", "")
+direct_scr = st.session_state.get(f"screener_direct:{active_cid}") or st.session_state.get("screener_direct")
+editorial_memo = st.session_state.get(f"editorial_memo:{active_cid}") or st.session_state.get("editorial_memo")
 data = st.session_state.get(f"screener_data:{active_cid}") or st.session_state.get("screener_data")
 dossier = st.session_state.get(f"dossier:{active_cid}") or st.session_state.get("dossier")
 about = st.session_state.get(f"about_data:{active_cid}") or st.session_state.get("about_data")
 intel = st.session_state.get(f"intel_dossier:{active_cid}") or st.session_state.get("intel_dossier")
 
-if not data or not dossier:
+if not data and not direct_scr:
     # Render Workstation Home Landing View when no company is searched
     render_workstation_home()
 else:
     # HARD FAILURE ZERO-CONTAMINATION RENDER GATE
     try:
-        if active_cid:
+        if active_cid and data and dossier:
             assert_company_boundary(data, active_cid, caller_module="App.Render.ScreenerData")
             assert_company_boundary(dossier, active_cid, caller_module="App.Render.Dossier")
             if intel:
@@ -464,20 +508,29 @@ else:
         )
         st.stop()
 
-    company_name = data.get("company_name", "Corporate Enterprise")
-    clean_sym = data.get("clean_symbol", "")
-    sector = data.get("sector", "")
-    industry = data.get("industry", "")
-    website = data.get("website", "")
-    bse_url = data.get("bse_url", "")
-    nse_url = data.get("nse_url", "")
+    company_name = (direct_scr or {}).get("company_name") or (data or {}).get("company_name", "Corporate Enterprise")
+    clean_sym = (direct_scr or {}).get("symbol") or (data or {}).get("clean_symbol", "")
+    sector = (data or {}).get("sector", "")
+    industry = (data or {}).get("industry", "")
+    website = (data or {}).get("website", "")
+    bse_url = (data or {}).get("bse_url", "")
+    nse_url = (data or {}).get("nse_url", "")
 
-    cmp = data.get("current_price", 0.0)
-    mcap_cr = data.get("market_cap_cr", 0.0)
-    high_52 = data.get("high_52w", 0.0)
-    low_52 = data.get("low_52w", 0.0)
+    cmp = (direct_scr or {}).get("ratios", {}).get("current_price") or (data or {}).get("current_price", 0.0)
+    mcap_cr = (direct_scr or {}).get("ratios", {}).get("market_cap_cr") or (data or {}).get("market_cap_cr", 0.0)
+    high_52 = (direct_scr or {}).get("ratios", {}).get("high_52w") or (data or {}).get("high_52w", 0.0)
+    low_52 = (direct_scr or {}).get("ratios", {}).get("low_52w") or (data or {}).get("low_52w", 0.0)
 
-    inst_rating = str(dossier.get("institutional_rating", "[HOLD / FAIR VALUE]"))
+    if direct_scr and not editorial_memo:
+        try:
+            thesis_agent = ThesisAgent()
+            editorial_memo = thesis_agent.generate_editorial_memo(direct_scr)
+            st.session_state[f"editorial_memo:{active_cid}"] = editorial_memo
+            st.session_state["editorial_memo"] = editorial_memo
+        except Exception as exc:
+            logger.warning(f"Lazy thesis synthesis failed: {exc}")
+
+    inst_rating = str((dossier or {}).get("institutional_rating", "[HOLD / FAIR VALUE]"))
 
     # Agents data references
     a0 = dossier.get("agent_0", {})
@@ -514,514 +567,573 @@ else:
     health_status = simple_exp.get("core_change", {}).get("status", "VERIFIED AUDIT")
 
     # ---------------------------------------------------------------------
-    # LEVEL 1: Company Header & Identity
+    # LEVEL 0: Clean Screener-Style Frontend (Direct Screener & Editorial Memo)
     # ---------------------------------------------------------------------
-    render_company_header(
-        company_name=company_name,
-        symbol=clean_sym,
-        sector=sector,
-        industry=industry,
-        cmp=cmp,
-        market_cap_cr=mcap_cr,
-        high_52=high_52,
-        low_52=low_52,
-        rating=health_status,
-        website=website,
-        bse_url=bse_url,
-        nse_url=nse_url,
+    if direct_scr:
+        scr_cname = direct_scr.get("company_name", company_name)
+        scr_cmp_str = direct_scr.get("ratios", {}).get("Current Price", fmt_curr(cmp))
+        scr_mcap_str = direct_scr.get("ratios", {}).get("Market Cap", fmt_cr(mcap_cr))
+        scr_about = direct_scr.get("about", "")
+        scr_ratios = direct_scr.get("ratios", {})
+        scr_pl_df = direct_scr.get("pl_dataframe")
+    else:
+        scr_cname = company_name
+        scr_cmp_str = fmt_curr(cmp)
+        scr_mcap_str = fmt_cr(mcap_cr)
+        scr_about = data.get("raw_summary", "") if data else ""
+        scr_ratios = {
+            "Market Cap": fmt_cr(mcap_cr),
+            "Current Price": fmt_curr(cmp),
+            "High / Low": f"₹{high_52:,.0f} / ₹{low_52:,.0f}",
+            "Stock P/E": f"{data.get('pe_ratio', 0.0):.1f}" if data and data.get('pe_ratio', 0.0) > 0 else "—",
+            "Book Value": f"₹{data.get('book_value', 0.0):,.1f}" if data else "—",
+            "Dividend Yield": f"{data.get('dividend_yield_pct', 0.0):.2f}%" if data else "—",
+            "ROCE": f"{data.get('roce_pct', 0.0):.1f}%" if data else "—",
+            "ROE": f"{data.get('roe_pct', 0.0):.1f}%" if data else "—",
+            "Face Value": f"₹{data.get('face_value', 1.0):.1f}" if data else "₹ 1.0",
+        }
+        scr_pl_df = data.get("pl_dataframe") if data else None
+
+    # 1. Top Header: Company Name, CMP, and Market Cap
+    render_screener_top_header(
+        company_name=scr_cname,
+        cmp_str=scr_cmp_str,
+        mcap_str=scr_mcap_str,
+        symbol=clean_sym
     )
 
-    # Canonical Company Isolation Bar
-    render_research_status_bar(cid=cid, isin=isin, period="FY2025 · Consolidated")
+    # 2. About Box: Authentic business summary and key operations
+    render_screener_about_box(
+        company_name=scr_cname,
+        about_text=scr_about
+    )
+
+    # 3. Ratios Grid: 3x3 clean metric grid for the 9 key ratios
+    render_screener_ratios_3x3(scr_ratios)
+
+    # 4. Financial Table: 5 to 10-year Profit & Loss table in a clean Pandas/Streamlit table
+    render_screener_financial_table(scr_pl_df)
+
+    # 5. Editorial Memo: Render LLM-generated qualitative thesis below the tables
+    if editorial_memo:
+        render_screener_editorial_memo(editorial_memo)
 
     # ---------------------------------------------------------------------
-    # LEVEL 2: Key Investment Signals & Compounded Growth
+    # DEEP RESEARCH & INSTITUTIONAL WORKSTATION (EXPANDABLE)
     # ---------------------------------------------------------------------
-    render_section_header("Key Investment Signals", "Latest audited fundamentals and cash metrics")
-    render_key_investment_signals(data)
-    render_compounded_growth_cards(data)
-
-    # ---------------------------------------------------------------------
-    # LEVEL 3: Business Health & Decision Matrix (7 Pillars)
-    # ---------------------------------------------------------------------
-    if intel and "decision_map" in intel:
-        render_section_header("Business Health & Decision Matrix", "7 Fundamental Investment Pillars")
-        render_decision_pillars(intel["decision_map"].get("decision_pillars", []))
-
-    # ---------------------------------------------------------------------
-    # MASTER WORKSTATION TABS (8 Integrated Modules)
-    # ---------------------------------------------------------------------
-    tab_overview, tab_dec, tab_fq, tab_ind, tab_dd, tab_stmt, tab_about, tab_dossier = st.tabs([
-        "📖 Company Investor Story (12 Sections)",
-        "🎯 Core Decision Intelligence",
-        "🛡️ Financial Quality & Forensics",
-        "🌐 Industry, Catalysts & Risks",
-        "🔍 Due Diligence & Audit Trail",
-        "📊 Financial Statements",
-        "🏢 Screener Profile & Moats",
-        "🏛️ Complete Research Dossier"
-    ])
-
-    # ---------------------------------------------------------------------
-    # TAB 1: 12-Section Vertical Storytelling Experience (Clean, Plain English)
-    # ---------------------------------------------------------------------
-    with tab_overview:
-        render_section_header("Fundamental Investment Story", "Smart Human Analyst Voice · Clean Vertical Scrolling · 100% Audited Data")
-        if intel and "simple_explanation" in intel:
-            render_simple_investor_overview(intel["simple_explanation"], data, intel)
-        else:
-            st.info("Verified financial data is being compiled into plain-English takeaways...")
-
-    # ---------------------------------------------------------------------
-    # TAB 2: Core Decision Intelligence (What Changed, Why, Signals, Valuation)
-    # ---------------------------------------------------------------------
-    with tab_dec:
-        st.subheader("1. What Changed? — Multi-Year Trajectory & Divergence Alerts")
-        if intel and "changes_detected" in intel:
-            render_what_changed(intel["changes_detected"])
-
-        st.subheader("2. Why Did It Change? — Audited Driver Attribution & Causation Guard")
-        if intel and "driver_analysis" in intel:
-            st.html(build_why_it_changed_html(intel["driver_analysis"]))
-
-        st.subheader("3. Granular Business Signals — Positive, Negative & Watch")
-        if intel and "signals" in intel:
-            st.html(build_signals_dashboard_html(intel["signals"]))
-
-        st.subheader("4. Valuation Expectations — Reverse DCF Growth Hurdle")
-        if intel and "valuation_and_expectations" in intel:
-            st.html(build_valuation_expectations_html(intel["valuation_and_expectations"]))
-
-    # ---------------------------------------------------------------------
-    # TAB 2: Financial Quality & Forensics
-    # ---------------------------------------------------------------------
-    with tab_fq:
-        st.subheader("1. Cumulative 5-Year Cash Flow Conversion Waterfall")
-        if intel and "financial_quality" in intel:
-            render_cash_flow_waterfall(intel["financial_quality"])
-
-        st.subheader("2. Systematic Forensic & Red-Flag Investigation")
-        if intel and "forensic_audit" in intel:
-            render_forensic_audit(intel["forensic_audit"].get("anomalies", []))
-
-    # ---------------------------------------------------------------------
-    # TAB 3: Industry, Catalysts & Risks
-    # ---------------------------------------------------------------------
-    with tab_ind:
-        st.subheader("1. Industry Intelligence, Macro Factors & Structural Shifts")
-        if intel and "industry_intelligence" in intel:
-            st.html(build_industry_intelligence_html(intel["industry_intelligence"]))
-
-        st.subheader("2. Future Catalysts & Opportunities vs Structural Vulnerabilities")
-        if intel:
-            st.html(build_opportunities_and_risks_html(
-                intel.get("opportunities", []),
-                intel.get("risks", [])
-            ))
-
-    # ---------------------------------------------------------------------
-    # TAB 4: Due Diligence & Audit Trail
-    # ---------------------------------------------------------------------
-    with tab_dd:
-        st.subheader("1. What Should The Investor Investigate Next?")
-        if intel and "investor_investigation_questions" in intel:
-            render_investor_questions(intel["investor_investigation_questions"])
-
-        st.subheader("2. Corporate Regulatory Filings & Event Timeline")
-        if intel and "event_timeline" in intel:
-            render_event_timeline(intel["event_timeline"])
-
-        st.subheader("3. TypeSafe AI JEV Structured Verification Gate Audit Trail")
-        if intel and "jev_verification_log" in intel:
-            render_jev_audit_log(intel["jev_verification_log"])
-
-    # ---------------------------------------------------------------------
-    # TAB 5: Financial Statements
-    # ---------------------------------------------------------------------
-    with tab_stmt:
-        render_section_header("Profit & Loss", "Consolidated figures in ₹ Crores (Annual)")
-        render_pl_table(data.get("pl_rows", []))
-
-        q_rows = data.get("quarterly_rows", [])
-        if q_rows:
-            render_section_header("Quarterly Results", "Consolidated figures in ₹ Crores (Recent Quarters)")
-            render_quarterly_table(q_rows)
-
-        peer_rows = data.get("peer_rows", [])
-        if peer_rows:
-            render_section_header("Peer Comparison", "Sector benchmark peers listed in India")
-            render_peer_table(peer_rows, target_symbol=clean_sym)
-
-    # ---------------------------------------------------------------------
-    # TAB 6: Screener Profile & Moats
-    # ---------------------------------------------------------------------
-    with tab_about:
-        if not about or not about.get("company_description"):
-            agent = EditorialAgent()
-            about = agent.generate_comprehensive_about(
-                summary_text=data.get("raw_summary", ""),
+    if data and dossier:
+        st.write("")
+        st.write("---")
+        with st.expander("🔍 Deep Research & 12-Section Storytelling Workstation", expanded=False):
+            # ---------------------------------------------------------------------
+            # LEVEL 1: Company Header & Identity
+            # ---------------------------------------------------------------------
+            render_company_header(
                 company_name=company_name,
                 symbol=clean_sym,
                 sector=sector,
                 industry=industry,
-                screener_data=data,
-                primary_disclosures=prim_disc
+                cmp=cmp,
+                market_cap_cr=mcap_cr,
+                high_52=high_52,
+                low_52=low_52,
+                rating=health_status,
+                website=website,
+                bse_url=bse_url,
+                nse_url=nse_url,
             )
-            st.session_state["about_data"] = about
 
-        comp_desc = about.get("company_description", data.get("raw_summary", ""))
-        desc_paras = [p.strip() for p in comp_desc.split("\n\n") if p.strip()]
-        desc_html = "".join([f"<p style='margin-bottom: 0.65rem;'>{p}</p>" for p in desc_paras])
+            # Canonical Company Isolation Bar
+            render_research_status_bar(cid=cid, isin=isin, period="FY2025 · Consolidated")
 
-        snap_metrics = about.get("snapshot_metrics", {})
-        if not snap_metrics:
-            snap_metrics = {
-                "market_cap_cr": mcap_cr,
-                "current_price": cmp,
-                "high_52w": high_52,
-                "low_52w": low_52,
-                "pe_ratio": data.get("pe_ratio", 0.0),
-                "book_value": data.get("book_value", 0.0),
-                "dividend_yield_pct": data.get("dividend_yield_pct", 0.0),
-                "roce_pct": data.get("roce_pct", 0.0),
-                "roe_pct": data.get("roe_pct", 0.0),
-                "face_value": data.get("face_value", 1.0),
-                "total_debt_cr": data.get("total_debt_cr", 0.0),
-                "total_cash_cr": data.get("total_cash_cr", 0.0),
-                "promoter_holding_pct": data.get("promoter_holding_pct", 0.0),
-                "institutional_holding_pct": data.get("institutional_holding_pct", 0.0),
-                "debt_to_equity": data.get("debt_to_equity", 0.0)
-            }
+            # ---------------------------------------------------------------------
+            # LEVEL 2: Key Investment Signals & Compounded Growth
+            # ---------------------------------------------------------------------
+            render_section_header("Key Investment Signals", "Latest audited fundamentals and cash metrics")
+            render_key_investment_signals(data)
+            render_compounded_growth_cards(data)
 
-        snapshot_grid_html = build_about_snapshot_html(snap_metrics)
-        segments_html = build_about_segments_html(about.get("business_segments", []))
+            # ---------------------------------------------------------------------
+            # LEVEL 3: Business Health & Decision Matrix (7 Pillars)
+            # ---------------------------------------------------------------------
+            if intel and "decision_map" in intel:
+                render_section_header("Business Health & Decision Matrix", "7 Fundamental Investment Pillars")
+                render_decision_pillars(intel["decision_map"].get("decision_pillars", []))
 
-        st.html(f"""<div style="background: #0f172a; border: 1px solid #1e293b; border-radius: 8px; padding: 1.25rem 1.5rem; margin-bottom: 1.5rem;">
-<div style="font-size: 0.95rem; font-weight: 700; color: #f8fafc; margin-bottom: 0.75rem;">
-🏢 About {company_name} — Fundamental Profile
-</div>
-<div style="font-size: 0.88rem; line-height: 1.65; color: #cbd5e1; margin-bottom: 1.25rem;">
-{desc_html}
-</div>
-<div style="font-size: 0.8rem; font-weight: 600; color: #94a3b8; text-transform: uppercase; margin-bottom: 0.5rem;">
-📊 Company Fundamental Snapshot
-</div>
-{snapshot_grid_html}
-<div style="font-size: 0.8rem; font-weight: 600; color: #94a3b8; text-transform: uppercase; margin-top: 1rem; margin-bottom: 0.5rem;">
-📦 Core Business Operating Segments
-</div>
-{segments_html}
-</div>""")
+            # ---------------------------------------------------------------------
+            # MASTER WORKSTATION TABS (8 Integrated Modules)
+            # ---------------------------------------------------------------------
+            tab_overview, tab_dec, tab_fq, tab_ind, tab_dd, tab_stmt, tab_about, tab_dossier = st.tabs([
+                "📖 Company Investor Story (12 Sections)",
+                "🎯 Core Decision Intelligence",
+                "🛡️ Financial Quality & Forensics",
+                "🌐 Industry, Catalysts & Risks",
+                "🔍 Due Diligence & Audit Trail",
+                "📊 Financial Statements",
+                "🏢 Screener Profile & Moats",
+                "🏛️ Complete Research Dossier"
+            ])
 
-        subtab_biz, subtab_gov, subtab_market, subtab_comp = st.tabs([
-            "🏢 Business Model & Revenue Mix",
-            "📋 Corporate Facts & Governance",
-            "🌍 Markets & Footprint",
-            "🏆 Competitive Moat & Milestones"
-        ])
+            # ---------------------------------------------------------------------
+            # TAB 1: 12-Section Vertical Storytelling Experience (Clean, Plain English)
+            # ---------------------------------------------------------------------
+            with tab_overview:
+                render_section_header("Fundamental Investment Story", "Smart Human Analyst Voice · Clean Vertical Scrolling · 100% Audited Data")
+                if intel and "simple_explanation" in intel:
+                    render_simple_investor_overview(intel["simple_explanation"], data, intel)
+                else:
+                    st.info("Verified financial data is being compiled into plain-English takeaways...")
 
-        with subtab_biz:
-            biz_model_text = about.get("business_model", "")
-            if biz_model_text:
-                st.html(f"""<div style="background: #0f172a; border: 1px solid #1e293b; border-radius: 6px; padding: 1rem 1.25rem; margin-bottom: 1rem;">
-<div style="font-size: 0.92rem; font-weight: 600; color: #f8fafc; margin-bottom: 0.4rem;">💡 Revenue Generation & Contracting Model</div>
-<div style="font-size: 0.86rem; line-height: 1.6; color: #cbd5e1;">{biz_model_text}</div>
-</div>""")
-            st.subheader("Segment Revenue Mix & Contribution")
-            st.html(build_about_revenue_mix_html(about.get("revenue_mix", [])))
+            # ---------------------------------------------------------------------
+            # TAB 2: Core Decision Intelligence (What Changed, Why, Signals, Valuation)
+            # ---------------------------------------------------------------------
+            with tab_dec:
+                st.subheader("1. What Changed? — Multi-Year Trajectory & Divergence Alerts")
+                if intel and "changes_detected" in intel:
+                    render_what_changed(intel["changes_detected"])
 
-        with subtab_gov:
-            st.subheader("Key Corporate Facts")
-            st.html(build_about_facts_html(about.get("key_business_facts", {})))
-            st.subheader("Major Subsidiaries & Concession SPVs")
-            st.html(build_about_subsidiaries_html(about.get("subsidiaries_jvs", [])))
+                st.subheader("2. Why Did It Change? — Audited Driver Attribution & Causation Guard")
+                if intel and "driver_analysis" in intel:
+                    st.html(build_why_it_changed_html(intel["driver_analysis"]))
 
-        with subtab_market:
-            geo = about.get("geographic_presence", {})
-            dom_text = geo.get("domestic", "Established domestic operations across major state clusters.")
-            intl_text = geo.get("international", "Export presence and global client channels where disclosed.")
-            geo_summary = geo.get("summary", "")
+                st.subheader("3. Granular Business Signals — Positive, Negative & Watch")
+                if intel and "signals" in intel:
+                    st.html(build_signals_dashboard_html(intel["signals"]))
 
-            col_dom, col_intl = st.columns(2)
-            with col_dom:
-                st.html(f"""<div style="background: #0f172a; border: 1px solid #1e293b; border-radius: 6px; padding: 1rem 1.25rem;">
-<div style="font-size: 0.92rem; font-weight: 600; color: #f8fafc; margin-bottom: 0.4rem;">🇮🇳 Domestic Operations & Clusters</div>
-<div style="font-size: 0.86rem; line-height: 1.6; color: #cbd5e1;">{dom_text}</div>
-</div>""")
-            with col_intl:
-                st.html(f"""<div style="background: #0f172a; border: 1px solid #1e293b; border-radius: 6px; padding: 1rem 1.25rem;">
-<div style="font-size: 0.92rem; font-weight: 600; color: #f8fafc; margin-bottom: 0.4rem;">🌐 International & Export Reach</div>
-<div style="font-size: 0.86rem; line-height: 1.6; color: #cbd5e1;">{intl_text}</div>
-</div>""")
-            if geo_summary:
-                st.html(f"<div style='font-size: 0.82rem; color: #94a3b8; margin-top: 0.5rem;'>📍 <em>{geo_summary}</em></div>")
+                st.subheader("4. Valuation Expectations — Reverse DCF Growth Hurdle")
+                if intel and "valuation_and_expectations" in intel:
+                    st.html(build_valuation_expectations_html(intel["valuation_and_expectations"]))
 
-            st.subheader("Key Customer Base & Primary Counterparties")
-            cust_list = about.get("key_customers", [])
-            if cust_list:
-                cust_items = "".join([f"<li style='margin-bottom: 4px;'>{c}</li>" for c in cust_list])
-                st.html(f"<ul style='color: #cbd5e1; font-size: 0.86rem; padding-left: 1.25rem;'>{cust_items}</ul>")
+            # ---------------------------------------------------------------------
+            # TAB 2: Financial Quality & Forensics
+            # ---------------------------------------------------------------------
+            with tab_fq:
+                st.subheader("1. Cumulative 5-Year Cash Flow Conversion Waterfall")
+                if intel and "financial_quality" in intel:
+                    render_cash_flow_waterfall(intel["financial_quality"])
 
-        with subtab_comp:
-            comp = about.get("competitive_position", {})
-            mkt_pos = comp.get("market_position", f"Established market position in {sector}.")
-            scale_m = comp.get("scale_metrics", "")
-            peers = comp.get("key_competitors", [])
-            moats = comp.get("core_advantages", [])
+                st.subheader("2. Systematic Forensic & Red-Flag Investigation")
+                if intel and "forensic_audit" in intel:
+                    render_forensic_audit(intel["forensic_audit"].get("anomalies", []))
 
-            scale_line = f"<p style='margin-top: 4px;'><strong>Scale Metric:</strong> {scale_m}</p>" if scale_m else ""
-            st.html(f"""<div style="background: #0f172a; border: 1px solid #1e293b; border-radius: 6px; padding: 1rem 1.25rem; margin-bottom: 1rem;">
-<div style="font-size: 0.92rem; font-weight: 600; color: #f8fafc; margin-bottom: 0.4rem;">🏆 Market Position & Defensibility</div>
-<div style="font-size: 0.86rem; line-height: 1.6; color: #cbd5e1;">
-<p style="margin: 0;"><strong>Standing:</strong> {mkt_pos}</p>
-{scale_line}
-</div>
-</div>""")
+            # ---------------------------------------------------------------------
+            # TAB 3: Industry, Catalysts & Risks
+            # ---------------------------------------------------------------------
+            with tab_ind:
+                st.subheader("1. Industry Intelligence, Macro Factors & Structural Shifts")
+                if intel and "industry_intelligence" in intel:
+                    st.html(build_industry_intelligence_html(intel["industry_intelligence"]))
 
-            if peers:
-                peer_chips = "".join([f"<span style='background: #1e293b; color: #cbd5e1; padding: 3px 8px; border-radius: 4px; font-size: 0.8rem; margin-right: 6px;'>{p}</span>" for p in peers])
-                st.subheader("Benchmark Competitors")
-                st.html(f"<div style='display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 1rem;'>{peer_chips}</div>")
+                st.subheader("2. Future Catalysts & Opportunities vs Structural Vulnerabilities")
+                if intel:
+                    st.html(build_opportunities_and_risks_html(
+                        intel.get("opportunities", []),
+                        intel.get("risks", [])
+                    ))
 
-            if moats:
-                moat_items = "".join([f"<div style='margin-bottom: 4px;'>🛡️ {m}</div>" for m in moats])
-                st.subheader("Core Competitive Advantages & Moats")
-                st.html(f"<div style='font-size: 0.86rem; color: #cbd5e1;'>{moat_items}</div>")
+            # ---------------------------------------------------------------------
+            # TAB 4: Due Diligence & Audit Trail
+            # ---------------------------------------------------------------------
+            with tab_dd:
+                st.subheader("1. What Should The Investor Investigate Next?")
+                if intel and "investor_investigation_questions" in intel:
+                    render_investor_questions(intel["investor_investigation_questions"])
 
-            st.subheader("Company History & Key Milestones")
-            st.html(build_about_milestones_html(about.get("milestones", [])))
+                st.subheader("2. Corporate Regulatory Filings & Event Timeline")
+                if intel and "event_timeline" in intel:
+                    render_event_timeline(intel["event_timeline"])
 
-            sources = about.get("sources", [])
-            if sources:
-                render_evidence_drawer(prim_disc, sources)
+                st.subheader("3. TypeSafe AI JEV Structured Verification Gate Audit Trail")
+                if intel and "jev_verification_log" in intel:
+                    render_jev_audit_log(intel["jev_verification_log"])
 
-    # ---------------------------------------------------------------------
-    # TAB 7: Institutional Research Dossier
-    # ---------------------------------------------------------------------
-    with tab_dossier:
-        render_section_header("Institutional Equity Research Dossier", "15 Multi-Dimensional Research Modules")
+            # ---------------------------------------------------------------------
+            # TAB 5: Financial Statements
+            # ---------------------------------------------------------------------
+            with tab_stmt:
+                render_section_header("Profit & Loss", "Consolidated figures in ₹ Crores (Annual)")
+                render_pl_table(data.get("pl_rows", []))
 
-        subtab_moat, subtab_dossier_ind, subtab_fin, subtab_dossier_gov, subtab_concall, subtab_val = st.tabs([
-            "🛡️ Business & Moat",
-            "🌐 Industry & Peers",
-            "📊 Financials & Quality",
-            "🏛️ Governance & Filings",
-            "🎙️ Concall & Guidance",
-            "🎯 Valuation & Scenarios"
-        ])
+                q_rows = data.get("quarterly_rows", [])
+                if q_rows:
+                    render_section_header("Quarterly Results", "Consolidated figures in ₹ Crores (Recent Quarters)")
+                    render_quarterly_table(q_rows)
 
-        with subtab_moat:
-            st.subheader("Module 1: Company Overview, Business Model & Economic Moat")
-            moat_md = dossier.get("moat_markdown")
-            if moat_md:
-                st.markdown(moat_md)
+                peer_rows = data.get("peer_rows", [])
+                if peer_rows:
+                    render_section_header("Peer Comparison", "Sector benchmark peers listed in India")
+                    render_peer_table(peer_rows, target_symbol=clean_sym)
 
-            p1_bm = a1.get("part1_business_model", {})
-            for k, v in p1_bm.items():
-                render_audit_item(k, v)
+            # ---------------------------------------------------------------------
+            # TAB 6: Screener Profile & Moats
+            # ---------------------------------------------------------------------
+            with tab_about:
+                if not about or not about.get("company_description"):
+                    agent = EditorialAgent()
+                    about = agent.generate_comprehensive_about(
+                        summary_text=data.get("raw_summary", ""),
+                        company_name=company_name,
+                        symbol=clean_sym,
+                        sector=sector,
+                        industry=industry,
+                        screener_data=data,
+                        primary_disclosures=prim_disc
+                    )
+                    st.session_state["about_data"] = about
 
-            p2_moat = a1.get("part2_competitive_moat", {})
-            for k, v in p2_moat.items():
-                render_audit_item(k, v)
+                comp_desc = about.get("company_description", data.get("raw_summary", ""))
+                desc_paras = [p.strip() for p in comp_desc.split("\n\n") if p.strip()]
+                desc_html = "".join([f"<p style='margin-bottom: 0.65rem;'>{p}</p>" for p in desc_paras])
 
-            st.subheader("Module 11: Documented Growth Drivers & Operating Leverage")
-            p5_ops = a1.get("part5_operations_scalability", {})
-            if p5_ops:
-                for k, v in p5_ops.items():
-                    render_audit_item(k, v)
-            else:
-                render_audit_item("Capacity Additions & Operating Leverage Trajectory",
-                                  "The enterprise exhibits operating leverage headroom as utilization across existing execution clusters expands.")
+                snap_metrics = about.get("snapshot_metrics", {})
+                if not snap_metrics:
+                    snap_metrics = {
+                        "market_cap_cr": mcap_cr,
+                        "current_price": cmp,
+                        "high_52w": high_52,
+                        "low_52w": low_52,
+                        "pe_ratio": data.get("pe_ratio", 0.0),
+                        "book_value": data.get("book_value", 0.0),
+                        "dividend_yield_pct": data.get("dividend_yield_pct", 0.0),
+                        "roce_pct": data.get("roce_pct", 0.0),
+                        "roe_pct": data.get("roe_pct", 0.0),
+                        "face_value": data.get("face_value", 1.0),
+                        "total_debt_cr": data.get("total_debt_cr", 0.0),
+                        "total_cash_cr": data.get("total_cash_cr", 0.0),
+                        "promoter_holding_pct": data.get("promoter_holding_pct", 0.0),
+                        "institutional_holding_pct": data.get("institutional_holding_pct", 0.0),
+                        "debt_to_equity": data.get("debt_to_equity", 0.0)
+                    }
 
-            st.subheader("Module 12: Near-Term & Long-Term Catalysts")
-            render_audit_item("Documented vs Potential Catalysts",
-                              "Near-term execution acceleration driven by primary sector demand and balance sheet deleveraging.")
+                snapshot_grid_html = build_about_snapshot_html(snap_metrics)
+                segments_html = build_about_segments_html(about.get("business_segments", []))
 
-        with subtab_dossier_ind:
-            st.subheader("Module 2: Industry Research & Structural Market Dynamics")
-            p3_ind = a1.get("part3_industry_growth", {})
-            if p3_ind:
-                for k, v in p3_ind.items():
-                    render_audit_item(k, v)
+                st.html(f"""<div style="background: #0f172a; border: 1px solid #1e293b; border-radius: 8px; padding: 1.25rem 1.5rem; margin-bottom: 1.5rem;">
+        <div style="font-size: 0.95rem; font-weight: 700; color: #f8fafc; margin-bottom: 0.75rem;">
+        🏢 About {company_name} — Fundamental Profile
+        </div>
+        <div style="font-size: 0.88rem; line-height: 1.65; color: #cbd5e1; margin-bottom: 1.25rem;">
+        {desc_html}
+        </div>
+        <div style="font-size: 0.8rem; font-weight: 600; color: #94a3b8; text-transform: uppercase; margin-bottom: 0.5rem;">
+        📊 Company Fundamental Snapshot
+        </div>
+        {snapshot_grid_html}
+        <div style="font-size: 0.8rem; font-weight: 600; color: #94a3b8; text-transform: uppercase; margin-top: 1rem; margin-bottom: 0.5rem;">
+        📦 Core Business Operating Segments
+        </div>
+        {segments_html}
+        </div>""")
 
-            kpi_res = a5.get("kpi_results", {})
-            if kpi_res:
-                st.markdown("##### Sector-Specific Operational KPIs")
-                for kpi_k, kpi_v in kpi_res.items():
-                    render_audit_item(kpi_k, kpi_v)
+                subtab_biz, subtab_gov, subtab_market, subtab_comp = st.tabs([
+                    "🏢 Business Model & Revenue Mix",
+                    "📋 Corporate Facts & Governance",
+                    "🌍 Markets & Footprint",
+                    "🏆 Competitive Moat & Milestones"
+                ])
 
-            st.subheader("Module 8: Competitive Benchmarking & Peer Comparison")
-            comp_matrix = a4.get("dimension4_competitor_matrix", {})
-            if comp_matrix and isinstance(comp_matrix, dict):
-                render_audit_item("Competitive Positioning & Peer Benchmarking", comp_matrix)
+                with subtab_biz:
+                    biz_model_text = about.get("business_model", "")
+                    if biz_model_text:
+                        st.html(f"""<div style="background: #0f172a; border: 1px solid #1e293b; border-radius: 6px; padding: 1rem 1.25rem; margin-bottom: 1rem;">
+        <div style="font-size: 0.92rem; font-weight: 600; color: #f8fafc; margin-bottom: 0.4rem;">💡 Revenue Generation & Contracting Model</div>
+        <div style="font-size: 0.86rem; line-height: 1.6; color: #cbd5e1;">{biz_model_text}</div>
+        </div>""")
+                    st.subheader("Segment Revenue Mix & Contribution")
+                    st.html(build_about_revenue_mix_html(about.get("revenue_mix", [])))
 
-            leadership_md = dossier.get("leadership_markdown")
-            if leadership_md:
-                st.markdown(leadership_md)
+                with subtab_gov:
+                    st.subheader("Key Corporate Facts")
+                    st.html(build_about_facts_html(about.get("key_business_facts", {})))
+                    st.subheader("Major Subsidiaries & Concession SPVs")
+                    st.html(build_about_subsidiaries_html(about.get("subsidiaries_jvs", [])))
 
-        with subtab_fin:
-            st.subheader("Module 3: 5-Year Historical Financial Analysis & DuPont Trajectory")
-            p8_prof = a3.get("part8_profitability", {})
-            if p8_prof:
-                for k, v in p8_prof.items():
-                    render_audit_item(k, v)
+                with subtab_market:
+                    geo = about.get("geographic_presence", {})
+                    dom_text = geo.get("domestic", "Established domestic operations across major state clusters.")
+                    intl_text = geo.get("international", "Export presence and global client channels where disclosed.")
+                    geo_summary = geo.get("summary", "")
 
-            p10_solv = a3.get("part10_solvency", {})
-            if p10_solv:
-                for k, v in p10_solv.items():
-                    render_audit_item(k, v)
+                    col_dom, col_intl = st.columns(2)
+                    with col_dom:
+                        st.html(f"""<div style="background: #0f172a; border: 1px solid #1e293b; border-radius: 6px; padding: 1rem 1.25rem;">
+        <div style="font-size: 0.92rem; font-weight: 600; color: #f8fafc; margin-bottom: 0.4rem;">🇮🇳 Domestic Operations & Clusters</div>
+        <div style="font-size: 0.86rem; line-height: 1.6; color: #cbd5e1;">{dom_text}</div>
+        </div>""")
+                    with col_intl:
+                        st.html(f"""<div style="background: #0f172a; border: 1px solid #1e293b; border-radius: 6px; padding: 1rem 1.25rem;">
+        <div style="font-size: 0.92rem; font-weight: 600; color: #f8fafc; margin-bottom: 0.4rem;">🌐 International & Export Reach</div>
+        <div style="font-size: 0.86rem; line-height: 1.6; color: #cbd5e1;">{intl_text}</div>
+        </div>""")
+                    if geo_summary:
+                        st.html(f"<div style='font-size: 0.82rem; color: #94a3b8; margin-top: 0.5rem;'>📍 <em>{geo_summary}</em></div>")
 
-            st.subheader("Module 4: Quarterly Financial Trends & Driver Identification")
-            render_audit_item("Quarterly Margin & Volume Momentum",
-                              "Trailing quarterly performance reflects seasonal execution ramp-up and operational volume delivery.")
+                    st.subheader("Key Customer Base & Primary Counterparties")
+                    cust_list = about.get("key_customers", [])
+                    if cust_list:
+                        cust_items = "".join([f"<li style='margin-bottom: 4px;'>{c}</li>" for c in cust_list])
+                        st.html(f"<ul style='color: #cbd5e1; font-size: 0.86rem; padding-left: 1.25rem;'>{cust_items}</ul>")
 
-            st.subheader("Module 9: Financial Quality & Accrual Forensics")
-            forensic_md = dossier.get("forensics_markdown")
-            if forensic_md:
-                st.markdown(forensic_md)
+                with subtab_comp:
+                    comp = about.get("competitive_position", {})
+                    mkt_pos = comp.get("market_position", f"Established market position in {sector}.")
+                    scale_m = comp.get("scale_metrics", "")
+                    peers = comp.get("key_competitors", [])
+                    moats = comp.get("core_advantages", [])
 
-            p15_rev = a2.get("part15_revenue_quality", {})
-            for k, v in p15_rev.items():
-                render_audit_item(k, v)
+                    scale_line = f"<p style='margin-top: 4px;'><strong>Scale Metric:</strong> {scale_m}</p>" if scale_m else ""
+                    st.html(f"""<div style="background: #0f172a; border: 1px solid #1e293b; border-radius: 6px; padding: 1rem 1.25rem; margin-bottom: 1rem;">
+        <div style="font-size: 0.92rem; font-weight: 600; color: #f8fafc; margin-bottom: 0.4rem;">🏆 Market Position & Defensibility</div>
+        <div style="font-size: 0.86rem; line-height: 1.6; color: #cbd5e1;">
+        <p style="margin: 0;"><strong>Standing:</strong> {mkt_pos}</p>
+        {scale_line}
+        </div>
+        </div>""")
 
-            p11_wc = a3.get("part11_working_capital", {})
-            for k, v in p11_wc.items():
-                render_audit_item(k, v)
+                    if peers:
+                        peer_chips = "".join([f"<span style='background: #1e293b; color: #cbd5e1; padding: 3px 8px; border-radius: 4px; font-size: 0.8rem; margin-right: 6px;'>{p}</span>" for p in peers])
+                        st.subheader("Benchmark Competitors")
+                        st.html(f"<div style='display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 1rem;'>{peer_chips}</div>")
 
-        with subtab_dossier_gov:
-            st.subheader("Module 5: Annual Report Deep Analysis & Contingent Liabilities")
-            p16_bs = a2.get("part16_balance_sheet", {})
-            for k, v in p16_bs.items():
-                render_audit_item(k, v)
+                    if moats:
+                        moat_items = "".join([f"<div style='margin-bottom: 4px;'>🛡️ {m}</div>" for m in moats])
+                        st.subheader("Core Competitive Advantages & Moats")
+                        st.html(f"<div style='font-size: 0.86rem; color: #cbd5e1;'>{moat_items}</div>")
 
-            p13_dep = a2.get("part13_depreciation", {})
-            for k, v in p13_dep.items():
-                render_audit_item(k, v)
+                    st.subheader("Company History & Key Milestones")
+                    st.html(build_about_milestones_html(about.get("milestones", [])))
 
-            st.subheader("Module 7: Management, Promoter Pledging & Corporate Governance")
-            sec1_prom = a4.get("section1_promoter_integrity", {})
-            for k, v in sec1_prom.items():
-                render_audit_item(k, v)
+                    sources = about.get("sources", [])
+                    if sources:
+                        render_evidence_drawer(prim_disc, sources)
 
-            sec2_rem = a4.get("section2_executive_remuneration", {})
-            for k, v in sec2_rem.items():
-                render_audit_item(k, v)
+            # ---------------------------------------------------------------------
+            # TAB 7: Institutional Research Dossier
+            # ---------------------------------------------------------------------
+            with tab_dossier:
+                render_section_header("Institutional Equity Research Dossier", "15 Multi-Dimensional Research Modules")
 
-            sec4_rpt = a4.get("section4_master_rpt", {})
-            if isinstance(sec4_rpt, dict):
-                for k, v in sec4_rpt.items():
-                    if isinstance(v, dict):
-                        for sub_k, sub_v in v.items():
-                            render_audit_item(f"{k}: {sub_k}", sub_v)
-                    else:
+                subtab_moat, subtab_dossier_ind, subtab_fin, subtab_dossier_gov, subtab_concall, subtab_val = st.tabs([
+                    "🛡️ Business & Moat",
+                    "🌐 Industry & Peers",
+                    "📊 Financials & Quality",
+                    "🏛️ Governance & Filings",
+                    "🎙️ Concall & Guidance",
+                    "🎯 Valuation & Scenarios"
+                ])
+
+                with subtab_moat:
+                    st.subheader("Module 1: Company Overview, Business Model & Economic Moat")
+                    moat_md = dossier.get("moat_markdown")
+                    if moat_md:
+                        st.markdown(moat_md)
+
+                    p1_bm = a1.get("part1_business_model", {})
+                    for k, v in p1_bm.items():
                         render_audit_item(k, v)
 
-            st.subheader("Module 10: Institutional Red Flag & Forensic Vulnerability Audit")
-            render_audit_item("Critical Forensic Vulnerability Audit",
-                              "Review contingent liabilities, contract assets, retention monies, and promoter encumbrance ratios.")
+                    p2_moat = a1.get("part2_competitive_moat", {})
+                    for k, v in p2_moat.items():
+                        render_audit_item(k, v)
 
-        with subtab_concall:
-            st.subheader("Module 6: Earnings Conference Call Transcripts & Guidance Tracking")
-            call_period = a7.get("call_period", "Recent Earnings Conference Call")
-            tone = a7.get("tone_sentiment", "Pragmatic / Constructive")
-            integrity = a7.get("integrity_score", "High Integrity")
-            rev_guid = a7.get("revenue_growth_guidance", "Management targets execution in line with order book pacing.")
-            margin_out = a7.get("margin_outlook", "Operating profit margins guided within historical corridors.")
-            capex_comm = a7.get("committed_capex", "Routine capex funded from internal accruals.")
+                    st.subheader("Module 11: Documented Growth Drivers & Operating Leverage")
+                    p5_ops = a1.get("part5_operations_scalability", {})
+                    if p5_ops:
+                        for k, v in p5_ops.items():
+                            render_audit_item(k, v)
+                    else:
+                        render_audit_item("Capacity Additions & Operating Leverage Trajectory",
+                                          "The enterprise exhibits operating leverage headroom as utilization across existing execution clusters expands.")
 
-            st.html(f"""<div style="background: #0f172a; border: 1px solid #1e293b; border-radius: 6px; padding: 1rem 1.25rem; margin-bottom: 1rem;">
-<div style="font-size: 0.95rem; font-weight: 600; color: #f8fafc; margin-bottom: 0.4rem;">{call_period} — Executive Management Tone & Guidance</div>
-<div style="font-size: 0.86rem; line-height: 1.6; color: #cbd5e1;">
-<p style="margin-bottom: 0.4rem;"><strong>Executive Tone:</strong> <span style="color: #38bdf8; font-weight: 600;">{tone}</span> &bull; <strong>Commitment Integrity Score:</strong> <span style="color: #34d399; font-weight: 600;">{integrity}</span></p>
-<p style="margin-bottom: 0.4rem;"><strong>Revenue Growth Guidance:</strong> {rev_guid}</p>
-<p style="margin-bottom: 0.4rem;"><strong>Margin Outlook:</strong> {margin_out}</p>
-<p style="margin: 0;"><strong>Committed Capex:</strong> {capex_comm}</p>
-</div>
-</div>""")
+                    st.subheader("Module 12: Near-Term & Long-Term Catalysts")
+                    render_audit_item("Documented vs Potential Catalysts",
+                                      "Near-term execution acceleration driven by primary sector demand and balance sheet deleveraging.")
 
-            qa_list = a7.get("qa_highlights", [])
-            if qa_list:
-                st.markdown("##### Key Analyst Q&A Pushback & Management Responses")
-                for qa in qa_list:
-                    if isinstance(qa, dict):
-                        q_text = qa.get("question", "Operational query")
-                        ans_text = qa.get("answer") or qa.get("management_response", "Addressed in call")
-                        inst = qa.get("analyst_institution") or qa.get("institution", "Institutional Equities")
-                        st.html(f"""<div style="background: #0f172a; border: 1px solid #1e293b; border-radius: 6px; padding: 0.85rem 1rem; margin-bottom: 0.65rem;">
-<div style="font-size: 0.82rem; font-weight: 600; color: #94a3b8; margin-bottom: 0.3rem;">{inst}</div>
-<div style="font-size: 0.84rem; line-height: 1.5; color: #cbd5e1;">
-<p style="margin-bottom: 0.25rem;"><strong>Q:</strong> {q_text}</p>
-<p style="margin: 0;"><strong>Management Response:</strong> {ans_text}</p>
-</div>
-</div>""")
+                with subtab_dossier_ind:
+                    st.subheader("Module 2: Industry Research & Structural Market Dynamics")
+                    p3_ind = a1.get("part3_industry_growth", {})
+                    if p3_ind:
+                        for k, v in p3_ind.items():
+                            render_audit_item(k, v)
 
-        with subtab_val:
-            st.subheader("Module 13: Deterministic Multi-Stage DCF & Reverse DCF Hurdle")
-            val_md = dossier.get("valuation_markdown")
-            if val_md:
-                st.markdown(val_md)
+                    kpi_res = a5.get("kpi_results", {})
+                    if kpi_res:
+                        st.markdown("##### Sector-Specific Operational KPIs")
+                        for kpi_k, kpi_v in kpi_res.items():
+                            render_audit_item(kpi_k, kpi_v)
 
-            dynamic_wacc = dossier.get("wacc_pct", 11.5)
-            implied_hurdle = dossier.get("implied_growth_pct", "10.0%")
-            mos = dossier.get("margin_of_safety_pct", 15.0)
+                    st.subheader("Module 8: Competitive Benchmarking & Peer Comparison")
+                    comp_matrix = a4.get("dimension4_competitor_matrix", {})
+                    if comp_matrix and isinstance(comp_matrix, dict):
+                        render_audit_item("Competitive Positioning & Peer Benchmarking", comp_matrix)
 
-            st.html(f"""<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.65rem; margin-top: 1rem; margin-bottom: 1.25rem;">
-<div style="background: #0f172a; border: 1px solid #1e293b; border-radius: 6px; padding: 0.75rem 1rem;">
-<div style="font-size: 0.72rem; color: #94a3b8; text-transform: uppercase;">Cost of Capital (WACC)</div>
-<div style="font-family: 'JetBrains Mono', monospace; font-size: 1.2rem; font-weight: 700; color: #38bdf8;">{dynamic_wacc:.2f}%</div>
-</div>
-<div style="background: #0f172a; border: 1px solid #1e293b; border-radius: 6px; padding: 0.75rem 1rem;">
-<div style="font-size: 0.72rem; color: #94a3b8; text-transform: uppercase;">Reverse DCF Hurdle Rate</div>
-<div style="font-family: 'JetBrains Mono', monospace; font-size: 1.2rem; font-weight: 700; color: #34d399;">{implied_hurdle}</div>
-</div>
-<div style="background: #0f172a; border: 1px solid #1e293b; border-radius: 6px; padding: 0.75rem 1rem;">
-<div style="font-size: 0.72rem; color: #94a3b8; text-transform: uppercase;">Margin of Safety</div>
-<div style="font-family: 'JetBrains Mono', monospace; font-size: 1.2rem; font-weight: 700; color: #34d399;">{mos:+.1f}%</div>
-</div>
-<div style="background: #0f172a; border: 1px solid #1e293b; border-radius: 6px; padding: 0.75rem 1rem;">
-<div style="font-size: 0.72rem; color: #94a3b8; text-transform: uppercase;">Primary Architecture</div>
-<div style="font-size: 0.95rem; font-weight: 600; color: #f8fafc; margin-top: 4px;">{dossier.get('primary_valuation', 'Multi-Stage DCF')}</div>
-</div>
-</div>""")
+                    leadership_md = dossier.get("leadership_markdown")
+                    if leadership_md:
+                        st.markdown(leadership_md)
 
-            st.subheader("Module 14: 3-Scenario Valuation Matrix")
-            sc_matrix = a6.get("section4_scenario_matrix", {})
-            bear = sc_matrix.get("bear_case", {})
-            base = sc_matrix.get("base_case", {})
-            bull = sc_matrix.get("bull_case", {})
+                with subtab_fin:
+                    st.subheader("Module 3: 5-Year Historical Financial Analysis & DuPont Trajectory")
+                    p8_prof = a3.get("part8_profitability", {})
+                    if p8_prof:
+                        for k, v in p8_prof.items():
+                            render_audit_item(k, v)
 
-            st.html(f"""<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 0.75rem; margin-bottom: 1.25rem;">
-<div style="background: #0f172a; border: 1px solid #1e293b; border-left: 3px solid #f87171; border-radius: 6px; padding: 0.9rem 1.1rem;">
-<div style="font-weight: 600; color: #f87171; font-size: 0.88rem; margin-bottom: 0.4rem;">Bear Case (Stressed)</div>
-<div style="font-size: 0.82rem; color: #cbd5e1; line-height: 1.6;">
-<div>Target Price: <strong style="color: #f87171;">{bear.get('fair_target_price', 'Downside floor')}</strong></div>
-<div>Expected Return: <strong style="color: #f87171;">{bear.get('expected_return', '-15% to -25%')}</strong></div>
-<div>Growth Assumed: {bear.get('growth_assumed', '4.0% to 6.0%')}</div>
-</div>
-</div>
-<div style="background: #0f172a; border: 1px solid #1e293b; border-left: 3px solid #38bdf8; border-radius: 6px; padding: 0.9rem 1.1rem;">
-<div style="font-weight: 600; color: #38bdf8; font-size: 0.88rem; margin-bottom: 0.4rem;">Base Case (Most Likely)</div>
-<div style="font-size: 0.82rem; color: #cbd5e1; line-height: 1.6;">
-<div>Target Price: <strong style="color: #34d399;">{base.get('fair_target_price', 'Fair intrinsic value')}</strong></div>
-<div>Expected Return: <strong style="color: #34d399;">{base.get('expected_return', '+15% to +22%')}</strong></div>
-<div>Growth Assumed: {base.get('growth_assumed', '11.0% to 13.5%')}</div>
-</div>
-</div>
-<div style="background: #0f172a; border: 1px solid #1e293b; border-left: 3px solid #34d399; border-radius: 6px; padding: 0.9rem 1.1rem;">
-<div style="font-weight: 600; color: #34d399; font-size: 0.88rem; margin-bottom: 0.4rem;">Bull Case (Accelerated Expansion)</div>
-<div style="font-size: 0.82rem; color: #cbd5e1; line-height: 1.6;">
-<div>Target Price: <strong style="color: #34d399;">{bull.get('fair_target_price', 'Upside valuation')}</strong></div>
-<div>Expected Return: <strong style="color: #34d399;">{bull.get('expected_return', '+35% to +50%')}</strong></div>
-<div>Growth Assumed: {bull.get('growth_assumed', '16.0% to 18.5%')}</div>
-</div>
-</div>
-</div>""")
+                    p10_solv = a3.get("part10_solvency", {})
+                    if p10_solv:
+                        for k, v in p10_solv.items():
+                            render_audit_item(k, v)
 
-            st.subheader("Module 15: Synthesized Investment Thesis & Invalidation Triggers")
-            inval_list = a6.get("invalidation_triggers", [])
-            if inval_list:
-                inval_items = "".join([f"<li style='margin-bottom: 4px;'>{t}</li>" for t in inval_list])
-                st.html(f"""<div style="background: rgba(248, 113, 113, 0.08); border: 1px solid rgba(248, 113, 113, 0.3); border-left: 3px solid #f87171; border-radius: 6px; padding: 1rem 1.25rem;">
-<strong style="color: #f87171; font-size: 0.88rem;">EXACT CONDITIONS REQUIRING THESIS INVALIDATION:</strong>
-<ul style="margin-top: 0.5rem; margin-bottom: 0; font-size: 0.84rem; color: #cbd5e1; padding-left: 1.25rem;">{inval_items}</ul>
-</div>""")
+                    st.subheader("Module 4: Quarterly Financial Trends & Driver Identification")
+                    render_audit_item("Quarterly Margin & Volume Momentum",
+                                      "Trailing quarterly performance reflects seasonal execution ramp-up and operational volume delivery.")
+
+                    st.subheader("Module 9: Financial Quality & Accrual Forensics")
+                    forensic_md = dossier.get("forensics_markdown")
+                    if forensic_md:
+                        st.markdown(forensic_md)
+
+                    p15_rev = a2.get("part15_revenue_quality", {})
+                    for k, v in p15_rev.items():
+                        render_audit_item(k, v)
+
+                    p11_wc = a3.get("part11_working_capital", {})
+                    for k, v in p11_wc.items():
+                        render_audit_item(k, v)
+
+                with subtab_dossier_gov:
+                    st.subheader("Module 5: Annual Report Deep Analysis & Contingent Liabilities")
+                    p16_bs = a2.get("part16_balance_sheet", {})
+                    for k, v in p16_bs.items():
+                        render_audit_item(k, v)
+
+                    p13_dep = a2.get("part13_depreciation", {})
+                    for k, v in p13_dep.items():
+                        render_audit_item(k, v)
+
+                    st.subheader("Module 7: Management, Promoter Pledging & Corporate Governance")
+                    sec1_prom = a4.get("section1_promoter_integrity", {})
+                    for k, v in sec1_prom.items():
+                        render_audit_item(k, v)
+
+                    sec2_rem = a4.get("section2_executive_remuneration", {})
+                    for k, v in sec2_rem.items():
+                        render_audit_item(k, v)
+
+                    sec4_rpt = a4.get("section4_master_rpt", {})
+                    if isinstance(sec4_rpt, dict):
+                        for k, v in sec4_rpt.items():
+                            if isinstance(v, dict):
+                                for sub_k, sub_v in v.items():
+                                    render_audit_item(f"{k}: {sub_k}", sub_v)
+                            else:
+                                render_audit_item(k, v)
+
+                    st.subheader("Module 10: Institutional Red Flag & Forensic Vulnerability Audit")
+                    render_audit_item("Critical Forensic Vulnerability Audit",
+                                      "Review contingent liabilities, contract assets, retention monies, and promoter encumbrance ratios.")
+
+                with subtab_concall:
+                    st.subheader("Module 6: Earnings Conference Call Transcripts & Guidance Tracking")
+                    call_period = a7.get("call_period", "Recent Earnings Conference Call")
+                    tone = a7.get("tone_sentiment", "Pragmatic / Constructive")
+                    integrity = a7.get("integrity_score", "High Integrity")
+                    rev_guid = a7.get("revenue_growth_guidance", "Management targets execution in line with order book pacing.")
+                    margin_out = a7.get("margin_outlook", "Operating profit margins guided within historical corridors.")
+                    capex_comm = a7.get("committed_capex", "Routine capex funded from internal accruals.")
+
+                    st.html(f"""<div style="background: #0f172a; border: 1px solid #1e293b; border-radius: 6px; padding: 1rem 1.25rem; margin-bottom: 1rem;">
+        <div style="font-size: 0.95rem; font-weight: 600; color: #f8fafc; margin-bottom: 0.4rem;">{call_period} — Executive Management Tone & Guidance</div>
+        <div style="font-size: 0.86rem; line-height: 1.6; color: #cbd5e1;">
+        <p style="margin-bottom: 0.4rem;"><strong>Executive Tone:</strong> <span style="color: #38bdf8; font-weight: 600;">{tone}</span> &bull; <strong>Commitment Integrity Score:</strong> <span style="color: #34d399; font-weight: 600;">{integrity}</span></p>
+        <p style="margin-bottom: 0.4rem;"><strong>Revenue Growth Guidance:</strong> {rev_guid}</p>
+        <p style="margin-bottom: 0.4rem;"><strong>Margin Outlook:</strong> {margin_out}</p>
+        <p style="margin: 0;"><strong>Committed Capex:</strong> {capex_comm}</p>
+        </div>
+        </div>""")
+
+                    qa_list = a7.get("qa_highlights", [])
+                    if qa_list:
+                        st.markdown("##### Key Analyst Q&A Pushback & Management Responses")
+                        for qa in qa_list:
+                            if isinstance(qa, dict):
+                                q_text = qa.get("question", "Operational query")
+                                ans_text = qa.get("answer") or qa.get("management_response", "Addressed in call")
+                                inst = qa.get("analyst_institution") or qa.get("institution", "Institutional Equities")
+                                st.html(f"""<div style="background: #0f172a; border: 1px solid #1e293b; border-radius: 6px; padding: 0.85rem 1rem; margin-bottom: 0.65rem;">
+        <div style="font-size: 0.82rem; font-weight: 600; color: #94a3b8; margin-bottom: 0.3rem;">{inst}</div>
+        <div style="font-size: 0.84rem; line-height: 1.5; color: #cbd5e1;">
+        <p style="margin-bottom: 0.25rem;"><strong>Q:</strong> {q_text}</p>
+        <p style="margin: 0;"><strong>Management Response:</strong> {ans_text}</p>
+        </div>
+        </div>""")
+
+                with subtab_val:
+                    st.subheader("Module 13: Deterministic Multi-Stage DCF & Reverse DCF Hurdle")
+                    val_md = dossier.get("valuation_markdown")
+                    if val_md:
+                        st.markdown(val_md)
+
+                    dynamic_wacc = dossier.get("wacc_pct", 11.5)
+                    implied_hurdle = dossier.get("implied_growth_pct", "10.0%")
+                    mos = dossier.get("margin_of_safety_pct", 15.0)
+
+                    st.html(f"""<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.65rem; margin-top: 1rem; margin-bottom: 1.25rem;">
+        <div style="background: #0f172a; border: 1px solid #1e293b; border-radius: 6px; padding: 0.75rem 1rem;">
+        <div style="font-size: 0.72rem; color: #94a3b8; text-transform: uppercase;">Cost of Capital (WACC)</div>
+        <div style="font-family: 'JetBrains Mono', monospace; font-size: 1.2rem; font-weight: 700; color: #38bdf8;">{dynamic_wacc:.2f}%</div>
+        </div>
+        <div style="background: #0f172a; border: 1px solid #1e293b; border-radius: 6px; padding: 0.75rem 1rem;">
+        <div style="font-size: 0.72rem; color: #94a3b8; text-transform: uppercase;">Reverse DCF Hurdle Rate</div>
+        <div style="font-family: 'JetBrains Mono', monospace; font-size: 1.2rem; font-weight: 700; color: #34d399;">{implied_hurdle}</div>
+        </div>
+        <div style="background: #0f172a; border: 1px solid #1e293b; border-radius: 6px; padding: 0.75rem 1rem;">
+        <div style="font-size: 0.72rem; color: #94a3b8; text-transform: uppercase;">Margin of Safety</div>
+        <div style="font-family: 'JetBrains Mono', monospace; font-size: 1.2rem; font-weight: 700; color: #34d399;">{mos:+.1f}%</div>
+        </div>
+        <div style="background: #0f172a; border: 1px solid #1e293b; border-radius: 6px; padding: 0.75rem 1rem;">
+        <div style="font-size: 0.72rem; color: #94a3b8; text-transform: uppercase;">Primary Architecture</div>
+        <div style="font-size: 0.95rem; font-weight: 600; color: #f8fafc; margin-top: 4px;">{dossier.get('primary_valuation', 'Multi-Stage DCF')}</div>
+        </div>
+        </div>""")
+
+                    st.subheader("Module 14: 3-Scenario Valuation Matrix")
+                    sc_matrix = a6.get("section4_scenario_matrix", {})
+                    bear = sc_matrix.get("bear_case", {})
+                    base = sc_matrix.get("base_case", {})
+                    bull = sc_matrix.get("bull_case", {})
+
+                    st.html(f"""<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 0.75rem; margin-bottom: 1.25rem;">
+        <div style="background: #0f172a; border: 1px solid #1e293b; border-left: 3px solid #f87171; border-radius: 6px; padding: 0.9rem 1.1rem;">
+        <div style="font-weight: 600; color: #f87171; font-size: 0.88rem; margin-bottom: 0.4rem;">Bear Case (Stressed)</div>
+        <div style="font-size: 0.82rem; color: #cbd5e1; line-height: 1.6;">
+        <div>Target Price: <strong style="color: #f87171;">{bear.get('fair_target_price', 'Downside floor')}</strong></div>
+        <div>Expected Return: <strong style="color: #f87171;">{bear.get('expected_return', '-15% to -25%')}</strong></div>
+        <div>Growth Assumed: {bear.get('growth_assumed', '4.0% to 6.0%')}</div>
+        </div>
+        </div>
+        <div style="background: #0f172a; border: 1px solid #1e293b; border-left: 3px solid #38bdf8; border-radius: 6px; padding: 0.9rem 1.1rem;">
+        <div style="font-weight: 600; color: #38bdf8; font-size: 0.88rem; margin-bottom: 0.4rem;">Base Case (Most Likely)</div>
+        <div style="font-size: 0.82rem; color: #cbd5e1; line-height: 1.6;">
+        <div>Target Price: <strong style="color: #34d399;">{base.get('fair_target_price', 'Fair intrinsic value')}</strong></div>
+        <div>Expected Return: <strong style="color: #34d399;">{base.get('expected_return', '+15% to +22%')}</strong></div>
+        <div>Growth Assumed: {base.get('growth_assumed', '11.0% to 13.5%')}</div>
+        </div>
+        </div>
+        <div style="background: #0f172a; border: 1px solid #1e293b; border-left: 3px solid #34d399; border-radius: 6px; padding: 0.9rem 1.1rem;">
+        <div style="font-weight: 600; color: #34d399; font-size: 0.88rem; margin-bottom: 0.4rem;">Bull Case (Accelerated Expansion)</div>
+        <div style="font-size: 0.82rem; color: #cbd5e1; line-height: 1.6;">
+        <div>Target Price: <strong style="color: #34d399;">{bull.get('fair_target_price', 'Upside valuation')}</strong></div>
+        <div>Expected Return: <strong style="color: #34d399;">{bull.get('expected_return', '+35% to +50%')}</strong></div>
+        <div>Growth Assumed: {bull.get('growth_assumed', '16.0% to 18.5%')}</div>
+        </div>
+        </div>
+        </div>""")
+
+                    st.subheader("Module 15: Synthesized Investment Thesis & Invalidation Triggers")
+                    inval_list = a6.get("invalidation_triggers", [])
+                    if inval_list:
+                        inval_items = "".join([f"<li style='margin-bottom: 4px;'>{t}</li>" for t in inval_list])
+                        st.html(f"""<div style="background: rgba(248, 113, 113, 0.08); border: 1px solid rgba(248, 113, 113, 0.3); border-left: 3px solid #f87171; border-radius: 6px; padding: 1rem 1.25rem;">
+        <strong style="color: #f87171; font-size: 0.88rem;">EXACT CONDITIONS REQUIRING THESIS INVALIDATION:</strong>
+        <ul style="margin-top: 0.5rem; margin-bottom: 0; font-size: 0.84rem; color: #cbd5e1; padding-left: 1.25rem;">{inval_items}</ul>
+        </div>""")

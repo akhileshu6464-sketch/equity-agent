@@ -683,7 +683,7 @@ Output MUST be valid JSON with this exact schema:
                     "company": "Operating in sector corridor",
                     "peer1": "Benchmark Peer A",
                     "peer2": "Benchmark Peer B",
-                    "commentary": f"Margin defense for {comp_name} anchored by product mix and operational scale."
+                    "commentary": f"Margin defense for {name} anchored by product mix and operational scale."
                 },
                 {
                     "metric": "Return on Capital Employed (ROCE %)",

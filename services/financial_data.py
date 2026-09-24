@@ -34,6 +34,7 @@ from core.research_context import (
     DataContaminationError,
     EntityRole
 )
+from services.screener_fetcher import _fetch_screener_soup, clean_user_input
 
 logger = logging.getLogger(__name__)
 
@@ -465,23 +466,22 @@ class FinancialDataService:
         data = None
 
         # ---------------------------------------------------------
-        # Provider 1: Yahoo Finance (with configured browser session)
+        # Provider 1: Screener.in Direct Financial Extractor (Primary Regulatory Data)
         # ---------------------------------------------------------
-        if yf is not None:
-            try:
-                data = self._fetch_from_yfinance(symbol)
-            except Exception as e:
-                logger.warning(f"yfinance failed for {symbol}: {e}. Activating Screener fallback.")
+        try:
+            data = self._fetch_from_screener(symbol)
+        except Exception as e:
+            logger.warning(f"Screener data retrieval failed for {symbol}: {e}. Activating yfinance fallback.")
 
         # ---------------------------------------------------------
-        # Provider 2: Screener.in Live Scraping (Alternative Provider)
+        # Provider 2: Yahoo Finance (Secondary Fallback Provider)
         # ---------------------------------------------------------
         if not data or data.get("current_price", 0.0) <= 0.0:
-            logger.info(f"Attempting live fundamental data retrieval from Screener for {symbol}...")
-            try:
-                data = self._fetch_from_screener(symbol)
-            except Exception as e:
-                logger.warning(f"Screener data retrieval failed for {symbol}: {e}")
+            if yf is not None:
+                try:
+                    data = self._fetch_from_yfinance(symbol)
+                except Exception as e:
+                    logger.warning(f"yfinance failed for {symbol}: {e}")
 
         # ---------------------------------------------------------
         # Error Raising: No Silent Mock Fallbacks Disguising Errors
@@ -675,63 +675,15 @@ class FinancialDataService:
 
     def _fetch_from_screener(self, symbol: str) -> Optional[Dict[str, Any]]:
         """
-        Alternative resilient data provider fetching live metrics and statements from Screener.in.
+        Primary resilient data provider fetching live metrics and statements from Screener.in.
         """
-        clean_sym = symbol.upper().replace(".NS", "").replace(".BO", "")
+        clean_sym = clean_user_input(symbol)
         _load_master_dictionaries()
         comp_name_master = _COMPANY_NAME_MAP.get(clean_sym, "") if _COMPANY_NAME_MAP else ""
 
-        urls_to_try = [
-            f"https://www.screener.in/company/{clean_sym}/consolidated/",
-            f"https://www.screener.in/company/{clean_sym}/"
-        ]
-
-        soup = None
-        for u in urls_to_try:
-            try:
-                r = self._session.get(u, timeout=12)
-                if r.status_code == 200 and "Company not found" not in r.text:
-                    temp_soup = BeautifulSoup(r.text, "html.parser")
-                    top_ul = temp_soup.find("ul", id="top-ratios")
-                    if top_ul:
-                        nums = [s.text.strip() for s in top_ul.find_all("span", class_="number") if s.text.strip()]
-                        if nums:
-                            soup = temp_soup
-                            break
-            except Exception:
-                pass
-
-        if soup is None:
-            # Try Screener Search API with symbol or company name
-            queries = [clean_sym]
-            if comp_name_master:
-                # Use clean first two words of company name
-                words = re.sub(r"[^A-Za-z0-9\s]", "", comp_name_master).split()
-                if len(words) >= 2:
-                    queries.append(f"{words[0]} {words[1]}")
-
-            for q in queries:
-                try:
-                    sr = self._session.get(f"https://www.screener.in/api/company/search/?q={q}", timeout=10)
-                    if sr.status_code == 200:
-                        results = sr.json()
-                        if results and isinstance(results, list):
-                            for res_item in results[:3]:
-                                target_url = res_item.get("url")
-                                if target_url:
-                                    r = self._session.get(f"https://www.screener.in{target_url}", timeout=12)
-                                    if r.status_code == 200:
-                                        temp_soup = BeautifulSoup(r.text, "html.parser")
-                                        top_ul = temp_soup.find("ul", id="top-ratios")
-                                        if top_ul:
-                                            nums = [s.text.strip() for s in top_ul.find_all("span", class_="number") if s.text.strip()]
-                                            if nums:
-                                                soup = temp_soup
-                                                break
-                            if soup is not None:
-                                break
-                except Exception:
-                    pass
+        soup, final_url = _fetch_screener_soup(clean_sym)
+        if soup is None and comp_name_master:
+            soup, final_url = _fetch_screener_soup(comp_name_master)
 
         if soup is None:
             return None
