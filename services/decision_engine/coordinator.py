@@ -21,7 +21,8 @@ Master orchestrator uniting all 15 decision-support intelligence modules:
 
 from typing import Dict, Any, List, Optional
 import logging
-from core.research_context import ResearchRunContext
+from core.research_context import ResearchRunContext, StructuredAgentContext, DataContaminationError
+from calculations.audit import global_audit_registry
 from .fundamental_store import FundamentalDataStore
 from .change_detector import ChangeDetectionEngine
 from .driver_analyzer import DriverAnalysisEngine
@@ -317,6 +318,31 @@ class DecisionEngineCoordinator:
             "story_sections": story_payload
         }
 
+        # Construct and validate Structured AI Agent Context (Section 11)
+        conflicts = [c.to_dict() for c in store.get_conflicts()]
+        calculations = global_audit_registry.to_json_list(cid)
+        agent_context = StructuredAgentContext(
+            company_id=cid,
+            company_name=cname,
+            isin=isin,
+            period="LATEST_ACTIVE",
+            scope=getattr(run_context, "statement_scope", "CONSOLIDATED"),
+            verified_financial_data=store.to_summary_dict(),
+            deterministic_calculations=calculations,
+            verified_documents=(concall.get("drishti_concalls", []) if isinstance(concall, dict) else []),
+            news=((drishti_intel or {}).get("news", []) if isinstance(drishti_intel, dict) else []),
+            announcements=((drishti_intel or {}).get("announcements", []) if isinstance(drishti_intel, dict) else []),
+            known_conflicts=conflicts,
+            source_metadata={
+                "sector": sector,
+                "industry": industry,
+                "exchange": getattr(run_context, "exchange", "NSE"),
+                "datapoints_verified": datapoints_count
+            }
+        )
+        # Pre-execution anti-contamination validation: asserts all objects belong to company_id
+        agent_context.validate_integrity()
+
         logger.info(f"Investment Intelligence Audit complete for {cname}. Total JEV verified claims: {len(verified_claims_log)}")
 
         return {
@@ -342,7 +368,9 @@ class DecisionEngineCoordinator:
             "event_timeline": events,
             "investor_investigation_questions": investor_questions,
             "jev_verification_log": verified_claims_log,
-            "drishti_intelligence": drishti_intel
+            "drishti_intelligence": drishti_intel,
+            "structured_agent_context": agent_context.to_dict(),
+            "known_conflicts": conflicts
         }
 
     def _execute_jev_verification_gate(
@@ -354,21 +382,21 @@ class DecisionEngineCoordinator:
         store: FundamentalDataStore
     ) -> List[Dict[str, Any]]:
         """
-        Constructs internal claim objects and submits them to JEV verification.
+        Constructs internal claim objects and submits them to JEV verification checklist (Section 14).
         Filters out any claim that fails JEV validation from presenting as fact.
         """
-        verification_log: List[Dict[str, Any]] = []
+        all_claims: List[AnalyticalClaim] = []
 
         # Reference numbers from store to check numerical truth
         annual_periods = store.to_summary_dict().get("annual_periods", [])
         ref_numbers: List[float] = []
         for dp in store._datapoints:
-            if dp.period_type == "ANNUAL":
+            if dp.period_type == "ANNUAL" and dp.value is not None:
                 ref_numbers.append(dp.value)
 
-        # 1. Verify Top Positive Signals
+        # 1. Collect Top Positive Signals
         for s in signals_data.get("positive_signals", [])[:3]:
-            claim_obj = AnalyticalClaim(
+            all_claims.append(AnalyticalClaim(
                 company_id=run_context.company_id,
                 company_name=run_context.company_name,
                 claim=f"{s.get('metric')}: {s.get('reason')}",
@@ -377,13 +405,11 @@ class DecisionEngineCoordinator:
                 source=["Audited Financial Statements"],
                 claim_type="HISTORICAL_FACT" if "CFO" in s.get("metric", "") or "Revenue" in s.get("metric", "") else "RESEARCH_BEAST_INFERENCE",
                 cited_numbers=[]
-            )
-            v_res = self.jev_verifier.verify_claim(claim_obj, run_context.company_id, ref_numbers)
-            verification_log.append(v_res.to_dict())
+            ))
 
-        # 2. Verify Top Negative Signals
+        # 2. Collect Top Negative Signals
         for s in signals_data.get("negative_signals", [])[:3]:
-            claim_obj = AnalyticalClaim(
+            all_claims.append(AnalyticalClaim(
                 company_id=run_context.company_id,
                 company_name=run_context.company_name,
                 claim=f"{s.get('metric')}: {s.get('reason')}",
@@ -392,13 +418,11 @@ class DecisionEngineCoordinator:
                 source=["Audited Financial Statements"],
                 claim_type="FORENSIC_SIGNAL" if "Divergence" in s.get("status_label", "") else "RESEARCH_BEAST_INFERENCE",
                 cited_numbers=[]
-            )
-            v_res = self.jev_verifier.verify_claim(claim_obj, run_context.company_id, ref_numbers)
-            verification_log.append(v_res.to_dict())
+            ))
 
-        # 3. Verify Driver Claims
+        # 3. Collect Driver Claims
         for d in driver_results[:3]:
-            claim_obj = AnalyticalClaim(
+            all_claims.append(AnalyticalClaim(
                 company_id=run_context.company_id,
                 company_name=run_context.company_name,
                 claim=d.get("explanation", ""),
@@ -407,8 +431,15 @@ class DecisionEngineCoordinator:
                 source=[d.get("evidence_source", "")],
                 claim_type="MANAGEMENT_COMMENTARY" if "Management" in d.get("evidence_source", "") else "RESEARCH_BEAST_INFERENCE",
                 cited_numbers=[]
-            )
-            v_res = self.jev_verifier.verify_claim(claim_obj, run_context.company_id, ref_numbers)
-            verification_log.append(v_res.to_dict())
+            ))
 
-        return verification_log
+        # Run Section 14 JEV Validation Checklist
+        verified_sources = ["audited financial statements", "bse lodr", "nse", "drishti", "screener"]
+        audit_res = self.jev_verifier.audit_ai_output_package(
+            claims=all_claims,
+            active_company_id=run_context.company_id,
+            verified_numbers=ref_numbers,
+            verified_sources=verified_sources
+        )
+
+        return audit_res.get("verification_results", [])

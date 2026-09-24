@@ -58,6 +58,16 @@ def render_qa_intelligence_section(
     key_ratios = (direct_scr or {}).get("ratios", {}) or (screener_data or {}).get("ratios", {})
     announcements = (direct_scr or {}).get("announcements", [])
 
+    conflicts = (intel or {}).get("known_conflicts", [])
+    if conflicts:
+        with st.expander("⚖️ Multi-Source Data Reconciliation Notice", expanded=False):
+            st.info(
+                f"Research Beast detected {len(conflicts)} numerical divergence(s) between reporting sources. "
+                "To protect investment accuracy, conflicting numbers are flagged and excluded from automated calculation."
+            )
+            for c in conflicts:
+                st.markdown(f"- **{c.get('metric')} ({c.get('period')})**: {c.get('conflict_reason')}")
+
     tab_names = [
         "1. What Changed?",
         "2. Why Did It Change?",

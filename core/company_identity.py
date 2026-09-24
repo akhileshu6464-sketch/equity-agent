@@ -93,6 +93,34 @@ KNOWN_BSE_MAP: Dict[str, str] = {
     "HINDUNILVR": "500696",
 }
 
+KNOWN_CIN_MAP: Dict[str, str] = {
+    "TATAMOTORS": "L28920MH1945PLC004520",
+    "ASHOKA": "L45200MH1993PLC071970",
+    "VINATIORGA": "L24116MH1989PLC052005",
+    "REDINGTON": "L52599TN1961PLC028758",
+    "RELIANCE": "L17110MH1973PLC019786",
+    "HDFCBANK": "L65920MH1994PLC080618",
+    "INFY": "L85110KA1981PLC013115",
+    "TCS": "L22210MH1995PLC084781",
+    "LT": "L99999MH1946PLC004768",
+    "CROMPTON": "L31900MH2015PLC262254",
+    "ICICIBANK": "L65190GJ1994PLC021012",
+    "SBIN": "STATE_BANK_OF_INDIA_ACT",
+    "BHARTIARTL": "L74899HR1995PLC095967",
+    "ITC": "L16005WB1910PLC001985",
+    "KOTAKBANK": "L65110MH1985PLC038137",
+    "WIPRO": "L32102KA1945PLC020800",
+    "HCLTECH": "L74140DL1991PLC046369",
+    "ASIANPAINT": "L24220MH1942PLC003554",
+    "MARUTI": "L34103DL1981PLC011375",
+    "BAJFINANCE": "L65910MH1987PLC042961",
+    "BAJAJFINSV": "L65923PN2007PLC130075",
+    "AXISBANK": "L65110GJ1993PLC020769",
+    "SUNPHARMA": "L24230GJ1993PLC019050",
+    "TITAN": "L74999TZ1984PLC001456",
+    "HINDUNILVR": "L15140MH1933PLC002030",
+}
+
 # Strict canonical alias dictionary ensuring different entry paths map to the ONE true identity
 CANONICAL_ALIASES: Dict[str, str] = {
     # Tata Motors aliases -> canonical TATAMOTORS (Tata Motors Limited)
@@ -241,6 +269,7 @@ class CompanyIdentity:
     primary_symbol: str = ""    # e.g. "ASHOKA"
     nse_symbol: str = ""        # e.g. "ASHOKA"
     bse_code: str = ""          # e.g. "533271"
+    cin: str = ""               # e.g. "L45200MH1993PLC071970"
     yahoo_symbol: str = ""      # e.g. "ASHOKA.NS"
     sector: str = ""            # e.g. "Industrials"
     industry: str = ""          # e.g. "Engineering & Construction"
@@ -566,6 +595,7 @@ def _build_canonical_identity_from_record(rec: Dict[str, Any]) -> CompanyIdentit
     ticker = rec.get("ticker", "").strip().upper() or f"{sym}.NS"
     isin = rec.get("isin", "").strip().upper() or KNOWN_ISIN_MAP.get(sym, "")
     bse = rec.get("bse_code", "").strip() or KNOWN_BSE_MAP.get(sym, "")
+    cin = rec.get("cin", "").strip() or KNOWN_CIN_MAP.get(sym, "")
     exch = rec.get("exchange", "NSE").strip().upper()
     sec, ind = KNOWN_SECTOR_MAP.get(sym, ("General Corporate", "Diverse Operations"))
 
@@ -583,11 +613,92 @@ def _build_canonical_identity_from_record(rec: Dict[str, Any]) -> CompanyIdentit
         primary_symbol=sym,
         nse_symbol=sym if not ticker.endswith(".BO") else "",
         bse_code=bse if (bse or ticker.endswith(".BO")) else "",
+        cin=cin,
         yahoo_symbol=ticker,
         sector=sec,
         industry=ind,
         entity_role="PRIMARY_COMPANY"
     )
+
+
+def verify_data_object_identity(
+    data_obj: Any,
+    target_identity: CompanyIdentity,
+    strict_metadata: bool = False
+) -> Tuple[bool, str]:
+    """
+    Company Identity Firewall Gate (Section 2 & 3).
+    Verifies that an incoming data object belongs strictly to target_identity.
+    Verification hierarchy:
+    source company -> canonical company -> ISIN -> exchange identifier (NSE/BSE).
+
+    Rules:
+    1. Company name alone must NEVER be used as the primary identifier.
+    2. Zero guessing: if identity cannot be established or mismatches, REJECT DATA.
+    3. If strict_metadata=True, asserts presence of: company_id, isin, source, period, scope.
+    """
+    if data_obj is None:
+        return False, "Null data object rejected by identity firewall."
+
+    # Extract attributes whether dictionary or object
+    def _get(attr_name, default=""):
+        if isinstance(data_obj, dict):
+            return str(data_obj.get(attr_name) or default).strip()
+        return str(getattr(data_obj, attr_name, default) or default).strip()
+
+    obj_cid = _get("company_id")
+    obj_isin = _get("isin").upper()
+    obj_nse = _get("nse_symbol").upper() or _get("symbol").upper()
+    obj_bse = _get("bse_code") or _get("scrip_code")
+    obj_name = _get("company_name") or _get("name")
+    obj_source = _get("source")
+    obj_period = _get("period")
+    obj_scope = _get("scope") or _get("statement_scope")
+
+    # Strict metadata check
+    if strict_metadata:
+        missing = []
+        if not obj_cid: missing.append("company_id")
+        if not obj_isin: missing.append("isin")
+        if not obj_source: missing.append("source")
+        if not obj_period: missing.append("period")
+        if not obj_scope: missing.append("scope")
+        if missing:
+            return False, f"Missing required identity metadata fields: {', '.join(missing)}"
+
+    # 1. Check ISIN if present
+    if obj_isin and target_identity.isin:
+        if obj_isin == target_identity.isin.upper():
+            return True, "Verified via ISIN match."
+        else:
+            return False, f"ISIN mismatch: object ISIN '{obj_isin}' != target ISIN '{target_identity.isin}'"
+
+    # 2. Check canonical company_id
+    if obj_cid:
+        from core.research_context import _normalize_cid
+        if _normalize_cid(obj_cid) == _normalize_cid(target_identity.company_id):
+            return True, "Verified via canonical company_id match."
+        else:
+            return False, f"Company ID mismatch: object '{obj_cid}' != target '{target_identity.company_id}'"
+
+    # 3. Check NSE symbol
+    if obj_nse:
+        # Strip exchange suffixes if present
+        clean_nse = obj_nse.replace(".NS", "").replace(".BO", "")
+        clean_target_nse = target_identity.nse_symbol.replace(".NS", "").replace(".BO", "")
+        if clean_nse and clean_target_nse and clean_nse == clean_target_nse:
+            return True, "Verified via NSE symbol match."
+
+    # 4. Check BSE scrip code
+    if obj_bse and target_identity.bse_code:
+        if str(obj_bse).strip() == str(target_identity.bse_code).strip():
+            return True, "Verified via BSE scrip code match."
+
+    # 5. Strictly forbid company name alone as primary identifier!
+    if obj_name and not (obj_cid or obj_isin or obj_nse or obj_bse):
+        return False, "REJECTED: Company name alone must NEVER be used as the primary identifier. No verified regulatory code provided."
+
+    return False, f"REJECTED: Unable to verify regulatory identity against target {target_identity.company_id} ({target_identity.isin}). Never guess."
 
 
 # Backward-compatible alias

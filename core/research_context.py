@@ -213,3 +213,40 @@ def create_research_context(user_input_or_identity: Any) -> ResearchRunContext:
         statement_scope="CONSOLIDATED",
         active_period=None
     )
+
+
+@dataclass
+class StructuredAgentContext:
+    """
+    Standard Structured Input Context for AI Agents (Section 11).
+    Before execution: asserts all objects belong to company_id; if mismatch, raises DataContaminationError.
+    """
+    company_id: str
+    company_name: str
+    isin: str
+    period: str
+    scope: str
+    verified_financial_data: Dict[str, Any]
+    deterministic_calculations: List[Dict[str, Any]]
+    verified_documents: List[Dict[str, Any]]
+    news: List[Dict[str, Any]]
+    announcements: List[Dict[str, Any]]
+    known_conflicts: List[Dict[str, Any]]
+    source_metadata: Dict[str, Any]
+
+    def validate_integrity(self) -> None:
+        """Asserts that all contained objects match company_id. Raises DataContaminationError if breached."""
+        for collection_name, collection in [
+            ("verified_documents", self.verified_documents),
+            ("news", self.news),
+            ("announcements", self.announcements),
+            ("known_conflicts", self.known_conflicts)
+        ]:
+            if isinstance(collection, (list, tuple)):
+                for item in collection:
+                    assert_company_boundary(item, self.company_id, caller_module=f"StructuredAgentContext.{collection_name}")
+            elif isinstance(collection, dict):
+                assert_company_boundary(collection, self.company_id, caller_module=f"StructuredAgentContext.{collection_name}")
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)

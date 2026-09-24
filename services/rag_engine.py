@@ -57,6 +57,10 @@ class CompanyRAGEngine:
                     company_id TEXT NOT NULL,
                     ticker TEXT NOT NULL,
                     document_type TEXT NOT NULL,
+                    doc_date TEXT,
+                    period TEXT,
+                    source TEXT,
+                    page_number INTEGER,
                     chunk_index INTEGER NOT NULL,
                     chunk_text TEXT NOT NULL,
                     created_at REAL NOT NULL
@@ -64,6 +68,19 @@ class CompanyRAGEngine:
             """)
             conn.execute("CREATE INDEX IF NOT EXISTS idx_docs_company ON documents(company_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_chunks_company ON document_chunks(company_id)")
+
+            # Automatic schema migration for existing SQLite databases
+            for col, col_type in [
+                ("doc_date", "TEXT"),
+                ("period", "TEXT"),
+                ("source", "TEXT"),
+                ("page_number", "INTEGER")
+            ]:
+                try:
+                    conn.execute(f"ALTER TABLE document_chunks ADD COLUMN {col} {col_type}")
+                except sqlite3.OperationalError:
+                    pass  # Column already exists
+
             conn.commit()
         finally:
             conn.close()
@@ -145,17 +162,23 @@ class CompanyRAGEngine:
 
             for idx, chk_text in enumerate(raw_chunks):
                 chunk_id = f"{document_id}_chk_{idx}"
+                doc_date = kwargs.get("date") or kwargs.get("publication_date") or ""
                 conn.execute("""
                     INSERT OR REPLACE INTO document_chunks (
                         chunk_id, document_id, company_id, ticker, document_type,
+                        doc_date, period, source, page_number,
                         chunk_index, chunk_text, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     chunk_id,
                     document_id,
                     run_context.company_id,
                     run_context.ticker,
                     document_type,
+                    doc_date,
+                    period,
+                    source,
+                    page_number,
                     idx,
                     chk_text,
                     now_ts
@@ -179,9 +202,11 @@ class CompanyRAGEngine:
         **kwargs
     ) -> List[Dict[str, Any]]:
         """
-        RAG retrieval with STRICT company_id filtering.
+        RAG retrieval with STRICT company_id filtering (Section 9).
         Never retrieves chunks belonging to other companies.
         Enforces a HARD FAILURE assertion if any foreign company data is returned.
+        Every returned chunk contains:
+        company_id, document_id, document_type, date, period, source, page_or_chunk, chunk_text.
         """
         if top_k is not None:
             limit = top_k
@@ -190,7 +215,17 @@ class CompanyRAGEngine:
 
         conn = sqlite3.connect(self._db_path)
         try:
-            sql = "SELECT chunk_id, document_id, company_id, ticker, document_type, chunk_index, chunk_text FROM document_chunks WHERE company_id = ?"
+            # Handle backward compatibility if table was created with older schema
+            sql = """
+                SELECT chunk_id, document_id, company_id, ticker, document_type,
+                       chunk_index, chunk_text,
+                       COALESCE(doc_date, '') as doc_date,
+                       COALESCE(period, '') as period,
+                       COALESCE(source, '') as source,
+                       COALESCE(page_number, 1) as page_number
+                FROM document_chunks
+                WHERE company_id = ?
+            """
             params = [run_context.company_id]
 
             if document_types:
@@ -199,8 +234,17 @@ class CompanyRAGEngine:
                 params.extend(document_types)
 
             cursor = conn.cursor()
-            cursor.execute(sql, params)
-            rows = cursor.fetchall()
+            try:
+                cursor.execute(sql, params)
+                rows = cursor.fetchall()
+            except sqlite3.OperationalError:
+                # Fallback if old SQLite schema without extra columns
+                fallback_sql = "SELECT chunk_id, document_id, company_id, ticker, document_type, chunk_index, chunk_text FROM document_chunks WHERE company_id = ?"
+                if document_types:
+                    fallback_sql += f" AND document_type IN ({placeholders})"
+                cursor.execute(fallback_sql, params)
+                raw_rows = cursor.fetchall()
+                rows = [(r[0], r[1], r[2], r[3], r[4], r[5], r[6], "", "", "", 1) for r in raw_rows]
         finally:
             conn.close()
 
@@ -214,10 +258,15 @@ class CompanyRAGEngine:
                 "document_type": r[4],
                 "chunk_index": r[5],
                 "chunk_text": r[6],
-                "content": r[6]
+                "content": r[6],
+                "date": r[7],
+                "period": r[8],
+                "source": r[9],
+                "page_number": r[10],
+                "page_or_chunk": f"Page {r[10]} (Chunk {r[5]})" if r[10] else f"Chunk {r[5]}"
             }
 
-            # HARD FAILURE CHECK
+            # HARD FAILURE CHECK (Section 9: zero cross-company leakage)
             if chunk_obj["company_id"] != run_context.company_id:
                 raise DataContaminationError(
                     f"CRITICAL HARD FAILURE: RAG retrieval for company_id='{run_context.company_id}' "

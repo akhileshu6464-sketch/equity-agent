@@ -1,15 +1,22 @@
 """
 Fundamental Data Store & Normalizer (services/decision_engine/fundamental_store.py)
-Collects, normalizes, and indexes multi-year annual and quarterly financial data.
-Enforces that every financial value contains:
-- company_id, ticker, exchange, isin
-- metric, period, period_type (annual/quarterly)
-- value, unit, source, source_date, document, page/section
+Collects, normalizes, reconciles, and indexes multi-year annual and quarterly financial data.
 
-The LLM is NEVER the source of financial numbers. All numbers are deterministically extracted.
+Strict Architecture Principles (Sections 4, 5, 6, 7):
+1. THE DATABASE KNOWS THE FACTS. AI is never the database or source of financial truth.
+2. Canonical schema:
+   {company_id, isin, metric, value, unit, currency, period_start, period_end,
+    period_type, fiscal_year, quarter, scope, source, source_document, source_date,
+    extraction_method, verification_status}
+3. No anonymous numbers: Every single value retains full provenance.
+4. Source reconciliation: When multiple sources provide the same number, compare them.
+   - Match within tolerance -> VERIFIED
+   - Divergence -> CONFLICT (investigate revision, period, scope, units; if unresolved: DO NOT use for analysis).
+5. Revision control: original value, revised value, filing date, revision date, revision status.
+   Latest valid becomes ACTIVE; older versions remain for audit.
 """
 
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, field, asdict
 from typing import Dict, Any, List, Optional, Tuple
 import os
 import sqlite3
@@ -22,6 +29,7 @@ from calculations.profitability import roe as calc_roe, roce as calc_roce
 from calculations.leverage import net_debt as calc_net_debt
 from calculations.audit import global_audit_registry
 from calculations.normalization import format_percentage, format_inr_crores
+from calculations.metric_mapper import MetricMapper
 from core.research_context import assert_company_boundary, DataContaminationError, EntityRole
 
 logger = logging.getLogger("ResearchBeast.FundamentalStore")
@@ -32,33 +40,66 @@ DEFAULT_DB_PATH = os.path.join(DEFAULT_CACHE_DIR, "financial_cache.db")
 
 @dataclass(frozen=True)
 class FundamentalDatapoint:
-    """Immutable, fully-auditable financial datapoint."""
+    """
+    Immutable, fully-auditable verified financial datapoint (Sections 4, 5, 6, 7).
+    No anonymous financial numbers.
+    """
     company_id: str
-    ticker: str
-    exchange: str
     isin: str
     metric: str
-    period: str            # e.g. "FY24", "FY23", "Q4 FY24", "Dec 2024"
-    period_type: str       # "ANNUAL" or "QUARTERLY"
     value: Optional[float]
-    unit: str = "INR_CR"   # "INR_CR", "PERCENT", "RATIO", "COUNT", "INR"
-    statement_scope: str = "CONSOLIDATED"  # "CONSOLIDATED" or "STANDALONE"
-    value_type: str = "REPORTED"           # "REPORTED" or "CALCULATED"
-    source_tier: str = "TIER_1_REGULATORY" # "TIER_1_REGULATORY", "TIER_2_AGGREGATOR", "TIER_3_WEB"
+    unit: str = "INR_CR"                       # "INR_CR", "PERCENT", "RATIO", "COUNT", "INR", "DAYS"
+    currency: str = "INR"
+    period_start: str = ""                    # e.g. "2023-04-01"
+    period_end: str = ""                      # e.g. "2024-03-31"
+    period_type: str = "ANNUAL"               # "ANNUAL" or "QUARTERLY"
+    fiscal_year: str = ""                     # e.g. "FY2024"
+    quarter: Optional[str] = None             # e.g. "Q1", "Q2", "Q3", "Q4"
+    scope: str = "CONSOLIDATED"               # "CONSOLIDATED" or "STANDALONE"
     source: str = "Statutory Financial Disclosures"
+    source_document: str = ""
     source_date: str = ""
-    document: str = ""
+    extraction_method: str = "DETERMINISTIC_REGULATORY_PARSER"
+    verification_status: str = "VERIFIED"     # "VERIFIED", "CONFLICT", "VALIDATED", "DATA_UNAVAILABLE"
+
+    # Explicit normalization tracking (Section 4)
+    original_source_field: str = ""
+
+    # Provenance and classification
+    ticker: str = ""
+    exchange: str = "NSE"
+    statement_scope: str = "CONSOLIDATED"     # Backward-compatible alias for scope
+    document: str = ""                        # Backward-compatible alias for source_document
+    period: str = ""                          # e.g. "FY24", "Dec 2024"
+    value_type: str = "REPORTED"              # "REPORTED" or "CALCULATED"
+    source_tier: str = "TIER_1_REGULATORY"
     page_or_section: str = ""
     entity_role: str = "PRIMARY_COMPANY"
 
+    # Revision Control (Section 7)
+    original_value: Optional[float] = None
+    revised_value: Optional[float] = None
+    filing_date: str = ""
+    revision_date: str = ""
+    revision_status: str = "ACTIVE"           # "ACTIVE", "SUPERSEDED", "RESTATED"
+    is_active: bool = True
+
+    # Multi-source Reconciliation & Usability (Section 6)
+    is_usable_for_analysis: bool = True
+    conflict_reason: Optional[str] = None
+    reconciliation_sources: Tuple[str, ...] = field(default_factory=tuple)
+
     def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
+        d = asdict(self)
+        d["reconciliation_sources"] = list(self.reconciliation_sources)
+        return d
 
 
 class FundamentalDataStore:
     """
-    Structured repository of normalized, auditable financial metrics for a canonical company.
-    Provides multi-period indexing, chronological sorting, and metric-level historical queries.
+    Central Verified Financial Data Layer (Section 5).
+    Structured repository of normalized, reconciled, auditable financial metrics.
+    Enforces that AI agents never invent or estimate basic financial figures.
     """
 
     def __init__(self, company_id: str, ticker: str, exchange: str = "NSE", isin: str = ""):
@@ -68,6 +109,7 @@ class FundamentalDataStore:
         self.isin = isin
         self._datapoints: List[FundamentalDatapoint] = []
         self._index: Dict[Tuple[str, str, str], FundamentalDatapoint] = {}  # (metric, period_type, period) -> Datapoint
+        self._conflicts: List[FundamentalDatapoint] = []
 
     def add_datapoint(
         self,
@@ -83,7 +125,24 @@ class FundamentalDataStore:
         source_date: str = "",
         document: str = "",
         page_or_section: str = "",
-        entity_role: str = "PRIMARY_COMPANY"
+        entity_role: str = "PRIMARY_COMPANY",
+        currency: str = "INR",
+        period_start: str = "",
+        period_end: str = "",
+        fiscal_year: str = "",
+        quarter: Optional[str] = None,
+        extraction_method: str = "DETERMINISTIC_REGULATORY_PARSER",
+        verification_status: str = "VERIFIED",
+        original_source_field: str = "",
+        original_value: Optional[float] = None,
+        revised_value: Optional[float] = None,
+        filing_date: str = "",
+        revision_date: str = "",
+        revision_status: str = "ACTIVE",
+        is_active: bool = True,
+        is_usable_for_analysis: bool = True,
+        conflict_reason: Optional[str] = None,
+        reconciliation_sources: Optional[List[str]] = None
     ) -> FundamentalDatapoint:
         """Adds a single verified datapoint strictly bound to this company's canonical identity."""
         if entity_role != "PRIMARY_COMPANY":
@@ -100,38 +159,284 @@ class FundamentalDataStore:
             except (ValueError, TypeError):
                 clean_val = None
 
+        clean_period = str(period).strip()
+        clean_ptype = str(period_type).strip().upper()
+        clean_fy = fiscal_year or (clean_period if clean_ptype == "ANNUAL" else "")
+        clean_scope = statement_scope.strip().upper()
+
+        rec_sources = tuple(reconciliation_sources) if reconciliation_sources else (source,)
+
         dp = FundamentalDatapoint(
             company_id=self.company_id,
-            ticker=self.ticker,
-            exchange=self.exchange,
             isin=self.isin,
             metric=metric,
-            period=str(period).strip(),
-            period_type=str(period_type).strip().upper(),
             value=clean_val,
             unit=unit,
-            statement_scope=statement_scope,
+            currency=currency,
+            period_start=period_start,
+            period_end=period_end,
+            period_type=clean_ptype,
+            fiscal_year=clean_fy,
+            quarter=quarter,
+            scope=clean_scope,
+            source=source,
+            source_document=document,
+            source_date=source_date,
+            extraction_method=extraction_method,
+            verification_status=verification_status,
+            original_source_field=original_source_field or metric,
+            ticker=self.ticker,
+            exchange=self.exchange,
+            statement_scope=clean_scope,
+            document=document,
+            period=clean_period,
             value_type=value_type,
             source_tier=source_tier,
-            source=source,
-            source_date=source_date,
-            document=document,
             page_or_section=page_or_section,
-            entity_role=entity_role
+            entity_role=entity_role,
+            original_value=original_value if original_value is not None else clean_val,
+            revised_value=revised_value,
+            filing_date=filing_date,
+            revision_date=revision_date,
+            revision_status=revision_status,
+            is_active=is_active,
+            is_usable_for_analysis=is_usable_for_analysis,
+            conflict_reason=conflict_reason,
+            reconciliation_sources=rec_sources
         )
+
         self._datapoints.append(dp)
         self._index[(metric, dp.period_type, dp.period)] = dp
+
+        # Add index aliases for canonical accounting equivalents
+        alias_groups = [
+            {"Revenue", "Revenue from Operations", "Sales", "Net Sales"},
+            {"EBITDA", "Operating Profit"},
+            {"EBIT", "Operating Income"},
+            {"PAT", "Net Profit", "Net Income", "Profit After Tax"},
+            {"Total Debt", "Borrowings"},
+            {"Operating Cash Flow", "Cash from Operating Activity", "CFO"},
+            {"Receivables", "Debtor Days", "Trade Receivables"},
+            {"Capital Expenditures", "Capex"},
+            {"Interest Expense", "Interest"}
+        ]
+        for grp in alias_groups:
+            if metric in grp:
+                for alias in grp:
+                    self._index[(alias, dp.period_type, dp.period)] = dp
+                break
+
+        if not is_usable_for_analysis or verification_status == "CONFLICT":
+            self._conflicts.append(dp)
+
         return dp
+
+    def reconcile_and_add_datapoint(
+        self,
+        metric: str,
+        period: str,
+        period_type: str,
+        value: Optional[float],
+        new_source: str,
+        new_document: str = "",
+        unit: str = "INR_CR",
+        statement_scope: str = "CONSOLIDATED",
+        tolerance_pct: float = 1.0,
+        original_source_field: str = ""
+    ) -> FundamentalDatapoint:
+        """
+        Multi-source reconciliation gate (Section 6).
+        When multiple sources provide the same number:
+        - Compares new_source vs existing record.
+        - Match within tolerance -> Marks VERIFIED, appends source.
+        - Divergence -> Marks CONFLICT, flags for investigation, DO NOT use for analysis.
+        - Never lets AI choose between conflicting sources.
+        """
+        key = (metric, period_type.strip().upper(), str(period).strip())
+        existing = self._index.get(key)
+        if existing is None:
+            # Check canonical alias groups
+            alias_groups = [
+                {"Revenue", "Revenue from Operations", "Sales", "Net Sales"},
+                {"EBITDA", "Operating Profit"},
+                {"EBIT", "Operating Income"},
+                {"PAT", "Net Profit", "Net Income", "Profit After Tax"},
+                {"Total Debt", "Borrowings"},
+                {"Operating Cash Flow", "Cash from Operating Activity", "CFO"},
+                {"Receivables", "Debtor Days", "Trade Receivables"},
+                {"Capital Expenditures", "Capex"},
+                {"Interest Expense", "Interest"}
+            ]
+            for grp in alias_groups:
+                if metric in grp:
+                    for alias in grp:
+                        alt_key = (alias, period_type.strip().upper(), str(period).strip())
+                        if alt_key in self._index:
+                            existing = self._index[alt_key]
+                            break
+                    if existing:
+                        break
+
+        clean_val = None
+        if value is not None:
+            try:
+                f = float(value)
+                if not (math.isnan(f) or math.isinf(f)):
+                    clean_val = f
+            except (ValueError, TypeError):
+                clean_val = None
+
+        if existing is None:
+            # First observation of this metric
+            return self.add_datapoint(
+                metric=metric,
+                period=period,
+                period_type=period_type,
+                value=clean_val,
+                unit=unit,
+                statement_scope=statement_scope,
+                source=new_source,
+                document=new_document,
+                original_source_field=original_source_field,
+                verification_status="VALIDATED",
+                reconciliation_sources=[new_source]
+            )
+
+        # Existing record found -> Reconcile
+        if clean_val is not None and existing.value is not None:
+            base = max(abs(existing.value), 1.0)
+            diff_pct = (abs(clean_val - existing.value) / base) * 100.0
+
+            if diff_pct <= tolerance_pct:
+                # Reconciliation match -> Mark VERIFIED
+                updated_sources = list(existing.reconciliation_sources)
+                if new_source not in updated_sources:
+                    updated_sources.append(new_source)
+
+                # Update existing record in place
+                verified_dp = FundamentalDatapoint(
+                    company_id=existing.company_id,
+                    isin=existing.isin,
+                    metric=existing.metric,
+                    value=existing.value,
+                    unit=existing.unit,
+                    currency=existing.currency,
+                    period_start=existing.period_start,
+                    period_end=existing.period_end,
+                    period_type=existing.period_type,
+                    fiscal_year=existing.fiscal_year,
+                    quarter=existing.quarter,
+                    scope=existing.scope,
+                    source=f"{existing.source} + {new_source}",
+                    source_document=existing.source_document,
+                    source_date=existing.source_date,
+                    extraction_method=existing.extraction_method,
+                    verification_status="VERIFIED",
+                    original_source_field=existing.original_source_field,
+                    ticker=existing.ticker,
+                    exchange=existing.exchange,
+                    statement_scope=existing.statement_scope,
+                    document=existing.document,
+                    period=existing.period,
+                    value_type=existing.value_type,
+                    source_tier=existing.source_tier,
+                    page_or_section=existing.page_or_section,
+                    entity_role=existing.entity_role,
+                    original_value=existing.original_value,
+                    revised_value=existing.revised_value,
+                    filing_date=existing.filing_date,
+                    revision_date=existing.revision_date,
+                    revision_status=existing.revision_status,
+                    is_active=True,
+                    is_usable_for_analysis=True,
+                    conflict_reason=None,
+                    reconciliation_sources=tuple(updated_sources)
+                )
+                self._index[key] = verified_dp
+                # Replace in list
+                for i, dp in enumerate(self._datapoints):
+                    if (dp.metric, dp.period_type, dp.period) == key:
+                        self._datapoints[i] = verified_dp
+                        break
+                logger.info(f"Reconciliation verified for {metric} ({period}): {existing.source} vs {new_source}")
+                return verified_dp
+            else:
+                # Numerical divergence -> Flag CONFLICT (Section 6)
+                conflict_msg = (
+                    f"Divergence of {diff_pct:.2f}% detected for {metric} ({period}): "
+                    f"Existing '{existing.source}' reported {existing.value} vs '{new_source}' reported {clean_val}. "
+                    f"Flagged for investigation (scope/restatement/period alignment). Excluded from automated analysis."
+                )
+                conflict_dp = FundamentalDatapoint(
+                    company_id=existing.company_id,
+                    isin=existing.isin,
+                    metric=existing.metric,
+                    value=existing.value,
+                    unit=existing.unit,
+                    currency=existing.currency,
+                    period_start=existing.period_start,
+                    period_end=existing.period_end,
+                    period_type=existing.period_type,
+                    fiscal_year=existing.fiscal_year,
+                    quarter=existing.quarter,
+                    scope=existing.scope,
+                    source=existing.source,
+                    source_document=existing.source_document,
+                    source_date=existing.source_date,
+                    extraction_method=existing.extraction_method,
+                    verification_status="CONFLICT",
+                    original_source_field=existing.original_source_field,
+                    ticker=existing.ticker,
+                    exchange=existing.exchange,
+                    statement_scope=existing.statement_scope,
+                    document=existing.document,
+                    period=existing.period,
+                    value_type=existing.value_type,
+                    source_tier=existing.source_tier,
+                    page_or_section=existing.page_or_section,
+                    entity_role=existing.entity_role,
+                    original_value=existing.original_value,
+                    revised_value=clean_val,
+                    filing_date=existing.filing_date,
+                    revision_date=str(time.time()),
+                    revision_status="CONFLICT",
+                    is_active=False,
+                    is_usable_for_analysis=False,
+                    conflict_reason=conflict_msg,
+                    reconciliation_sources=(existing.source, new_source)
+                )
+                self._index[key] = conflict_dp
+                for i, dp in enumerate(self._datapoints):
+                    if (dp.metric, dp.period_type, dp.period) == key:
+                        self._datapoints[i] = conflict_dp
+                        break
+                self._conflicts.append(conflict_dp)
+                logger.warning(f"SOURCE RECONCILIATION CONFLICT: {conflict_msg}")
+                return conflict_dp
+
+        return existing
 
     def add_datapoint_object(self, dp: FundamentalDatapoint) -> None:
         """Adds an existing FundamentalDatapoint verifying strict company boundary."""
         assert_company_boundary(dp, self.company_id, allowed_roles=("PRIMARY_COMPANY",), caller_module="FundamentalDataStore.add_datapoint_object")
         self._datapoints.append(dp)
         self._index[(dp.metric, dp.period_type, dp.period)] = dp
+        if not dp.is_usable_for_analysis or dp.verification_status == "CONFLICT":
+            self._conflicts.append(dp)
 
     def get_datapoint(self, metric: str, period: str, period_type: str = "ANNUAL") -> Optional[FundamentalDatapoint]:
         """Retrieves a specific verified datapoint by metric, period, and period_type."""
         return self._index.get((metric, period_type.upper(), period))
+
+    def get_usable_datapoint(self, metric: str, period: str, period_type: str = "ANNUAL") -> Optional[FundamentalDatapoint]:
+        """
+        Retrieves a verified datapoint ONLY IF it has passed reconciliation and is usable for analysis.
+        Returns None if conflicting or unverified (Section 6: never let AI guess or use ungrounded numbers).
+        """
+        dp = self.get_datapoint(metric, period, period_type)
+        if dp is not None and dp.is_usable_for_analysis and dp.verification_status != "CONFLICT":
+            return dp
+        return None
 
     def get_series(self, metric: str, period_type: str = "ANNUAL") -> List[FundamentalDatapoint]:
         """Returns chronologically ordered datapoints for a given metric and period type."""
@@ -147,6 +452,10 @@ class FundamentalDataStore:
         """Returns the float value of the most recent verified datapoint, or None if unavailable."""
         dp = self.get_latest_datapoint(metric, period_type)
         return dp.value if dp is not None else None
+
+    def get_conflicts(self) -> List[FundamentalDatapoint]:
+        """Returns all datapoints currently flagged with CONFLICT status."""
+        return [dp for dp in self._datapoints if dp.verification_status == "CONFLICT" or not dp.is_usable_for_analysis]
 
     def populate_from_raw_sources(
         self,
@@ -176,7 +485,7 @@ class FundamentalDataStore:
             if not year_label:
                 continue
 
-            metric_mappings = [
+            raw_items = [
                 ("Revenue", y_data.get("revenue"), "INR_CR"),
                 ("EBITDA", y_data.get("ebitda"), "INR_CR"),
                 ("EBIT", y_data.get("operating_income"), "INR_CR"),
@@ -196,8 +505,7 @@ class FundamentalDataStore:
                 ("Interest Expense", abs(y_data.get("interest_expense")) if y_data.get("interest_expense") is not None else None, "INR_CR"),
             ]
 
-            # Ingest reported primary lines
-            for m_name, val, unit in metric_mappings:
+            for m_name, val, unit in raw_items:
                 if val is not None:
                     self.add_datapoint(
                         metric=m_name,
@@ -209,7 +517,9 @@ class FundamentalDataStore:
                         value_type="REPORTED",
                         source_tier="TIER_1_REGULATORY",
                         source="Audited Annual Financial Statements",
-                        document=f"Annual Financial Statements {year_label}"
+                        document=f"Annual Financial Statements {year_label}",
+                        original_source_field=m_name,
+                        verification_status="VERIFIED"
                     )
                     count += 1
 
@@ -221,7 +531,7 @@ class FundamentalDataStore:
             total_debt = y_data.get("total_debt", 0.0)
             cash = y_data.get("cash_and_equivalents", 0.0)
 
-            # Deterministic Code-Calculated Ratios (Section 2 & 7: Pure Python calculations)
+            # Deterministic Code-Calculated Ratios (Section 8)
             ebitda_m_res = calc_ebitda_margin(ebitda, rev)
             ebit_m_res = calc_ebit_margin(ebit, rev)
             pat_m_res = calc_pat_margin(pat, rev)
@@ -251,9 +561,10 @@ class FundamentalDataStore:
                         value_type="CALCULATED",
                         source_tier="TIER_1_REGULATORY",
                         source="Deterministic Code Calculation",
-                        document=f"Annual Financial Statements {year_label}"
+                        document=f"Annual Financial Statements {year_label}",
+                        original_source_field=m_name,
+                        verification_status="VERIFIED"
                     )
-                    # Record into audit trail (Section 60)
                     global_audit_registry.record_calculation(
                         company_id=self.company_id,
                         metric=m_name,
@@ -265,10 +576,9 @@ class FundamentalDataStore:
                     )
                     count += 1
 
-        # 2. Ingest Quarterly Results from Screener/Fast Info
+        # 2. Ingest Quarterly Results
         if screener_data:
             q_rows = screener_data.get("quarterly_rows", []) or []
-            # q_rows: list of dicts like {"Metric": "Sales", "Dec 2023": 1200, "Mar 2024": 1350, ...}
             periods = [k for k in (q_rows[0].keys() if q_rows else []) if k not in ["Metric", "metric"]]
 
             for row in q_rows:
@@ -289,14 +599,43 @@ class FundamentalDataStore:
                                 value=clean_val,
                                 unit=unit,
                                 source="Quarterly Financial Disclosures (BSE/NSE LODR)",
-                                document=f"Quarterly Earnings Release {p}"
+                                document=f"Quarterly Earnings Release {p}",
+                                original_source_field=raw_metric,
+                                verification_status="VERIFIED"
                             )
                             count += 1
                         except (ValueError, TypeError):
                             continue
 
+        # 3. Optional Drishti Reconciliation (Section 6)
+        d_intel = (company_data or {}).get("drishti") or (screener_data or {}).get("drishti")
+        if d_intel and isinstance(d_intel, dict):
+            earnings_list = d_intel.get("earnings", [])
+            for ear in earnings_list:
+                ear_period = str(getattr(ear, "period", "") or (ear.get("period", "") if isinstance(ear, dict) else "")).strip()
+                ear_rev = getattr(ear, "revenue", None) or (ear.get("revenue") if isinstance(ear, dict) else None)
+                ear_pat = getattr(ear, "pat", None) or (ear.get("pat") if isinstance(ear, dict) else None)
+
+                if ear_period and ear_rev is not None:
+                    self.reconcile_and_add_datapoint(
+                        metric="Revenue from Operations",
+                        period=ear_period,
+                        period_type="ANNUAL" if "FY" in ear_period else "QUARTERLY",
+                        value=float(ear_rev),
+                        new_source="Drishti API",
+                        new_document="Drishti Earnings Disclosures"
+                    )
+                if ear_period and ear_pat is not None:
+                    self.reconcile_and_add_datapoint(
+                        metric="Net Profit (PAT)",
+                        period=ear_period,
+                        period_type="ANNUAL" if "FY" in ear_period else "QUARTERLY",
+                        value=float(ear_pat),
+                        new_source="Drishti API",
+                        new_document="Drishti Earnings Disclosures"
+                    )
+
         logger.info(f"FundamentalDataStore initialized with {count} verified financial datapoints for {self.company_id}")
-        # Auto-persist to SQLite verified store
         try:
             self.save_to_sqlite()
         except Exception as e:
@@ -313,17 +652,99 @@ class FundamentalDataStore:
             conn = sqlite3.connect(target_db)
             now = time.time()
             cursor = conn.cursor()
+
+            # Ensure table exists with full canonical schema
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS fundamental_datapoints (
+                    company_id TEXT NOT NULL,
+                    ticker TEXT,
+                    isin TEXT,
+                    metric TEXT NOT NULL,
+                    period TEXT NOT NULL,
+                    period_type TEXT NOT NULL,
+                    value REAL,
+                    unit TEXT,
+                    currency TEXT DEFAULT 'INR',
+                    period_start TEXT,
+                    period_end TEXT,
+                    fiscal_year TEXT,
+                    quarter TEXT,
+                    statement_scope TEXT,
+                    value_type TEXT,
+                    source_tier TEXT,
+                    source TEXT,
+                    source_date TEXT,
+                    document TEXT,
+                    page_or_section TEXT,
+                    extraction_method TEXT,
+                    verification_status TEXT DEFAULT 'VERIFIED',
+                    original_source_field TEXT,
+                    original_value REAL,
+                    revised_value REAL,
+                    filing_date TEXT,
+                    revision_date TEXT,
+                    revision_status TEXT DEFAULT 'ACTIVE',
+                    is_active INTEGER DEFAULT 1,
+                    is_usable_for_analysis INTEGER DEFAULT 1,
+                    conflict_reason TEXT,
+                    reconciliation_sources TEXT,
+                    created_at REAL NOT NULL,
+                    PRIMARY KEY (company_id, metric, period, period_type)
+                )
+            """)
+
+            # Automatic schema migration for existing SQLite databases
+            migration_cols = [
+                ("currency", "TEXT DEFAULT 'INR'"),
+                ("period_start", "TEXT"),
+                ("period_end", "TEXT"),
+                ("fiscal_year", "TEXT"),
+                ("quarter", "TEXT"),
+                ("statement_scope", "TEXT"),
+                ("value_type", "TEXT"),
+                ("source_tier", "TEXT"),
+                ("source_date", "TEXT"),
+                ("extraction_method", "TEXT"),
+                ("verification_status", "TEXT DEFAULT 'VERIFIED'"),
+                ("original_source_field", "TEXT"),
+                ("original_value", "REAL"),
+                ("revised_value", "REAL"),
+                ("filing_date", "TEXT"),
+                ("revision_date", "TEXT"),
+                ("revision_status", "TEXT DEFAULT 'ACTIVE'"),
+                ("is_active", "INTEGER DEFAULT 1"),
+                ("is_usable_for_analysis", "INTEGER DEFAULT 1"),
+                ("conflict_reason", "TEXT"),
+                ("reconciliation_sources", "TEXT")
+            ]
+            for col_name, col_type in migration_cols:
+                try:
+                    cursor.execute(f"ALTER TABLE fundamental_datapoints ADD COLUMN {col_name} {col_type}")
+                except sqlite3.OperationalError:
+                    pass  # Column already exists
+
             for dp in self._datapoints:
+                rec_sources_str = ",".join(dp.reconciliation_sources)
                 cursor.execute("""
                     INSERT OR REPLACE INTO fundamental_datapoints (
                         company_id, ticker, isin, metric, period, period_type,
-                        value, unit, statement_scope, value_type, source_tier,
-                        source, source_date, document, page_or_section, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        value, unit, currency, period_start, period_end, fiscal_year,
+                        quarter, statement_scope, value_type, source_tier, source,
+                        source_date, document, page_or_section, extraction_method,
+                        verification_status, original_source_field, original_value,
+                        revised_value, filing_date, revision_date, revision_status,
+                        is_active, is_usable_for_analysis, conflict_reason,
+                        reconciliation_sources, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     dp.company_id, dp.ticker, dp.isin, dp.metric, dp.period, dp.period_type,
-                    dp.value, dp.unit, dp.statement_scope, dp.value_type, dp.source_tier,
-                    dp.source, dp.source_date, dp.document, dp.page_or_section, now
+                    dp.value, dp.unit, dp.currency, dp.period_start, dp.period_end, dp.fiscal_year,
+                    dp.quarter, dp.scope, dp.value_type, dp.source_tier, dp.source,
+                    dp.source_date, dp.source_document, dp.page_or_section, dp.extraction_method,
+                    dp.verification_status, dp.original_source_field, dp.original_value,
+                    dp.revised_value, dp.filing_date, dp.revision_date, dp.revision_status,
+                    1 if dp.is_active else 0, 1 if dp.is_usable_for_analysis else 0, dp.conflict_reason,
+                    rec_sources_str, now
                 ))
                 saved += 1
             conn.commit()
@@ -379,6 +800,7 @@ class FundamentalDataStore:
 
     def to_summary_dict(self) -> Dict[str, Any]:
         """Returns structured metadata summary of the fundamental store."""
+        conflicts = self.get_conflicts()
         return {
             "company_id": self.company_id,
             "ticker": self.ticker,
@@ -387,6 +809,7 @@ class FundamentalDataStore:
             "total_datapoints": len(self._datapoints),
             "metrics_available": sorted(list(set(dp.metric for dp in self._datapoints))),
             "annual_periods": sorted(list(set(dp.period for dp in self._datapoints if dp.period_type == "ANNUAL"))),
-            "quarterly_periods": sorted(list(set(dp.period for dp in self._datapoints if dp.period_type == "QUARTERLY")))
+            "quarterly_periods": sorted(list(set(dp.period for dp in self._datapoints if dp.period_type == "QUARTERLY"))),
+            "total_conflicts": len(conflicts),
+            "conflicts": [c.to_dict() for c in conflicts]
         }
-

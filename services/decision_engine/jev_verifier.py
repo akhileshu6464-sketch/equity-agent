@@ -358,3 +358,68 @@ class JevVerificationLayer:
             review_notes=notes,
             evidence_quality=ev_quality
         )
+
+    def audit_ai_output_package(
+        self,
+        claims: List[AnalyticalClaim],
+        active_company_id: str,
+        verified_numbers: Optional[List[float]] = None,
+        verified_sources: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
+        """
+        Comprehensive JEv / Research Validation Gate (Section 14).
+        Runs the 11-point validation checklist before AI analysis reaches the user:
+        1. Company correct? (no other company mentioned)
+        2. Period correct?
+        3. Scope correct?
+        4. Numbers correct? (verified against primary financial store)
+        5. Calculation correct?
+        6. Source exists?
+        7. Evidence supports claim?
+        8. Fact vs Inference correctly labelled?
+        9. No unsupported causal statement?
+        10. No hallucinated source?
+        11. No unsupported numbers?
+
+        If validation fails: REJECT OUTPUT. Fail closed.
+        """
+        results: List[JevVerificationResult] = []
+        rejections: List[str] = []
+        passed_claims: List[AnalyticalClaim] = []
+
+        v_nums = verified_numbers or []
+        v_sources = set(s.lower() for s in (verified_sources or []))
+
+        for c in claims:
+            # 1. Company identity check
+            if c.company_id != active_company_id:
+                rejections.append(f"Company identity violation: claim company '{c.company_id}' != active '{active_company_id}'")
+                continue
+
+            # 2. Hallucinated source check
+            if v_sources and c.source:
+                for src in c.source:
+                    if src and not any(vs in src.lower() or src.lower() in vs for vs in v_sources):
+                        if "audited" not in src.lower() and "statutory" not in src.lower() and "drishti" not in src.lower() and "screener" not in src.lower() and "bse" not in src.lower() and "nse" not in src.lower():
+                            rejections.append(f"Hallucinated or unverified source cited: '{src}'")
+                            continue
+
+            # 3. Individual claim verification
+            v_res = self.verify_claim(c, active_company_id, v_nums)
+            results.append(v_res)
+
+            if v_res.status == "REJECT":
+                rejections.append(f"Claim REJECTED: {c.claim} -> {v_res.review_notes}")
+            else:
+                passed_claims.append(c)
+
+        is_approved = len(rejections) == 0
+
+        return {
+            "is_approved": is_approved,
+            "total_claims": len(claims),
+            "passed_count": len(passed_claims),
+            "rejected_count": len(rejections),
+            "rejections": rejections,
+            "verification_results": [r.to_dict() for r in results]
+        }

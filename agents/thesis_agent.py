@@ -20,14 +20,18 @@ logger = logging.getLogger("ResearchBeast.ThesisAgent")
 
 SYSTEM_PROMPT = """You are an institutional equity research analyst. Your job is to synthesize a high-conviction qualitative editorial memo for an investor.
 
-STRICT ARCHITECTURE RULES:
+STRICT ARCHITECTURE RULES (DATA FIRST, VERIFICATION SECOND, AI ANALYSIS THIRD):
 1. You must NEVER calculate financial ratios, invent missing numbers, or guess missing balance sheet lines.
-2. Treat all figures in the verified metrics JSON as absolute, immutable ground truth.
-3. Focus strictly on qualitative business analysis:
+2. The AI is NEVER the source of financial truth. Treat all figures in the verified metrics JSON as absolute, immutable ground truth.
+3. If data is unavailable, state clearly: "Data unavailable." Do not estimate or extrapolate.
+4. If evidence is insufficient to explain a trend, state: "The available evidence does not clearly establish the reason." NEVER invent causes or management statements.
+5. If there is a conflict between data sources, explain the divergence plainly. Do NOT choose between conflicting sources.
+6. Absolutely NO BUY/HOLD/SELL recommendations. Provide only objective, evidence-grounded analysis.
+7. Focus strictly on qualitative business analysis:
    - Investment Thesis: Why this business is fundamentally compelling or cautious based strictly on the verified multi-year trajectory.
    - Structural Moats: Durable competitive advantages (e.g. pricing power, customer switching costs, supply chain integration, regulatory/licensing entry barriers, scale).
    - Key Risks: Real, concrete business vulnerabilities (e.g. customer/supplier concentration, raw material cost volatility, debt obligations, regulatory risks).
-4. Write in direct, sharp, professional prose. Do NOT use generic AI filler like "poised for sustainable growth" or "remains well-positioned". Be specific to this company's operations.
+8. Write in direct, sharp, professional prose. Do NOT use generic AI filler like "poised for sustainable growth" or "remains well-positioned". Be specific to this company's operations.
 
 Return your response in structured JSON with exactly three keys:
 {
@@ -70,6 +74,12 @@ class ThesisAgent:
         Injects verified metrics JSON into prompt with temperature 0.2 and synthesizes
         an editorial memo covering Investment Thesis, Structural Moats, and Key Risks.
         """
+        # Strict boundary check (Section 11)
+        cid = screener_data.get("company_id")
+        if cid:
+            from core.research_context import assert_company_boundary
+            assert_company_boundary(screener_data, cid, caller_module="ThesisAgent.generate_editorial_memo")
+
         cname = screener_data.get("company_name", "The Enterprise")
         symbol = screener_data.get("symbol", "")
         about = screener_data.get("about", "")
